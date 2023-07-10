@@ -2,29 +2,29 @@
 2. Navigate to the folder containing the scripts.
 3. Add the folder into the path manually:
 
-![](Aspose.Words.1c341cbf-9dad-486f-a8cb-d71b90ab1a44.001.png)
+![](Instructions/figures/Aspose.Words.1c341cbf-9dad-486f-a8cb-d71b90ab1a44.001.png)
 
 4. Go to Main\_Experiment and open SpAtt050723.m
 
-![](Aspose.Words.1c341cbf-9dad-486f-a8cb-d71b90ab1a44.002.png)
+![](Instructions/figures/Aspose.Words.1c341cbf-9dad-486f-a8cb-d71b90ab1a44.002.png)
 
 5. Press ‘Run’
 6. Answer to the questions that appear in the command window:
 - First question: n
 
-![](Aspose.Words.1c341cbf-9dad-486f-a8cb-d71b90ab1a44.003.png)
+![](Instructions/figures/Aspose.Words.1c341cbf-9dad-486f-a8cb-d71b90ab1a44.003.png)
 
 - Second question: n
 
-![](Aspose.Words.1c341cbf-9dad-486f-a8cb-d71b90ab1a44.004.png)
+![](Instructions/figures/Aspose.Words.1c341cbf-9dad-486f-a8cb-d71b90ab1a44.004.png)
 
 - Third questions: y
 
-![](Aspose.Words.1c341cbf-9dad-486f-a8cb-d71b90ab1a44.005.png)
+![](Instructions/figures/Aspose.Words.1c341cbf-9dad-486f-a8cb-d71b90ab1a44.005.png)
 
 7. A question box appears, answer according to the following:
 
-![](Aspose.Words.1c341cbf-9dad-486f-a8cb-d71b90ab1a44.006.png)
+![](Instructions/figures/Aspose.Words.1c341cbf-9dad-486f-a8cb-d71b90ab1a44.006.png)
 
    - First participant: S101
    - Second participant: S102
