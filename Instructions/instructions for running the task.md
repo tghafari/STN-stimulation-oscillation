@@ -2,7 +2,7 @@
 2. Navigate to the folder containing the scripts.
 3. Add the folder into the path manually:
 
-![](figures\Aspose.Words.1c341cbf-9dad-486f-a8cb-d71b90ab1a44.001.png)
+![](Aspose.Words.1c341cbf-9dad-486f-a8cb-d71b90ab1a44.001.png)
 
 4. Go to Main\_Experiment and open SpAtt050723.m
 
