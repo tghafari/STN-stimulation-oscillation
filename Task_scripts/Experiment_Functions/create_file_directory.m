@@ -21,8 +21,8 @@ elseif strcmp(cfgExp.answer.pc,'MEG')
     cfgFile.cue = [cd, '\Stimuli\Cue_Stimuli\'];
 end
 
-mkdir([cfgFile.res, 'sub-', cfgExp.answer.sub, filesep, 'ses-', cfgExp.answer.ses, filesep, 'meg', filesep]);  % make result directory with BIDS format
-cfgFile.subDir = [cfgFile.res, 'sub-', cfgExp.answer.sub, filesep, 'ses-' cfgExp.answer.ses, filesep, 'meg', filesep];  % store subject directory address
+mkdir([cfgFile.res, 'sub-', cfgExp.answer.sub, filesep, 'ses-', cfgExp.answer.ses, filesep, 'eeg', filesep]);  % make result directory with BIDS format
+cfgFile.subDir = [cfgFile.res, 'sub-', cfgExp.answer.sub, filesep, 'ses-' cfgExp.answer.ses, filesep, 'eeg', filesep];  % store subject directory address
 if strcmp(cfgExp.answer.test,'train')
     cfgFile.BIDSname = ['sub-', cfgExp.answer.sub, '_', 'ses-', cfgExp.answer.ses, '_'...
      , 'train-', cfgExp.answer.task, '_', 'run-', cfgExp.answer.run];  % BIDS specific file name
