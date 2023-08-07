@@ -4,8 +4,7 @@ function  cfgTrigger = introduce_triggers
 % below is the list of stim channels and their corresponding code:
 % STI001 = 1;  STI002 = 2;  STI003 = 4;  STI004 = 8; 
 % STI005 = 16; STI006 = 32; STI007 = 64; STI008 = 128;
-% for mor info check github wiki
-% (https://github.com/tghafari/mTBI-predict/wiki/1.1.-MEG-and-Eyetracker-coding-schemes)
+
 
 cfgTrigger.off = 0;
 cfgTrigger.trialStart = 1;
