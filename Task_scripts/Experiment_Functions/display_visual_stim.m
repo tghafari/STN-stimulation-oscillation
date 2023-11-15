@@ -26,6 +26,8 @@ if cfgExp.corrResp(nstim)
     Screen('Flip', cfgScreen.window, cfgScreen.vbl + (cfgScreen.waitFrm - 0.5) * cfgScreen.ifi);
 
 else  % for catch trials
+    cfgOutput.catchOnTmPnt(nstim) = send_trigger(cfgTrigger, cfgExp, cfgTrigger.catchOnset, cfgEyelink...
+        , 'catch onset');
     for frm = 1:cfgExp.stimFrm(nstim)
         Screen('DrawTextures', cfgScreen.window, [presentingStr.visStimR{nstim}{frm}, presentingStr.visStimL{nstim}{frm}]...
             , [], [cfgStim.destVisStimR; cfgStim.destVisStimL]');

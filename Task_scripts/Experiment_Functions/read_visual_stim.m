@@ -33,12 +33,12 @@ cfgTrigger.dotDir = cell(cfgExp.numStim, 2);  % preallocation
 cfgExp.cuesDir(find(cfgStim.cueRndIdx == 1), 1) = {'Right'};
 cfgExp.cuesDir(find(cfgStim.cueRndIdx == 2), 1) = {'Left'};
 cfgExp.cuesDir(find(cfgExp.corrResp == 0), 1) = {'no resp'};
-cfgTrigger.cuesDir(find(cfgStim.cueRndIdx == 1), 1) = {'2'};  % EEG trigger codes are 2 -> cue right, 4 -> cue left
-cfgTrigger.cuesDir(find(cfgStim.cueRndIdx == 2), 1) = {'4'};  % EEG trigger codes are 2 -> cue right, 4 -> cue left
+cfgTrigger.cuesDir(find(cfgStim.cueRndIdx == 1), 1) = {'1'};  % EEG trigger codes are 1 -> cue right, 2 -> cue left
+cfgTrigger.cuesDir(find(cfgStim.cueRndIdx == 2), 1) = {'2'};  % EEG trigger codes are 1 -> cue right, 2 -> cue left
 cfgTrigger.cuesDir(find(cfgStim.cueRndIdx == 1), 2) = {'Right'};  % trigger message for Eyelink
 cfgTrigger.cuesDir(find(cfgStim.cueRndIdx == 2), 2) = {'Left'};  
-cfgTrigger.dotDir(find(cfgStim.cueRndIdx == 1), 1) = {'16'};  % EEG trigger codes are 16 -> dot right, 32 -> dot left
-cfgTrigger.dotDir(find(cfgStim.cueRndIdx == 2), 1) = {'32'};  % EEG trigger codes are 16 -> dot right, 32 -> dot left
+cfgTrigger.dotDir(find(cfgStim.cueRndIdx == 1), 1) = {'6'};  % EEG trigger codes are 6 -> dot right, 7 -> dot left
+cfgTrigger.dotDir(find(cfgStim.cueRndIdx == 2), 1) = {'7'};  % EEG trigger codes are 6 -> dot right, 7 -> dot left
 cfgTrigger.dotDir(find(cfgStim.cueRndIdx == 1), 2) = {'Right'};  % trigger message for Eyelink
 cfgTrigger.dotDir(find(cfgStim.cueRndIdx == 2), 2) = {'Left'};  
 cfgTrigger.dotDir(find(cfgExp.corrResp == 0), [1, 2]) = {'no resp'};

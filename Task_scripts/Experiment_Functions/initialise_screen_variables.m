@@ -1,16 +1,25 @@
 function cfgScreen = initialise_screen_variables(cfgExp)
 % cfgScreen = initialise_screen_variables(cfgExp)
 % introduce primary settings of screen
-% resolution and screen size and distance 
+% resolution and screen size and distance needs modification according to
+% each site
 
 
 PsychDefaultSetup(2);
 cfgScreen.scrNum = max(Screen('Screens'));  % get screen number - draw to the external screen if avaliable
 
-[cfgScreen.dispSize.width, cfgScreen.dispSize.height] = Screen('DisplaySize', cfgScreen.scrNum);  % get the physical size of the screen in millimeters
-cfgScreen.distance = 60;  % set the distance from participant to the monitor in cm
-cfgScreen.resolution = Screen('Resolution', cfgScreen.scrNum);  % get/set the on screen resolution
+if cfgExp.EEGLab 
+    cfgScreen.distance = 60;  % set the distance from participant to the projector in cm
+    cfgScreen.dispSize.width = 502;  % physical width of screen in cm
+    cfgScreen.dispSize.height = 282;  % physical height of screen in cm
+    cfgScreen.resolution = Screen('Resolution', cfgScreen.scrNum);  % get/set the on screen resolution
+else
+    [cfgScreen.dispSize.width, cfgScreen.dispSize.height]...
+        = Screen('DisplaySize', cfgScreen.scrNum);  % get the physical size of the screen in millimeters
+    cfgScreen.distance = 60;  % set the distance from participant to the monitor in cm
+    cfgScreen.resolution = Screen('Resolution', cfgScreen.scrNum);  % get/set the on screen resolution
 
+end
 
 cfgScreen.black = BlackIndex(cfgScreen.scrNum);
 cfgScreen.white = WhiteIndex(cfgScreen.scrNum);
