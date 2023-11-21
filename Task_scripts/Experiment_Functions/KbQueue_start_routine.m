@@ -7,7 +7,7 @@ KbName('UnifyKeyNames');
 cfgExp.quitKey = KbName('ESCAPE');  % quit key
 cfgExp.noKey = KbName('n');  % no key
 cfgExp.yesKey = KbName('y');  % yes response
-cfgExp.respKey = KbName('RightArrow');  % keyboard response
+cfgExp.respKey = KbName('Space');  % keyboard response
 
 cfgExp.activeKeys = [cfgExp.quitKey, cfgExp.respKey, cfgExp.yesKey, cfgExp.noKey];
 
