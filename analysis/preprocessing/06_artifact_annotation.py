@@ -6,6 +6,9 @@
 This code will identify artifacts and then annotate
 them for later use (eg., to reject).
 
+This code does not work for BrainVision data yet.
+(bug in muscle artifact in mne for non MEG data)
+
 written by Tara Ghafari
 adapted from flux pipeline
 ==============================================
@@ -43,20 +46,28 @@ if pilot:
 else:
     data_root = op.join(project_root, 'Data/real-data')
 
+project_root = r'/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD'  # this is to use for bear outage
+
 # Specify specific file names
 bids_root = op.join(project_root, 'Data', 'BIDS')
 bids_path = BIDSPath(subject=subject, session=session,
                      task=task, run=run, root=bids_root, 
-                     datatype ='eeg', suffix=eeg_suffix,)
+                     datatype ='eeg', suffix=eeg_suffix)
 deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
 if not op.exists(deriv_folder):
     os.makedirs(deriv_folder)
-
 deriv_fname = bids_path.basename + '_' + deriv_suffix
 
 # Read raw data 
 raw = read_raw_bids(bids_path=bids_path, verbose=False, 
                      extra_params={'preload':True})
+
+# Preparing the brainvision data format to standard
+montage = mne.channels.make_standard_montage("easycap-M1")
+raw.set_montage(montage, verbose=False)
+
+# Set common average reference
+raw.set_eeg_reference("average", projection=False, verbose=False)
 
 """
 # Identifying and annotating eye blinks using vEOG (EOG001)
@@ -82,7 +93,7 @@ threshold_muscle = 10
 min_length_good = .2
 filter_freq = [110,140]
 annotation_muscle, scores_muscle = annotate_muscle_zscore(raw, 
-                                                          ch_type=None, 
+                                                          ch_type='eeg', 
                                                           threshold=threshold_muscle, 
                                                           min_length_good=min_length_good, 
                                                           filter_freq=filter_freq)
@@ -90,14 +101,14 @@ annotation_muscle.onset -= raw.first_time  # align the artifact onsets to data o
 annotation_muscle._orig_time = None  # remove date and time from the annotation variable
 
 # Include annotations in dataset and inspect
-raw_sss.set_annotations(annotation_blink + annotation_muscle)
-raw_sss.set_channel_types({'EOG001':'eog', 'EOG002':'eog', 'ECG003':'ecg'})  # set both vEOG and hEOG as EOG channels
+raw.set_annotations(annotation_blink + annotation_muscle)
+raw.set_channel_types({'EOG001':'eog', 'EOG002':'eog', 'ECG003':'ecg'})  # set both vEOG and hEOG as EOG channels
 eog_picks = mne.pick_types(raw.info, meg=False, eog=True)
 scale = dict(eog=500e-6)
-raw_sss.plot(order=eog_picks, scalings=scale, start=50)
+raw.plot(order=eog_picks, scalings=scale, start=50)
 
 # Save the artifact annotated file
-raw_sss.save(deriv_fname, overwrite=True)
+raw.save(deriv_fname, overwrite=True)
 
 
 
