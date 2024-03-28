@@ -1,14 +1,30 @@
 """
 ===============================================
 01_first_look_and_BIDS_conversion
-    in this code opens .eeg file
+    1. this code opens .eeg file
     and plot raw eeg data.
-    then converts raw objevt to bids
-    format
+    2. reads the events from annotations of 
+    brainvision data.
+    3. corrects the annotation and event_ids 
+    4. adds annotations to the raw 
+    5. standardise montage and set reference
+    6. saves as .fif
+    7. then converts the raw data to bids
+    8. It also plots triggers and RT to quality
+    check the data.
+
+    note that this code will save two eeg files,
+    one .fif in the original folder and one .fif 
+    bids in the bids folder.
 
 written by Tara Ghafari
 t.ghafari@bham.ac.uk
 ==============================================  
+
+ToDos:
+- avg RT is very long
+- number of button presses = right dot, as if 
+they only responded to right dot not left.
 """
 
 # Import relevant Python modules
@@ -42,26 +58,21 @@ base_fname = op.join(data_root, subj_code, f'{subj_code}_EEG', f'{subj_name}_ao1
 eeg_fname = base_fname + '.eeg'
 vhdr_fname = base_fname + '.vhdr'
 events_fname = base_fname + '-eve.fif'
-annotated_raw_fname = base_fname + 'eve-annotated_eeg.fif'
+annotated_raw_fname = base_fname + '_eeg.fif'
 
 # BIDS settings
 bids_root = op.join(project_root, 'Data', 'BIDS')
-subject = '01b'
-session = '01b'
+subject = '01'
+session = '01'
 task = 'SpAtt'
-run = '01b'
+run = '01'
 
 # BIDS events
 events_suffix = 'events'  
 events_extension = '.tsv'
 
 # Read raw file in BrainVision (.vhdr, .vmrk, .eeg) format
-raw = mne.io.read_raw_brainvision(vhdr_fname, eog=('HEOGL', 'HEOGR', 'VEOGb'), preload=False)
-
-# Plot raw to take a look
-raw.plot(title="raw") 
-n_fft = int(raw.info['sfreq']*2)  # to ensure window size = 2
-raw.compute_psd(n_fft=n_fft, n_overlap=int(n_fft/2)).plot()  # default method is welch here (multitaper for epoch)
+raw = mne.io.read_raw_brainvision(vhdr_fname, eog=('HEOGL', 'HEOGR', 'VEOGb'), preload=True)
 
 # Read events from raw object
 events, _ = mne.events_from_annotations(raw, event_id='auto')
@@ -86,10 +97,25 @@ annotations_from_events = mne.annotations_from_events(events=events,
                                                     orig_time=raw.info["meas_date"],
                                                     )
 raw.set_annotations(annotations_from_events)
-raw.save(annotated_raw_fname)  # saving event annotated raw in fif - doesn't work, saves with no annotations. TODO
-# Plot raw to make sure the events are correct
+
+# Set common average reference
+raw.add_reference_channels(ref_channels=['Fz'])  # the reference channel is not by default in the channel list
+raw.set_eeg_reference(ref_channels=['Fz'], projection=False, verbose=False)
+
+# Preparing the brainvision data format to standard
+montage = mne.channels.make_standard_montage("easycap-M1")
+raw.set_montage(montage, verbose=False)
+
+mne.write_events(events_fname, events, overwrite=True)  # write events in a separate file
+
+# Plot to test
 raw.plot(title="raw") 
-mne.write_events(events_fname, events, overwrite=True)
+n_fft = int(raw.info['sfreq']*2)  # to ensure window size = 2
+raw.copy().drop_channels(['Fz']).compute_psd(n_fft=n_fft, n_overlap=int(n_fft/2)).plot()  # default method is welch here (multitaper for epoch)
+                                                                                          # drop reference is to adjust the scaling of the figure
+
+# Save a non-bids raw just in case 
+raw.save(annotated_raw_fname)  # note that the event_id is incorrect here, use the event_id dict if needed
 
 # Have to explicitly assign values to events 
 event_dict = {'cue_onset_right':1,
@@ -107,17 +133,15 @@ event_dict = {'cue_onset_right':1,
         }
 _, events_id = mne.events_from_annotations(raw, event_id=event_dict)
 
-# Plot raw to make sure the events are correct
-raw.set_annotations(None)  # have to remove annotations to prevent duplicating when converting to BIDS
-raw.plot(title="raw") 
-
 # Convert to BIDS
 bids_path = BIDSPath(subject=subject, session=session, datatype ='eeg',
                      task=task, run=run, root=bids_root)
 
 # Write to BIDS format
+raw.set_annotations(None)  # have to remove annotations to prevent duplicating when converting to BIDS
 write_raw_bids(raw, bids_path, events_data=events_fname, 
-               event_id=events_id, overwrite=True)
+               event_id=events_id, overwrite=True, allow_preload=True,
+               format='BrainVision')
 
 # Plot all events
 fig = mne.viz.plot_events(events, sfreq=raw.info["sfreq"], first_samp=raw.first_samp, event_id=events_id)
