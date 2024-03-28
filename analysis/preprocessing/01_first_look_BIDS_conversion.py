@@ -41,7 +41,8 @@ subj_code = '01_ly'  # subject code assigned to by Benchi's group
 subj_name = 'Liuyu'  # name on eeg file
 platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
 pilot = True  # is it pilot data or real data?
-rprt = True
+eve_rprt = True
+summary_rprt = True
 
 if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
@@ -108,12 +109,15 @@ raw.set_montage(montage, verbose=False)
 
 mne.write_events(events_fname, events, overwrite=True)  # write events in a separate file
 
+# Filter raw data (130Hz is stimulation frequency)
+raw.filter(0.3,100)
+
 # Plot to test
 raw.plot(title="raw") 
 n_fft = int(raw.info['sfreq']*2)  # to ensure window size = 2
-raw.copy().drop_channels(['Fz']).compute_psd(n_fft=n_fft, n_overlap=int(n_fft/2)).plot()  # default method is welch here (multitaper for epoch)
-                                                                                          # drop reference is to adjust the scaling of the figure
-
+psd_fig = raw.copy().drop_channels(['Fz']).compute_psd(n_fft=n_fft,  # default method is welch here (multitaper for epoch)
+                                                       n_overlap=int(n_fft/2)).plot()   # drop reference is to adjust the scaling of the figure
+                                                                                         
 # Save a non-bids raw just in case 
 raw.save(annotated_raw_fname)  # note that the event_id is incorrect here, use the event_id dict if needed
 
@@ -150,29 +154,9 @@ fig = mne.viz.plot_events(events, sfreq=raw.info["sfreq"], first_samp=raw.first_
 events_bids_path = bids_path.copy().update(suffix=events_suffix,
                                             extension=events_extension)
 events_file = pd.read_csv(events_bids_path, sep='\t')
-event_onsets = events_file[['onset', 'value', 'trial_type']]
+event_onsets = events_file[['onset', 'value', 'trial_type']]        
 
-
-if rprt:
-    report_root = op.join(project_root, 'results/reports')  # RDS folder for reports
-    if not op.exists(op.join(report_root , 'sub-' + subject)):
-        os.makedirs(op.join(report_root , 'sub-' + subject))
-    report_folder = op.join(report_root , 'sub-' + subject)
-    report_fname = op.join(report_folder, f'sub-{subject}_events.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub_{subject}_events.html')
-
-    report = mne.Report(title=f'sub-{subject}')
-    report.add_events(events=events, 
-                      event_id=events_id, 
-                      tags=('eve'),
-                      title='events from "events"', 
-                      sfreq=raw.info['sfreq'])
-    report.save(report_fname, overwrite=True)
-    report.save(html_report_fname, overwrite=True, open_browser=True)  # to check how the report looks
-        
-
-# this section needs to be edited with new stim names from Benchi
-# Check durations using triggers !!!!! number of events from tsv fo not match events_from_annotation from above. why? maybe run everything from beginnig to test.
+# Check event durations
 durations_onset = ['cue', 'catch', 'stim', 'dot', 'response_press']
 direction_onset = ['cue_onset', 'dot_onset']
 events_dict = {}
@@ -215,3 +199,39 @@ for dur in ['RT']:
     plt.show()
 
 
+
+if eve_rprt:
+    report_root = op.join(project_root, 'results/reports')  # RDS folder for reports
+    if not op.exists(op.join(report_root , 'sub-' + subject)):
+        os.makedirs(op.join(report_root , 'sub-' + subject))
+    report_folder = op.join(report_root , 'sub-' + subject)
+    report_fname = op.join(report_folder, f'sub-{subject}_events.hdf5')    # it is in .hdf5 for later adding images
+    html_report_fname = op.join(report_folder, f'sub_{subject}_events.html')
+
+    report = mne.Report(title=f'sub-{subject}')
+    report.add_events(events=events, 
+                      event_id=events_id, 
+                      tags=('eve'),
+                      title='events from "events"', 
+                      sfreq=raw.info['sfreq'])
+    report.save(report_fname, overwrite=True)
+    report.save(html_report_fname, overwrite=True, open_browser=True)  # to check how the report looks
+
+if summary_rprt:
+    report_root = op.join(project_root, 'results/reports')  # RDS folder for reports
+   
+    if not op.exists(op.join(report_root , 'sub-' + subject)):
+        os.makedirs(op.join(report_root , 'sub-' + subject))
+    report_folder = op.join(report_root , 'sub-' + subject)
+
+    report_fname = op.join(report_folder, 
+                        f'sub-{subject}_preproc_2.hdf5')    # it is in .hdf5 for later adding images
+    html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_2.html')
+    
+    report = mne.open_report(report_fname)
+    report.add_raw(raw=raw.drop_channels(['Fz']).filter(0.3, 100), title='raw with bad channels', 
+                   psd=True, 
+                   butterfly=False, 
+                   tags=('raw'))
+    report.save(report_fname, overwrite=True)
+    report.save(html_report_fname, overwrite=True, open_browser=True)  # to check how the report looks
