@@ -42,13 +42,14 @@ base_fname = op.join(data_root, subj_code, f'{subj_code}_EEG', f'{subj_name}_ao1
 eeg_fname = base_fname + '.eeg'
 vhdr_fname = base_fname + '.vhdr'
 events_fname = base_fname + '-eve.fif'
+annotated_raw_fname = base_fname + 'eve-annotated_eeg.fif'
 
 # BIDS settings
 bids_root = op.join(project_root, 'Data', 'BIDS')
-subject = '01'
-session = '01'
+subject = '01b'
+session = '01b'
 task = 'SpAtt'
-run = '01'
+run = '01b'
 
 # BIDS events
 events_suffix = 'events'  
@@ -85,6 +86,10 @@ annotations_from_events = mne.annotations_from_events(events=events,
                                                     orig_time=raw.info["meas_date"],
                                                     )
 raw.set_annotations(annotations_from_events)
+raw.save(annotated_raw_fname)  # saving event annotated raw in fif
+# Plot raw to make sure the events are correct
+raw.plot(title="raw") 
+mne.write_events(events_fname, events, overwrite=True)
 
 # Have to explicitly assign values to events 
 event_dict = {'cue_onset_right':1,
@@ -103,8 +108,8 @@ event_dict = {'cue_onset_right':1,
 _, events_id = mne.events_from_annotations(raw, event_id=event_dict)
 
 # Plot raw to make sure the events are correct
+raw.set_annotations(None)  # have to remove annotations to prevent duplicating when converting to BIDS
 raw.plot(title="raw") 
-mne.write_events(events_fname, events, overwrite=True)
 
 # Convert to BIDS
 bids_path = BIDSPath(subject=subject, session=session, datatype ='eeg',
@@ -125,7 +130,7 @@ event_onsets = events_file[['onset', 'value', 'trial_type']]
 
 
 if rprt:
-    report_root = op.join(project_root, r'results/reports')  # RDS folder for reports
+    report_root = op.join(project_root, 'results/reports')  # RDS folder for reports
     if not op.exists(op.join(report_root , 'sub-' + subject)):
         os.makedirs(op.join(report_root , 'sub-' + subject))
     report_folder = op.join(report_root , 'sub-' + subject)
@@ -145,15 +150,11 @@ if rprt:
 # this section needs to be edited with new stim names from Benchi
 # Check durations using triggers !!!!! number of events from tsv fo not match events_from_annotation from above. why? maybe run everything from beginnig to test.
 durations_onset = ['cue', 'catch', 'stim', 'dot', 'response_press']
-durations_offset = ['cue'] 
 direction_onset = ['cue_onset', 'dot_onset']
 events_dict = {}
 
 for dur in durations_onset:    
     events_dict[dur + "_onset"] = event_onsets.loc[event_onsets['trial_type'].str.contains(f'{dur}_onset'),
-                                                'onset'].to_numpy()
-for dur in durations_offset:   
-    events_dict[dur + "_offset"] = event_onsets.loc[event_onsets['trial_type'].str.contains(f'{dur}_offset'),
                                                 'onset'].to_numpy()
 for dirs in direction_onset:
     events_dict[dirs + "_right"] = event_onsets.loc[event_onsets['trial_type'].str.contains(f'{dirs}_right'),
@@ -174,14 +175,14 @@ ax.bar_label(bars)
 plt.show()
 
 # Check duration of cue presentation  
-events_dict['dot_onset'] = events_dict['dot_onset_right','dot_onset_left']
+events_dict['dot_onset'] = [events_dict['dot_onset_right'],events_dict['dot_onset_left']]
 events_dict['stim_to_dot_duration'] = events_dict['dot_onset'] - events_dict['stim_onset']
 events_dict['RT'] = events_dict['response_press_onset'] - events_dict['dot_onset'] 
 # cheat line to add extra elements for easier calculation of RTs:
     #events_dict['dot_onset'] = np.insert(events_dict['dot_onset'], index_onset_should_be_added_before, onset)
 
 # Plot all durations
-for dur in ['cue_duration', 'stim_to_dot_duration', 'RT']:
+for dur in ['RT']:
     fig, ax = plt.subplots()
     plt.hist(events_dict[dur])
     plt.title(dur)
