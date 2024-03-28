@@ -3,9 +3,9 @@
 ===============================================
 08. Epoching raw data based on conditions
 
-This code will epoch continuous MEG signal based
-on conditions saved in stim channel and generates 
-an HTML report about epochs.
+This code will epoch continuous EEG based
+on conditions that are annotated in the
+data and generates  an HTML report about epochs.
 
 written by Tara Ghafari
 adapted from flux pipeline
@@ -21,27 +21,28 @@ Questions:
 
 """
 
+
 import os.path as op
 import os
-import pandas as pd
-import matplotlib.pyplot as plt
 import numpy as np
 
 import mne
+from mne.preprocessing import ICA
+from copy import deepcopy
 from mne_bids import BIDSPath, read_raw_bids
 
-# fill these out
-site = 'Birmingham'
-subject = '2002'  # subject code in mTBI project
-session = '04B'  # data collection session within each run
-run = '01'  # data collection run for each participant
+# BIDS settings: fill these out 
+subject = '01'
+session = '01'
 task = 'SpAtt'
-meg_extension = '.fif'
-meg_suffix = 'meg'
+run = '01'
+eeg_suffix = 'eeg'
+eeg_extension = '.vhdr'
 input_suffix = 'ica'
-deriv_suffix = 'epo'
+deriv_suffix = 'ica'
+extension = '.fif'
 
-using_events_csv = False  # for when we are not using events_from_annotation. default is False
+pilot = True  # is it pilot data or real data?
 summary_rprt = True  # do you want to add evokeds figures to the summary report?
 platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
 
@@ -55,63 +56,33 @@ elif platform == 'mac':
     rds_dir = '/Volumes/jenseno-avtemporal-attention'
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
+project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
+if pilot:
+    data_root = op.join(project_root, 'Data/pilot-data/AO')
+else:
+    data_root = op.join(project_root, 'Data/real-data')
 
 # Specify specific file names
-mTBI_root = op.join(rds_dir, r'Projects/mTBI-predict')
-bids_root = op.join(mTBI_root, 'collected-data', 'BIDS', 'task_BIDS')  # RDS folder for bids formatted data
+bids_root = op.join(project_root, 'Data', 'BIDS')
 bids_path = BIDSPath(subject=subject, session=session,
                      task=task, run=run, root=bids_root, 
-                     suffix=meg_suffix, extension=meg_extension)
+                     datatype ='eeg', suffix=eeg_suffix)
+deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
+if not op.exists(deriv_folder):
+    os.makedirs(deriv_folder)
 
+input_fname = op.join(deriv_folder, bids_path.basename + '_' + input_suffix + extension)  # prone to change if annotation worked for eeg brainvision
+deriv_fname = op.join(deriv_folder, bids_path.basename + '_' + deriv_suffix + extension) 
+
+# read annotated data
 raw = read_raw_bids(bids_path=bids_path, verbose=False, 
                      extra_params={'preload':True})  # read raw for events and event ids only
-
-deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject, 
-                       'task-' + task)  # RDS folder for results
-bids_fname = bids_path.basename.replace(meg_suffix, input_suffix)  # only used for suffices that are not recognizable to bids 
-input_fname = op.join(deriv_folder, bids_fname)
-deriv_fname = str(input_fname).replace(input_suffix, deriv_suffix)
-
 
 # read raw and events file
 raw_ica = mne.io.read_raw_fif(input_fname, allow_maxshield=True,
                               verbose=True, preload=True)
 
-if using_events_csv:
-    event_fname = op.join(bids_path.directory, 'meg',
-                          bids_path.basename.replace('meg.fif', 'events.tsv'))
-    events_file = pd.read_csv(event_fname, sep='\t')
-    
-    # Some variable preparation in case we are using bids events file instead of mne
-    events = events_file[['sample','duration','value']].to_numpy(dtype=int)
-    events[:,0] = events[:,0] + raw_ica.first_samp  # begin from the first sample
-    event_to_series = events_file.copy().drop_duplicates(subset='trial_type')[['value','trial_type']]
-    events_id = pd.Series(event_to_series['value'].values, index=event_to_series['trial_type']).to_dict()
-    events_color = {'cue_onset_right':'red', 'cue_onset_left':'blue'}
-    
-    # creates a variable like mne.pick_events
-    events_picks = np.vstack(((events[events[:,2]==102]), (events[events[:,2]==101])))
-    events_picks[events_picks[:,0].argsort()]
-    events_picks_id = {k:v for k, v in events_id.items() if k.startswith('cue onset')}  # select only epochs you are interested in
-    
-    # Take a quick look at the events file
-    plt.figure()
-    plt.stem(events_file['onset'], events_file['trial_type'])
-    plt.xlim(0,200)  # only show first 200 seconds
-    plt.xlabel('time (sec)')
-    plt.ylabel('event type')
-    plt.show()
-
-else:
-    events, events_id = mne.events_from_annotations(raw, event_id='auto')
-
-# just for oscar's
-# raw_list = list()
-# events_list = list()
-# events_list.append(events)
-# raw_ica, events = mne.concatenate_raws(raw_list, preload=True,
-#                                         events_list=events_list)
-# end of oscar's
+events, events_id = mne.events_from_annotations(raw, event_id='auto')
 
 # Set the peak-peak amplitude threshold for trial rejection.
 """ subject to change based on data quality"""
