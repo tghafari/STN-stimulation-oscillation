@@ -86,7 +86,7 @@ annotations_from_events = mne.annotations_from_events(events=events,
                                                     orig_time=raw.info["meas_date"],
                                                     )
 raw.set_annotations(annotations_from_events)
-raw.save(annotated_raw_fname)  # saving event annotated raw in fif
+raw.save(annotated_raw_fname)  # saving event annotated raw in fif - doesn't work, saves with no annotations. TODO
 # Plot raw to make sure the events are correct
 raw.plot(title="raw") 
 mne.write_events(events_fname, events, overwrite=True)
