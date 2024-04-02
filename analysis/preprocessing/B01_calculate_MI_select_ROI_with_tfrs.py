@@ -7,6 +7,9 @@ This code will:
 
     A. Peak Alpha Frequency
     1. calculate TFR for cue right and left
+
+!!    only plot_topos and sensor TFRs work for now    !!
+
     2. crop the tfr into time point and frequency (4-14Hz)
       of interest and pick occipital sensors
     3. find peak alpha frequency range and plot
@@ -26,7 +29,11 @@ This code will:
 
 written by Tara Ghafari
 ==============================================
+ToDos:
+    needs layout of sensors
+
 questions?
+    can we actually rely on posterior sensors and alpha lateralisation and alpha peak? given the smearing of signal in eeg?
 
 """
 
@@ -37,7 +44,7 @@ import pandas as pd
 
 import mne
 from mne_bids import BIDSPath, read_raw_bids
-from autoreject import get_rejection_threshold
+import matplotlib.pyplot as plt
 
 
 
@@ -129,7 +136,7 @@ tfr_slow_cue_left = mne.time_frequency.tfr_multitaper(epochs['cue_onset_left'],
 
 # Plot TFR on all sensors and check
 fig_plot_topo_right = tfr_slow_cue_right.plot_topo(tmin=-.5, 
-                                                   tmax=.8, 
+                                                   tmax=1.7, 
                                                    baseline=[-.5,-.2], 
                                                    mode='percent',
                                                    fig_facecolor='w', 
@@ -138,7 +145,7 @@ fig_plot_topo_right = tfr_slow_cue_right.plot_topo(tmin=-.5,
                                                    vmax=1, 
                                                    title='TFR of power < 30Hz - cue right')
 fig_plot_topo_left = tfr_slow_cue_left.plot_topo(tmin=-.5, 
-                                                 tmax=.8,
+                                                 tmax=1.7,
                                                  baseline=[-.5,-.2], 
                                                  mode='percent',
                                                  fig_facecolor='w', 
@@ -150,33 +157,29 @@ fig_plot_topo_left = tfr_slow_cue_left.plot_topo(tmin=-.5,
 # ========================================= SECOND PLOT (REPRESENTATIVE SENSROS) ====================================
 # Plot TFR for representative sensors - same in all participants
 fig_tfr, axis = plt.subplots(2, 2, figsize = (7, 7))
-sensors = ['MEG1943','MEG2533']
-
-'MEG1733','MEG2133',
+sensors = ['C5','O2']
 
 for idx, sensor in enumerate(sensors):
-    if idx < len(sensors)/2:
-        tfr_slow_cue_left.plot(picks=sensor, 
-                               baseline=[-.5,-.2],
-                               mode='percent', 
-                               tmin=-.5, 
-                               tmax=1.2,
-                               vmin=-.75, 
-                               vmax=.75,
-                               axes=axis[idx,0], 
-                               show=False)
-        axis[idx, 0].set_title(f'cue left-{sensor}')        
-    else:   
-        tfr_slow_cue_right.plot(picks=sensor,
-                                baseline=[-.5,-.2],
-                                mode='percent', 
-                                tmin=-.5, 
-                                tmax=1.2,
-                                vmin=-.75, 
-                                vmax=.75, 
-                                axes=axis[idx-2,1], 
-                                show=False)
-        axis[idx-2, 1].set_title(f'cue right-{sensor}') 
+    tfr_slow_cue_left.plot(picks=sensor, 
+                            baseline=[-.5,-.2],
+                            mode='percent', 
+                            tmin=-.5, 
+                            tmax=1.2,
+                            vmin=-.75, 
+                            vmax=.75,
+                            axes=axis[idx,0], 
+                            show=False)
+    axis[idx, 0].set_title(f'cue left-{sensor}')        
+    tfr_slow_cue_right.plot(picks=sensor,
+                            baseline=[-.5,-.2],
+                            mode='percent', 
+                            tmin=-.5, 
+                            tmax=1.2,
+                            vmin=-.75, 
+                            vmax=.75, 
+                            axes=axis[idx,1], 
+                            show=False)
+    axis[idx, 1].set_title(f'cue right-{sensor}') 
         
 axis[0, 0].set_ylabel('left sensors')  
 axis[1, 0].set_ylabel('right sensors')  
@@ -429,29 +432,31 @@ with open(ROI_MI_ALI_html, 'r') as f:
 # =================================================================================================================
 
 if summary_rprt:
-    report_root = op.join(mTBI_root, 'results-outputs/mne-reports')  # RDS folder for reports
-    if not op.exists(op.join(report_root , 'sub-' + subject, 'ses-' + session, 'task-' + task)):
-        os.makedirs(op.join(report_root , 'sub-' + subject, 'ses-' + session, 'task-' + task))
-    report_folder = op.join(report_root , 'sub-' + subject, 'ses-' + session, 'task-' + task)
+
+    report_root = op.join(project_root, 'results/reports')  
+    if not op.exists(op.join(report_root , 'sub-' + subject)):
+        os.makedirs(op.join(report_root , 'sub-' + subject))
+    report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 
-                        f'mneReport_sub-{subject}_{session}_{task}_1.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'report_preproc_{session}_{task}_1.html')
+                        f'sub-{subject}_preproc_2.hdf5')    # it is in .hdf5 for later adding images
+    html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_2.html')
 
     report = mne.open_report(report_fname)
+
     report.add_figure(fig=fig_plot_topo_right, title='TFR of power < 30Hz - cue right',
                     caption='Time Frequency Representation for \
-                    cue right- -0.5 to 0.8- baseline corrected', 
+                    cue right- -0.5 to 1.7- baseline corrected', 
                     tags=('tfr'),
                     section='TFR'  # only in ver 1.1
                     )
     report.add_figure(fig=fig_plot_topo_left, title='TFR of power < 30Hz - cue left',
                     caption='Time Frequency Representation for \
-                        cue left- -0.5 to 0.8- baseline corrected', 
+                        cue left- -0.5 to 1.7- baseline corrected', 
                     tags=('tfr'),
                     section='TFR'  # only in ver 1.1
                     )
-    report.add_figure(fig=fig_tfr, title='TFR on four sensors',
+    report.add_figure(fig=fig_tfr, title='TFR on two sensors',
                     caption='Time Frequency Representation on \
                     right and left sensors', 
                     tags=('tfr'),
