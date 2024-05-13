@@ -7,13 +7,12 @@ This code will:
 
     A. Peak Alpha Frequency
     1. calculate TFR for cue right and left
-
-!!    only plot_topos and sensor TFRs work for now    !!
-
     2. crop the tfr into time point and frequency (4-14Hz)
       of interest and pick occipital sensors
     3. find peak alpha frequency range and plot
 
+!! works until here !!    
+    
     B. ROI sensors
     4. calculate tfr for right sensors 
     5. calculate MI = (attend right - attend left) \
@@ -43,10 +42,8 @@ import numpy as np
 import pandas as pd
 
 import mne
-from mne_bids import BIDSPath, read_raw_bids
+from mne_bids import BIDSPath
 import matplotlib.pyplot as plt
-
-
 
 # BIDS settings: fill these out 
 subject = '01'
@@ -56,7 +53,7 @@ run = '01'
 eeg_suffix = 'eeg'
 eeg_extension = '.vhdr'
 input_suffix = 'epo'
-deriv_suffix = 'evo'
+deriv_suffix = 'tfr'
 extension = '.fif'
 
 pilot = True  # is it pilot data or real data?
@@ -98,16 +95,17 @@ ROI_MI_ALI_html =  op.join(ROI_dir, f'sub-{subject}_ROI_MI_ALI.html')
 peak_alpha_fname = op.join(ROI_dir, f'sub-{subject}_peak_alpha.npz')  # 2 numpy arrays saved into an uncompressed file
 # Read sensor layout sheet from camcan RDS
 """these variables are in correct right-and-left-corresponding-sensors order"""
-sensors_layout_sheet = op.join(project_root, 'results/sensor_layout_name_grad_no_central.csv')
-sensors_layout_names_df = pd.read_csv(sensors_layout_sheet)
+sensors_layout_sheet = op.join(project_root, 'results/sensor-layout-with-centre.xlsx')
+sensors_layout_names_dict = pd.read_excel(sensors_layout_sheet, sheet_name=None)
+sensors_layout_names_df = sensors_layout_names_dict['Sheet1']
 
-right_sensors = [ch[1:8] for ch in sensors_layout_names_df['right_sensors']]
-left_sensors = [ch[1:8] for ch in sensors_layout_names_df['left_sensors']]
+right_sensors = [ch for ch in sensors_layout_names_df['right_sensors']]
+left_sensors = [ch for ch in sensors_layout_names_df['left_sensors']]
 sensors_layout_df = pd.DataFrame({'left_sensors': left_sensors,
                                   'right_sensors': right_sensors})  
 
 # Read epoched data
-epochs = mne.read_epochs(input_fname, verbose=True, preload=True)  # epochs are from -.5 to 1.7sec
+epochs = mne.read_epochs(input_fname, verbose=True, preload=True)  # epochs are from -.7 to 1.7sec
 
 # ========================================= TFR CALCULATIONS AND FIRST PLOT (PLOT_TOPO) ====================================
 # Calculate tfr for post cue alpha
@@ -136,7 +134,7 @@ tfr_slow_cue_left = mne.time_frequency.tfr_multitaper(epochs['cue_onset_left'],
 
 # Plot TFR on all sensors and check
 fig_plot_topo_right = tfr_slow_cue_right.plot_topo(tmin=-.5, 
-                                                   tmax=1.7, 
+                                                   tmax=1.5, 
                                                    baseline=[-.5,-.2], 
                                                    mode='percent',
                                                    fig_facecolor='w', 
@@ -145,7 +143,7 @@ fig_plot_topo_right = tfr_slow_cue_right.plot_topo(tmin=-.5,
                                                    vmax=1, 
                                                    title='TFR of power < 30Hz - cue right')
 fig_plot_topo_left = tfr_slow_cue_left.plot_topo(tmin=-.5, 
-                                                 tmax=1.7,
+                                                 tmax=1.5,
                                                  baseline=[-.5,-.2], 
                                                  mode='percent',
                                                  fig_facecolor='w', 
@@ -194,11 +192,7 @@ plt.show()
 
 # ========================================= PEAK ALPHA FREQUENCY (PAF) AND THIRD PLOT ====================================
 # Select occipital sensors
-occipital_picks = mne.read_vectorview_selection("occipital")  # contains both mag and grad
-occipital_picks =  [channel[-4:] for channel in occipital_picks]  # vectorview selection adds a space in the name of channels!
-
-# Create a list of channel names from epochs.ch_names that have the same last four characters as occipital picks and pick only grads
-occipital_channels = [channel for channel in epochs.pick(['grad']).ch_names if channel[-4:] in occipital_picks]
+occipital_channels =['Oz', 'Iz', 'Pz', 'POz', 'O9', 'O10', 'O1', 'O2', 'PO3', 'PO4', 'PO7', 'PO8', 'PO9', 'PO10']
 
 # Crop post stim alpha
 tfr_slow_cue_right_post_stim = tfr_slow_cue_right.copy().crop(tmin=.2,tmax=.8,fmin=4, fmax=14).pick(occipital_channels)
@@ -266,8 +260,7 @@ topomap_params = dict(fmin=peak_alpha_freq_range[0],
                       tmax=.8,
                       vlim=(-.5,.5),
                       baseline=(-.5, -.2), 
-                      mode='percent', 
-                      ch_type='grad',)
+                      mode='percent')
 
 fig_topo, axis = plt.subplots(1, 2, figsize=(7, 4))
 tfr_slow_cue_left.plot_topomap(**topomap_params,
@@ -283,8 +276,8 @@ fig_topo.set_tight_layout(True)
 plt.show()
 
 # ========================================= B. RIGHT SENSORS and ROI ============================================
-tfr_alpha_params = dict(picks='grad', use_fft=True, return_itc=False, average=True, decim=2, n_jobs=4, verbose=True)
-tfr_params = dict(picks=['grad'], use_fft=True, return_itc=False, average=True, decim=2, n_jobs=4, verbose=True)
+tfr_alpha_params = dict(use_fft=True, return_itc=False, average=True, decim=2, n_jobs=4, verbose=True)
+tfr_params = dict(use_fft=True, return_itc=False, average=True, decim=2, n_jobs=4, verbose=True)
 
 freqs = peak_alpha_freq_range  # peak frequency range calculated earlier
 n_cycles = freqs / 2  # the length of sliding window in cycle units. 
@@ -307,7 +300,7 @@ tfr_left_alpha_all_sens = mne.time_frequency.tfr_multitaper(epochs['cue_onset_le
 tfr_right_post_stim_alpha_right_sens = tfr_right_alpha_all_sens.copy().pick(right_sensors).crop(tmin=.2, tmax=.8)
 tfr_left_post_stim_alpha_right_sens = tfr_left_alpha_all_sens.copy().pick(right_sensors).crop(tmin=.2, tmax=.8)
 
-# Calculate power modulation for attention right and left (always R- L)
+# Calculate power modulation for attention right and left (always R - L)
 tfr_alpha_MI_right_sens = tfr_right_post_stim_alpha_right_sens.copy()
 tfr_alpha_MI_right_sens.data = (tfr_right_post_stim_alpha_right_sens.data - tfr_left_post_stim_alpha_right_sens.data) \
     / (tfr_right_post_stim_alpha_right_sens.data + tfr_left_post_stim_alpha_right_sens.data)  # shape: #sensors, #freqs, #time points
