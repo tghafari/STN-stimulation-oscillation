@@ -99,9 +99,11 @@ annotations_from_events = mne.annotations_from_events(events=events,
                                                     )
 raw.set_annotations(annotations_from_events)
 
-# Set common average reference
-raw.add_reference_channels(ref_channels=['Fz'])  # the reference channel is not by default in the channel list
-raw.set_eeg_reference(ref_channels=['Fz'], projection=False, verbose=False)
+## Set Fz reference - not for now - 
+"""you will have to drop (Fz) for plotting if you add it to the ch_names"""
+# we'l decide later if we want to do common average reference
+#raw.add_reference_channels(ref_channels=['Fz'])  # the reference channel is not by default in the channel list
+#raw.set_eeg_reference(ref_channels=['Fz'], projection=False, verbose=False)
 
 # Preparing the brainvision data format to standard
 montage = mne.channels.make_standard_montage("easycap-M1")
@@ -115,11 +117,12 @@ raw.filter(0.3,100)
 # Plot to test
 raw.plot(title="raw") 
 n_fft = int(raw.info['sfreq']*2)  # to ensure window size = 2
-psd_fig = raw.copy().drop_channels(['Fz']).compute_psd(n_fft=n_fft,  # default method is welch here (multitaper for epoch)
-                                                       n_overlap=int(n_fft/2)).plot()   # drop reference is to adjust the scaling of the figure
+psd_fig = raw.copy().compute_psd(n_fft=n_fft,  # default method is welch here (multitaper for epoch)
+                                 n_overlap=int(n_fft/2),
+                                 fmax=105).plot()  
                                                                                          
 # Save a non-bids raw just in case 
-raw.save(annotated_raw_fname)  # note that the event_id is incorrect here, use the event_id dict if needed
+raw.save(annotated_raw_fname, overwrite=True)  # note that the event_id is incorrect here, use the event_id dict if needed
 
 # Have to explicitly assign values to events 
 event_dict = {'cue_onset_right':1,
@@ -183,9 +186,8 @@ ax.bar_label(bars)
 plt.show()
 
 # Check duration of cue presentation  
-events_dict['dot_onset'] = [events_dict['dot_onset_right'],events_dict['dot_onset_left']]
 events_dict['stim_to_dot_duration'] = events_dict['dot_onset'] - events_dict['stim_onset']
-events_dict['RT'] = events_dict['response_press_onset'] - events_dict['dot_onset'] 
+events_dict['RT'] = events_dict['response_press_onset'] - events_dict['dot_onset']  # participant 01 only responded to right stim -> do not execute this line
 # cheat line to add extra elements for easier calculation of RTs:
     #events_dict['dot_onset'] = np.insert(events_dict['dot_onset'], index_onset_should_be_added_before, onset)
 
@@ -199,24 +201,6 @@ for dur in ['RT']:
     plt.show()
 
 
-
-if eve_rprt:
-    report_root = op.join(project_root, 'results/reports')  # RDS folder for reports
-    if not op.exists(op.join(report_root , 'sub-' + subject)):
-        os.makedirs(op.join(report_root , 'sub-' + subject))
-    report_folder = op.join(report_root , 'sub-' + subject)
-    report_fname = op.join(report_folder, f'sub-{subject}_events.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub_{subject}_events.html')
-
-    report = mne.Report(title=f'sub-{subject}')
-    report.add_events(events=events, 
-                      event_id=events_id, 
-                      tags=('eve'),
-                      title='events from "events"', 
-                      sfreq=raw.info['sfreq'])
-    report.save(report_fname, overwrite=True)
-    report.save(html_report_fname, overwrite=True, open_browser=True)  # to check how the report looks
-
 if summary_rprt:
     report_root = op.join(project_root, 'results/reports')  # RDS folder for reports
    
@@ -225,11 +209,17 @@ if summary_rprt:
     report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 
-                        f'sub-{subject}_preproc_2.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_2.html')
+                        f'sub-{subject}_preproc_1.hdf5')    # it is in .hdf5 for later adding images
+    html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_1.html')
     
     report = mne.open_report(report_fname)
-    report.add_raw(raw=raw.drop_channels(['Fz']).filter(0.3, 100), title='raw with bad channels', 
+    if eve_rprt:
+        report.add_events(events=events, 
+                        event_id=events_id, 
+                        tags=('eve'),
+                        title='events from "events"', 
+                        sfreq=raw.info['sfreq'])
+    report.add_raw(raw=raw.filter(0.3, 100), title='raw with bad channels', 
                    psd=True, 
                    butterfly=False, 
                    tags=('raw'))

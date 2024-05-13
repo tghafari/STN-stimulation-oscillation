@@ -3,6 +3,7 @@
 02_reading_beh_data
     this code opens the .mat file from MATLAB
     (output of psychtoolbox) and computes RT
+    !! not complete !!
 
 written by Tara Ghafari
 t.ghafari@bham.ac.uk

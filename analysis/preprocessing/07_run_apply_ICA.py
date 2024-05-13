@@ -79,9 +79,9 @@ raw = read_raw_bids(bids_path=bids_path, verbose=False,
 # Plot to find bad channels and reject from data
 raw.plot(title="raw") 
 n_fft = int(raw.info['sfreq']*2)  # to ensure window size = 2
-raw.copy().drop_channels(['Fz']).compute_psd(n_fft=n_fft,  # default method is welch here (multitaper for epoch)
-                                             n_overlap=int(n_fft/2),  # drop reference is to adjust the scaling of the figure
-                                             fmin=0.1, fmax=100).plot()  
+raw.copy().compute_psd(n_fft=n_fft,  # default method is welch here (multitaper for epoch)
+                    n_overlap=int(n_fft/2), 
+                    fmin=0.1, fmax=105).plot()  
                                                                                          
 # Mark bad channels before ICA
 original_bads = deepcopy(raw.info["bads"])
@@ -135,7 +135,7 @@ ica.apply(raw_ica)
 raw_ica.save(deriv_fname, overwrite=True)
 
 # plot a few frontal channels before and after ICA
-chs = ['MEG0311', 'MEG0121', 'MEG1211', 'MEG1411', 'MEG0342', 'MEG1432']
+chs = ['C5', 'O2']
 ch_idx = [raw.ch_names.index(ch) for ch in chs]
 raw.plot(order=ch_idx, duration=5, title='before')
 raw_ica.plot(order=ch_idx, duration=5, title='after')
@@ -152,13 +152,13 @@ if summary_rprt:
     report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 
-                        f'sub-{subject}_preproc_2.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_2.html')
+                        f'sub-{subject}_preproc_1.hdf5')    # it is in .hdf5 for later adding images
+    html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_1.html')
     
     report = mne.open_report(report_fname)
     report.add_figure(fig_ica, title="removed ICA components (saccade, blink)",
                       tags=('ica'), image_format="PNG")
-    report.add_raw(raw=raw_ica.drop_channels(['Fz']).filter(0.3, 100), title='raw after ICA', 
+    report.add_raw(raw=raw_ica.filter(0.3, 100), title='raw after ICA', 
                    psd=True, 
                    butterfly=False, 
                    tags=('ica'))

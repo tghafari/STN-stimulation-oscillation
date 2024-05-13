@@ -15,14 +15,12 @@ Questions:
 
 """
 
-
 import os.path as op
 import os
 import numpy as np
 
 import mne
-from mne_bids import BIDSPath, read_raw_bids
-from autoreject import get_rejection_threshold
+from mne_bids import BIDSPath
 
 
 
@@ -68,7 +66,7 @@ input_fname = op.join(deriv_folder, bids_path.basename + '_' + input_suffix + ex
 deriv_fname = op.join(deriv_folder, bids_path.basename + '_' + deriv_suffix + extension)  # prone to change if annotation worked for eeg brainvision
 
 # Read epoched data
-epochs = mne.read_epochs(input_fname, verbose=True, preload=True)  # -.5 to 1.7sec
+epochs = mne.read_epochs(input_fname, verbose=True, preload=True)  # -.7 to 1.7sec
 
 if test_plot:
     # ==================================== RIGHT LEFT SEPARATELY ==============================================
@@ -129,8 +127,8 @@ if summary_rprt:
     report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 
-                        f'sub-{subject}_preproc_2.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_2.html')
+                        f'sub-{subject}_preproc_1.hdf5')    # it is in .hdf5 for later adding images
+    html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_1.html')
 
     report = mne.open_report(report_fname)
 

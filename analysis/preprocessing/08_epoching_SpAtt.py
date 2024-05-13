@@ -12,6 +12,9 @@ adapted from flux pipeline
 ==============================================
 ToDos:
     1) which epochs to keep?
+
+Issues: 
+    1) bad channels are not saved from ica! 
     
 Questions:
 
@@ -28,7 +31,6 @@ from mne_bids import BIDSPath, read_raw_bids
 from autoreject import get_rejection_threshold
 
 
-
 # BIDS settings: fill these out 
 subject = '01'
 session = '01'
@@ -41,7 +43,7 @@ deriv_suffix = 'epo'
 extension = '.fif'
 
 pilot = True  # is it pilot data or real data?
-summary_rprt = False  # do you want to add evokeds figures to the summary report?
+summary_rprt = True  # do you want to add evokeds figures to the summary report?
 platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
 test_plot = False
 
@@ -71,21 +73,15 @@ input_fname = op.join(deriv_folder, bids_path.basename + '_' + input_suffix + ex
 deriv_fname = op.join(deriv_folder, bids_path.basename + '_' + deriv_suffix + extension)  # prone to change if annotation worked for eeg brainvision
 
 # read annotated data
-raw = read_raw_bids(bids_path=bids_path, verbose=False, 
-                        extra_params={'preload':True})
+raw_ica = mne.io.read_raw_fif(input_fname, verbose=True, preload=True)
 
-# Mark bad channels again- for whatever reason the bad channels are not annotated even though they are in the raw_ica from oy_run_apply_ICA
-original_bads = deepcopy(raw.info["bads"])
-raw.info["bads"].append("FCz")  # add a single channel
-# raw.info["bads"].extend(["EEG 051", "EEG 052"])  # add a list of channels - should there be more than one channel to drop
-
-events, events_id = mne.events_from_annotations(raw, event_id='auto')
+events, events_id = mne.events_from_annotations(raw_ica, event_id='auto')
 
 # Make epochs (1.7 seconds on cue onset)
-epochs = mne.Epochs(raw, 
+epochs = mne.Epochs(raw_ica, 
                     events, 
                     events_id,   # select events_picks and events_picks_id                   
-                    tmin=-0.5, 
+                    tmin=-0.7, 
                     tmax=1.7,
                     baseline=None, 
                     proj=True, 
@@ -138,8 +134,8 @@ if summary_rprt:
     report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 
-                        f'sub-{subject}_preproc_2.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_2.html')
+                        f'sub-{subject}_preproc_1.hdf5')    # it is in .hdf5 for later adding images
+    html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_1.html')
 
     report = mne.open_report(report_fname)
 
