@@ -33,7 +33,7 @@ from copy import deepcopy
 from mne_bids import BIDSPath, read_raw_bids
 
 # BIDS settings: fill these out 
-subject = '01'
+subject = '02'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -82,16 +82,21 @@ n_fft = int(raw.info['sfreq']*2)  # to ensure window size = 2
 raw.copy().compute_psd(n_fft=n_fft,  # default method is welch here (multitaper for epoch)
                     n_overlap=int(n_fft/2), 
                     fmin=0.1, fmax=105).plot()  
-                                                                                         
+
+bad_channels = False  # are there any bad channels?
+
 # Mark bad channels before ICA
-original_bads = deepcopy(raw.info["bads"])
-raw.info["bads"].append("FCz")  # add a single channel
+if bad_channels:
+    original_bads = deepcopy(raw.info["bads"])
+    bad_chs = ['FCz']
+    raw.info["bads"].append(bad_chs[0])  # add a single channel
 # raw.info["bads"].extend(["EEG 051", "EEG 052"])  # add a list of channels - should there be more than one channel to drop
 
 """
 list bad channels for all participants:
 {
 sub-01_ses-01_run-01: ['FCz'],
+sub-02_ses-01_run-01: [],
 } """
 
 # Resample and filtering
@@ -108,7 +113,7 @@ ica.fit(raw_resmpld, verbose=True)
 ica.plot_sources(raw_resmpld, title='ICA')
 ica.plot_components()
 
-ICA_rej_dic = {f'sub-{subject}_ses-{session}':[3,4]} # manually selected bad ICs or from sub config file 
+ICA_rej_dic = {f'sub-{subject}_ses-{session}':[]} # manually selected bad ICs or from sub config file 
 artifact_ICs = ICA_rej_dic[f'sub-{subject}_ses-{session}']
 """
 list bad ICA components for all participants:
