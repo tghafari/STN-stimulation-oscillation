@@ -113,12 +113,13 @@ ica.fit(raw_resmpld, verbose=True)
 ica.plot_sources(raw_resmpld, title='ICA')
 ica.plot_components()
 
-ICA_rej_dic = {f'sub-{subject}_ses-{session}':[]} # manually selected bad ICs or from sub config file 
+ICA_rej_dic = {f'sub-{subject}_ses-{session}':[1,4]} # manually selected bad ICs or from sub config file 
 artifact_ICs = ICA_rej_dic[f'sub-{subject}_ses-{session}']
 """
 list bad ICA components for all participants:
 {
 'sub-01_ses-01_run-01': [3, 4],  # 3:saccades, 4:blinks
+'sub-02_ses-01_run-01': [1, 4],  # 1:blink, 4:saccades
 } """
 
 # Double check the manually selected artifactual ICs
@@ -161,7 +162,7 @@ if summary_rprt:
     html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_1.html')
     
     report = mne.open_report(report_fname)
-    report.add_figure(fig_ica, title="removed ICA components (saccade, blink)",
+    report.add_figure(fig_ica, title="removed ICA components (blink, saccade)",
                       tags=('ica'), image_format="PNG")
     report.add_raw(raw=raw_ica.filter(0.3, 100), title='raw after ICA', 
                    psd=True, 
