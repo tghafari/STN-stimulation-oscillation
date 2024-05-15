@@ -46,7 +46,7 @@ from mne_bids import BIDSPath
 import matplotlib.pyplot as plt
 
 # BIDS settings: fill these out 
-subject = '01'
+subject = '02'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -147,7 +147,7 @@ for idx, sensor in enumerate(sensors):
                             baseline=[-.5,-.2],
                             mode='percent', 
                             tmin=-.5, 
-                            tmax=1.2,
+                            tmax=1.5,
                             vmin=-.75, 
                             vmax=.75,
                             axes=axis[idx,0], 
@@ -157,7 +157,7 @@ for idx, sensor in enumerate(sensors):
                             baseline=[-.5,-.2],
                             mode='percent', 
                             tmin=-.5, 
-                            tmax=1.2,
+                            tmax=1.5,
                             vmin=-.75, 
                             vmax=.75, 
                             axes=axis[idx,1], 
@@ -176,11 +176,13 @@ plt.show()
 
 # ========================================= PEAK ALPHA FREQUENCY (PAF) AND THIRD PLOT ====================================
 # Select occipital sensors
-occipital_channels = ['PO8', 'PO4', 'POz', 'PO3', 'PO7', 'O2', 'Oz', 'O1', 'Pz', 'P6', 'P2', 'P5', 'P1']
+occipital_channels = ['O2', 'Oz', 'O1', 'PO8', 'PO4', 'POz', 'PO3', 'PO7', 'P8', 'P6', 'P4', 'P2',
+                       'Pz', 'P1', 'P3', 'P5', 'P7', 'TP10', 'TP8', 'CP6', 'CP4', 'CP2', 'CPz',
+                       'CP1', 'CP3', 'CP5', 'TP7', 'TP9']
 
 # Crop post stim alpha
-tfr_slow_cue_right_post_stim = tfr_slow_cue_right.copy().crop(tmin=.2,tmax=.8,fmin=4, fmax=14).pick(occipital_channels)
-tfr_slow_cue_left_post_stim = tfr_slow_cue_left.copy().crop(tmin=.2,tmax=.8,fmin=4, fmax=14).pick(occipital_channels)
+tfr_slow_cue_right_post_stim = tfr_slow_cue_right.copy().crop(tmin=.3,tmax=.8,fmin=4, fmax=14).pick(occipital_channels)
+tfr_slow_cue_left_post_stim = tfr_slow_cue_left.copy().crop(tmin=.3,tmax=.8,fmin=4, fmax=14).pick(occipital_channels)
 
 # Find the frequency with the highest power by averaging over sensors and time points (data)
 freq_idx_right = np.argmax(np.mean(np.abs(tfr_slow_cue_right_post_stim.data), axis=(0,2)))
@@ -240,7 +242,7 @@ plt.show()
 # Plot post cue peak alpha range topographically
 topomap_params = dict(fmin=peak_alpha_freq_range[0], 
                       fmax=peak_alpha_freq_range[-1],
-                      tmin=.2,
+                      tmin=.3,
                       tmax=.8,
                       vlim=(-.5,.5),
                       baseline=(-.5, -.2), 
@@ -281,8 +283,8 @@ tfr_left_alpha_all_chans = mne.time_frequency.tfr_multitaper(epochs['cue_onset_l
                                                   )   
 
 # Crop tfrs to post-stim alpha and right sensors
-tfr_right_post_stim_alpha_occ_chans = tfr_right_alpha_all_chans.copy().pick(occipital_channels).crop(tmin=.2, tmax=.8)
-tfr_left_post_stim_alpha_occ_chans = tfr_left_alpha_all_chans.copy().pick(occipital_channels).crop(tmin=.2, tmax=.8)
+tfr_right_post_stim_alpha_occ_chans = tfr_right_alpha_all_chans.copy().pick(occipital_channels).crop(tmin=.3, tmax=.8)
+tfr_left_post_stim_alpha_occ_chans = tfr_left_alpha_all_chans.copy().pick(occipital_channels).crop(tmin=.3, tmax=.8)
 
 # Calculate power modulation for attention right and left (always R - L)
 tfr_alpha_MI_occ_chans = tfr_right_post_stim_alpha_occ_chans.copy()
@@ -302,7 +304,7 @@ tfr_alpha_modulation_power.data = (tfr_right_alpha_all_chans.data - tfr_left_alp
                                 / (tfr_right_alpha_all_chans.data + tfr_left_alpha_all_chans.data)
 
 fig, ax = plt.subplots()
-fig_mi = tfr_alpha_modulation_power.plot_topomap(tmin=.2, 
+fig_mi = tfr_alpha_modulation_power.plot_topomap(tmin=.3, 
                                                  tmax=.8, 
                                                  fmin=peak_alpha_freq_range[0],
                                                  fmax=peak_alpha_freq_range[-1],
@@ -361,13 +363,13 @@ if summary_rprt:
 
     report.add_figure(fig=fig_plot_topo_right, title='TFR of power < 30Hz - cue right',
                     caption='Time Frequency Representation for \
-                    cue right- -0.5 to 1.7- baseline corrected', 
+                    cue right- -0.5 to 1.5- baseline corrected', 
                     tags=('tfr'),
                     section='TFR'  # only in ver 1.1
                     )
     report.add_figure(fig=fig_plot_topo_left, title='TFR of power < 30Hz - cue left',
                     caption='Time Frequency Representation for \
-                        cue left- -0.5 to 1.7- baseline corrected', 
+                        cue left- -0.5 to 1.5- baseline corrected', 
                     tags=('tfr'),
                     section='TFR'  # only in ver 1.1
                     )
@@ -384,14 +386,14 @@ if summary_rprt:
                      section='TFR'  # only in ver 1.1
                      )
     report.add_figure(fig=fig_topo, title='post stim alpha',
-                     caption='PAF range, 0.2-0.8sec, \
+                     caption='PAF range, 0.3-0.8sec, \
                         baseline corrected', 
                      tags=('tfr'),
                      section='TFR'  # only in ver 1.1
                      )   
     report.add_figure(fig=fig_mi, title='MI and ROI',
                      caption='MI on PAF range and \
-                        occipital channels (0.2 to 0.8 sec)', 
+                        occipital channels (0.3 to 0.8 sec)', 
                      tags=('mi'),
                      section='MI'  
                      )  

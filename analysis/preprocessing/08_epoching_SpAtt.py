@@ -14,7 +14,6 @@ ToDos:
     1) which epochs to keep?
 
 Issues: 
-    1) bad channels are not saved from ica! 
     
 Questions:
 
@@ -27,7 +26,7 @@ import numpy as np
 import mne
 from mne.preprocessing import ICA
 from copy import deepcopy
-from mne_bids import BIDSPath, read_raw_bids
+from mne_bids import BIDSPath
 from autoreject import get_rejection_threshold
 
 
@@ -43,7 +42,7 @@ deriv_suffix = 'epo'
 extension = '.fif'
 
 pilot = True  # is it pilot data or real data?
-summary_rprt = True  # do you want to add evokeds figures to the summary report?
+summary_rprt = True # do you want to add evokeds figures to the summary report?
 platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
 test_plot = False
 
@@ -119,8 +118,6 @@ if test_plot:
     # Topo plot evoked responses
     evoked_obj_topo_plot = [epochs['cue_onset_left'].average(), epochs['cue_onset_right'].average()]
     mne.viz.plot_evoked_topo(evoked_obj_topo_plot, show=True)
-
-    ###############################################################################
 
     # Plots the average of one epoch type - pick best sensors for report
     epochs['cue_onset_left'].average().copy().filter(1,60).plot()

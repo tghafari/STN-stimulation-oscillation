@@ -133,7 +133,8 @@ if summary_rprt:
     report = mne.open_report(report_fname)
 
     report.add_figure(fig=fig_evo, title='evoked response',
-                        caption='evoked response for cue = 0-200ms', 
+                        caption='evoked response for cue = 0-200ms\
+                            and stim = 1200ms', 
                         tags=('evo'),
                         section='evokeds'
                         )

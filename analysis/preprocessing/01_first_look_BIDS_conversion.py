@@ -217,10 +217,10 @@ if summary_rprt:
     report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 
-                        f'sub-{subject}_preproc_3.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_3.html')
+                        f'sub-{subject}_preproc_1.hdf5')    # it is in .hdf5 for later adding images
+    html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_1.html')
     
-    report = mne.open_report(report_fname)
+    report = mne.Report(title=f'Subject {subject}')
     if eve_rprt:
         report.add_events(events=events, 
                         event_id=events_id, 
