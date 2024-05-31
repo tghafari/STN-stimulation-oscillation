@@ -1,35 +1,29 @@
 # -*- coding: utf-8 -*-
 """
 ===============================================
-B02. calculate MI and select ROI
+A02. calculate MI and select ROI
 
 This code will:
 
     A. Peak Alpha Frequency
     1. calculate TFR for cue right and left
-    2. crop the tfr into time point and frequency (4-14Hz)
-      of interest and pick occipital sensors
-    3. find peak alpha frequency range and plot
+    2. plot TFR plot_topo and TFR on two
+    sensors
+    3. crop the tfr into time point and frequency (4-14Hz)
+      of interest and pick occipital and parietal sensors
+    4. find peak alpha frequency range
+    5. plot range of peak alpha frequency and topography
+    of cue left and cue right on PAF
 
-!! works until here !!    
-    
-    B. ROI sensors
-    4. calculate tfr for right sensors 
-    5. calculate MI = (attend right - attend left) \
+    B. MI
+    6. calculate MI = (attend right - attend left) \
     / (attend right + attend left) 
-    6. sort sensors based on MI
-    7. select first five sensors on right and their 
-    corresponding left as ROI
-    8. calculate psd for left sensors and MI_left_sens
-    9. calculate ALI = MI_right_ROI_avg +
-                       MI_left_ROI_avg
-    10. report ALI as primary outcome
+    7. plot MI topographically 
 
 
 written by Tara Ghafari
 ==============================================
 ToDos:
-    needs layout of sensors
 
 questions?
     can we actually rely on posterior sensors and alpha lateralisation and alpha peak? given the smearing of signal in eeg?
@@ -321,6 +315,7 @@ fig_mi.suptitle('attention right - attention left (PAF range on occipital channe
 plt.show()  
 
 # ========================================= MI OVER TIME AND SIXTH PLOT =======================================
+# Don't plot now, it looks terrible for sub01 and sub02
 # Plot MI avg across ROI over time
 fig, axs = plt.subplots(figsize=(12, 6))
 
