@@ -5,15 +5,17 @@ S01. reporting stimulation epochs
 
 This code will:
 
-    1. read in the epochs (from fif file)
-    2. divide stim epochs from no stim epochs
+    1. read in the ica (from fif file)
+    2. epoch to 'block_onset' which has 
+    event_id=3, with reject_by_annotation=False
+    3. divide stim epochs from no stim epochs
     based on the 'new segment:9999' trigger
-    3. plot psd
-    4. plot mean psd on parieto occipital 
+    4. plot psd
+    5. plot mean psd on parieto occipital 
     channels
-    5. plots TFR plot_topo
-    6. plots TFR on representative channels
-    7. MI topographically 
+    6. plots TFR plot_topo
+    7. plots TFR on representative channels
+    8. MI topographically 
 
 
 written by Tara Ghafari
@@ -40,8 +42,8 @@ task = 'SpAtt'
 run = '01'
 eeg_suffix = 'eeg'
 eeg_extension = '.vhdr'
-input_suffix = 'epo'
-deriv_suffix = 'tfr'
+input_suffix = 'ica'
+deriv_suffix = 'stm-epo'
 extension = '.fif'
 
 pilot = True  # is it pilot data or real data?
@@ -77,24 +79,27 @@ deriv_fname = op.join(deriv_folder, bids_path.basename + '_' + deriv_suffix + ex
 
 peak_alpha_fname = op.join(ROI_dir, f'sub-{subject}_peak_alpha.npz')  # 2 numpy arrays saved into an uncompressed file
 
-# Read epoched data
-epochs = mne.read_epochs(input_fname, verbose=True, preload=True)  # epochs are from -.7 to 1.7sec
-
-# Specify specific file names
-input_suffix = 'ica'
-deriv_suffix = 'epo'
-extension = '.fif'
-bids_path = BIDSPath(subject=subject, session=session,
-                     task=task, run=run, root=bids_root, 
-                     datatype ='eeg', suffix=eeg_suffix)
-input_fname = op.join(deriv_folder, bids_path.basename + '_' + input_suffix + extension)
-deriv_fname = op.join(deriv_folder, bids_path.basename + '_' + deriv_suffix + extension)  # prone to change if annotation worked for eeg brainvision
-
 # read annotated data
 raw_ica = mne.io.read_raw_fif(input_fname, verbose=True, preload=True)
+events, events_id = mne.events_from_annotations(raw_ica, event_id='auto')
+
+# epoch ica data to make sure an entire block epoch is not rejected by annotation
+epochs_block_onset_end = mne.Epochs(raw_ica, 
+                    events, 
+                    events_id=[3,2],   # select only block_onset(3) and block_end(2) events                   
+                    tmin=-0.7, 
+                    tmax=1.7,
+                    baseline=None, 
+                    proj=True, 
+                    picks='all', 
+                    detrend=1, 
+                    event_repeated='merge',
+                    reject=None,  # we'll reject after calculating the threshold
+                    reject_by_annotation=True,
+                    preload=True, 
+                    verbose=True)
 
 # separately plot psd for each block: which block is stim on which stim off?
-epochs['block_onset']
 
 
 
