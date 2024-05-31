@@ -6,10 +6,9 @@ S01. reporting stimulation epochs
 This code will:
 
     1. read in the ica (from fif file)
-    2. epoch to 'block_onset' which has 
-    event_id=3, with reject_by_annotation=False
+    2. epoch again with reject_by_annotation=False
     3. divide stim epochs from no stim epochs
-    based on the 'new segment:9999' trigger
+    based on the psd (with or without 130Hz peak)
     4. plot psd
     5. plot mean psd on parieto occipital 
     channels
@@ -34,6 +33,8 @@ import pandas as pd
 import mne
 from mne_bids import BIDSPath
 import matplotlib.pyplot as plt
+from autoreject import get_rejection_threshold
+
 
 # BIDS settings: fill these out 
 subject = '02'
@@ -82,25 +83,24 @@ peak_alpha_fname = op.join(ROI_dir, f'sub-{subject}_peak_alpha.npz')  # 2 numpy 
 # read annotated data
 raw_ica = mne.io.read_raw_fif(input_fname, verbose=True, preload=True)
 events, events_id = mne.events_from_annotations(raw_ica, event_id='auto')
-
+              
 # epoch ica data to make sure an entire block epoch is not rejected by annotation
 epochs_block_onset_end = mne.Epochs(raw_ica, 
                     events, 
-                    events_id=[3,2],   # select only block_onset(3) and block_end(2) events                   
+                    events_id,   # select only block_onset(3) and block_end(2) events                   
                     tmin=-0.7, 
                     tmax=1.7,
                     baseline=None, 
-                    proj=True, 
+                    proj=True,  
                     picks='all', 
                     detrend=1, 
-                    event_repeated='merge',
+                    event_repeated='error',
                     reject=None,  # we'll reject after calculating the threshold
-                    reject_by_annotation=True,
+                    reject_by_annotation=False,
                     preload=True, 
                     verbose=True)
 
 # separately plot psd for each block: which block is stim on which stim off?
-
 
 
 
