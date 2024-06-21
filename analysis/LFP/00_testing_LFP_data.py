@@ -31,9 +31,9 @@ import matplotlib.pyplot as plt
 
 
 # fill these out
-subj_code = '01_ly'  # subject code assigned to by Benchi's group
-session_code = '01_ly_LFP'  # name of the folder containing the lfp data
-csv_fname = '01_ly_right_LFP_blocks3-4'
+subj_code = 'sub05'  # subject code assigned to by Benchi's group
+session_code = 'sub05_right_LFP'  # name of the folder containing the lfp data
+csv_fname = '1010P22531_2024_04_19_11_01_49_uv'
 platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
 pilot = True  # is it pilot data or real data?
 rprt = True
@@ -69,7 +69,7 @@ plt.figure(figsize=(10, 6))
 plt.plot(lfp_df_excluded['sample'], lfp_df_excluded['amplitude'], label='raw data')
 plt.xlabel(f'samples (sfreq={sfreq})')
 plt.ylabel('amplitude (microvolts)')
-plt.title(f'Raw Data sub_{subj_code}-{csv_fname}')
+plt.title(f'Raw Data sub_{subj_code}-{session_code}')
 
 plt.legend()
 plt.grid(True)
@@ -83,7 +83,6 @@ lfp_df_dropna = lfp_df_excluded.dropna()
 plt.figure(figsize=(10, 6))
 n, bins, patches = plt.hist(lfp_df_dropna['tag_code'], bins=50, edgecolor='black')
 
-#plt.hist(lfp_df_excluded.iloc[:, 2], bins=50, edgecolor='black')
 plt.xlabel('tag code')
 plt.ylabel('Frequency')
 plt.title('Histogram of Tag Codes')
