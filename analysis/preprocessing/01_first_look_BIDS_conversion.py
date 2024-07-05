@@ -37,8 +37,14 @@ from mne_bids import (BIDSPath, write_raw_bids, read_raw_bids)
 import matplotlib.pyplot as plt
 
 # Fill these out
-subj_code = '01_ly'  # subject code assigned to by Benchi's group
-subj_name = 'Liuyu'  # name on eeg file
+subj_code = 'sub01'  # subject code assigned to by Benchi's group
+base_fname = '1_ao_mo'  # the name of the eeg file for 01_ly to sub05 should be manually copied here
+
+# Stimulation sequence
+"""copy the stim sequence for each participant from here: 
+https://github.com/tghafari/STN-stimulation-oscillation/wiki/Stimulation-table"""
+stim_sequence = {'no_stim-left rec', 'no_stim-right rec', 'Right stim- no rec', 'Left stim- no rec'}  
+
 
 # BIDS settings
 subject = '01'
@@ -51,7 +57,7 @@ events_suffix = 'events'
 events_extension = '.tsv'
 
 platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
-pilot = True  # is it pilot data or real data?
+pilot = False  # is it pilot data or real data?
 sanity_test = False
 eve_rprt = True
 summary_rprt = True
@@ -63,19 +69,20 @@ elif platform == 'mac':
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
 if pilot:
-    data_root = op.join(project_root, 'Data/pilot-data/AO')
+    data_root = op.join(project_root, 'data/pilot-data')
 else:
-    data_root = op.join(project_root, 'Data/real-data')
+    data_root = op.join(project_root, 'data/real-data')
 
-bids_root = op.join(project_root, 'Data', 'BIDS')
-base_fname = op.join(data_root, subj_code, f'{subj_code}_EEG', f'{subj_name}_ao1_new')  # 01_ly has _new after ao1
-eeg_fname = base_fname + '.eeg'
-vhdr_fname = base_fname + '.vhdr'
-events_fname = base_fname + '-eve.fif'
-annotated_raw_fname = base_fname + '_eeg.fif'
+bids_root = op.join(project_root, 'data', 'BIDS')
+base_fpath = op.join(data_root, subj_code, f'EEG_{subj_code}')  
+eeg_fname = op.join(base_fpath, base_fname + '.eeg')  
+vhdr_fname = op.join(base_fpath, base_fname + '.vhdr')
+events_fname = op.join(base_fpath, base_fname + '-eve.fif')
+annotated_raw_fname = op.join(base_fpath, base_fname + '_eeg.fif')
 
 # Read raw file in BrainVision (.vhdr, .vmrk, .eeg) format
 raw = mne.io.read_raw_brainvision(vhdr_fname, eog=('HEOGL', 'HEOGR', 'VEOGb'), preload=True)
+raw.plot()  # first thing first
 
 # Read events from raw object
 events, _ = mne.events_from_annotations(raw, event_id='auto')
@@ -93,6 +100,7 @@ mapping = {1:'cue_onset_right',
            21:'block_end',
            30:'experiment_end',
            #31: 'abort',  # participant 04_wmf has abort
+           10001:'new_stim_segment_maybe',  # sub01 has an extra trigger           
            99999:'new_stim_segment',
         }
 annotations_from_events = mne.annotations_from_events(events=events,
@@ -129,7 +137,7 @@ psd_fig = raw.copy().compute_psd(n_fft=n_fft,  # default method is welch here (m
 # Save a non-bids raw just in case 
 raw.save(annotated_raw_fname, overwrite=True)  # note that the event_id is incorrect here, use the event_id dict if needed
 
-# Have to explicitly assign values to events 
+# Have to explicitly assign values to events for brainvision data
 event_dict = {'cue_onset_right':1,
            'cue_onset_left':2,
            'trial_onset':3,
@@ -142,6 +150,7 @@ event_dict = {'cue_onset_right':1,
            'block_end':21,
            'experiment_end':30,
            #'abort':31,  # participant 04_wmf has abort
+           'new_stim_segment_maybe':10001,  # sub01 has an extra trigger
            'new_stim_segment':99999,
         }
 _, events_id = mne.events_from_annotations(raw, event_id=event_dict)
@@ -194,13 +203,13 @@ plt.show()
 if sanity_test:
     # Check duration of cue presentation  
     events_dict['stim_to_dot_duration'] = events_dict['dot_onset'] - events_dict['stim_onset']
-    events_dict['RT'] = events_dict['response_press_onset'] - events_dict['dot_onset']  # participants 01 and 04 only responded to right stim -> do not execute this line
+    # events_dict['RT'] = events_dict['response_press_onset'] - events_dict['dot_onset']  # participants 01 and 04 only responded to right stim -> do not execute this line
     # cheat line to add extra elements for easier calculation of RTs:
     # events_dict['dot_onset'] = np.insert(events_dict['dot_onset'], index_onset_should_be_added_before, onset)
 
     # Plot all durations
     for dur in ['cue_onset_right', 'cue_onset_left', 'dot_onset_right', 'dot_onset_left', 
-                        'response_press_onset', 'RT']:
+                        'response_press_onset']:#, 'RT']:
         fig, ax = plt.subplots()
         plt.hist(events_dict[dur])
         plt.title(dur)
@@ -210,7 +219,7 @@ if sanity_test:
 
 
 if summary_rprt:
-    report_root = op.join(project_root, 'results/reports')  # RDS folder for reports
+    report_root = op.join(project_root, 'derivatives/reports')  # RDS folder for reports
    
     if not op.exists(op.join(report_root , 'sub-' + subject)):
         os.makedirs(op.join(report_root , 'sub-' + subject))
