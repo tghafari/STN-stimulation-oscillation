@@ -35,7 +35,7 @@ input_suffix = 'epo'
 deriv_suffix = 'evo'
 extension = '.fif'
 
-pilot = True  # is it pilot data or real data?
+pilot = False  # is it pilot data or real data?
 summary_rprt = True  # do you want to add evokeds figures to the summary report?
 platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
 test_plot = False
@@ -52,12 +52,11 @@ elif platform == 'mac':
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
 if pilot:
-    data_root = op.join(project_root, 'Data/pilot-data/AO')
+    bids_root = op.join(project_root, 'data', 'pilot-BIDS')
 else:
-    data_root = op.join(project_root, 'Data/real-data')
+    bids_root = op.join(project_root, 'data', 'BIDS')
 
 # Specify specific file names
-bids_root = op.join(project_root, 'Data', 'BIDS')
 bids_path = BIDSPath(subject=subject, session=session,
                      task=task, run=run, root=bids_root, 
                      datatype ='eeg', suffix=eeg_suffix)
@@ -70,7 +69,6 @@ epochs = mne.read_epochs(input_fname, verbose=True, preload=True)  # -.7 to 1.7s
 
 if test_plot:
     # ==================================== RIGHT LEFT SEPARATELY ==============================================
-    # Make evoked data for conditions of interest and save
     evoked_right = epochs['cue_onset_right'].copy().average(method='mean').filter(0.0,60).crop(-.2,1.7) 
     evoked_left = epochs['cue_onset_left'].copy().average(method='mean').filter(0.0,60).crop(-.2,1.7)
     evokeds = [evoked_right, evoked_left]
@@ -111,7 +109,7 @@ if test_plot:
     evoked.copy().plot_topomap(.2, time_unit='s')
 
     # Explore the epoched dataset
-    resampled_epochs = epochs.copy().drop_channels(['Fz']).resample(200)  # have to manually drop reference channel
+    resampled_epochs = epochs.copy().resample(200)  
     resampled_epochs.compute_psd(fmin=1.0, fmax=60.0).plot(spatial_colors=True)  # explore the frequency content of the epochs
     resampled_epochs.compute_psd().plot_topomap(normalize=False)  # spatial distribution of the PSD
 
@@ -121,7 +119,7 @@ fig_evo = evoked.copy().plot_joint(times=topos_times)
 
 if summary_rprt:
 
-    report_root = op.join(project_root, 'results/reports')  
+    report_root = op.join(project_root, 'derivatives/reports')  
     if not op.exists(op.join(report_root , 'sub-' + subject)):
         os.makedirs(op.join(report_root , 'sub-' + subject))
     report_folder = op.join(report_root , 'sub-' + subject)
