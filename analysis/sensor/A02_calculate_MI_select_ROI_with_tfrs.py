@@ -40,7 +40,7 @@ from mne_bids import BIDSPath
 import matplotlib.pyplot as plt
 
 # BIDS settings: fill these out 
-subject = '02'
+subject = '01'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -50,7 +50,7 @@ input_suffix = 'epo'
 deriv_suffix = 'tfr'
 extension = '.fif'
 
-pilot = True  # is it pilot data or real data?
+pilot = False  # is it pilot data or real data?
 summary_rprt = True  # do you want to add evokeds figures to the summary report?
 platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
 test_plot = False
@@ -67,13 +67,12 @@ elif platform == 'mac':
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
 if pilot:
-    data_root = op.join(project_root, 'Data/pilot-data/AO')
+    bids_root = op.join(project_root, 'data', 'pilot-BIDS')
 else:
-    data_root = op.join(project_root, 'Data/real-data')
+    bids_root = op.join(project_root, 'data', 'BIDS')
 
 # Specify specific file names
-ROI_dir = op.join(project_root, 'results/lateralisation-indices')
-bids_root = op.join(project_root, 'Data', 'BIDS')
+ROI_dir = op.join(project_root, 'derivatives/lateralisation-indices')
 bids_path = BIDSPath(subject=subject, session=session,
                      task=task, run=run, root=bids_root, 
                      datatype ='eeg', suffix=eeg_suffix)
