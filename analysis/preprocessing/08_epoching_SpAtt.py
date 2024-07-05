@@ -41,7 +41,7 @@ input_suffix = 'ica'
 deriv_suffix = 'epo'
 extension = '.fif'
 
-pilot = True  # is it pilot data or real data?
+pilot = False  # is it pilot data or real data?
 summary_rprt = True # do you want to add evokeds figures to the summary report?
 platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
 test_plot = False
@@ -58,12 +58,11 @@ elif platform == 'mac':
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
 if pilot:
-    data_root = op.join(project_root, 'Data/pilot-data/AO')
+    bids_root = op.join(project_root, 'data', 'pilot-BIDS')
 else:
-    data_root = op.join(project_root, 'Data/real-data')
+    bids_root = op.join(project_root, 'data', 'BIDS')
 
 # Specify specific file names
-bids_root = op.join(project_root, 'Data', 'BIDS')
 bids_path = BIDSPath(subject=subject, session=session,
                      task=task, run=run, root=bids_root, 
                      datatype ='eeg', suffix=eeg_suffix)
@@ -125,7 +124,7 @@ if test_plot:
 
 if summary_rprt:
 
-    report_root = op.join(project_root, 'results/reports')  
+    report_root = op.join(project_root, 'derivatives/reports')  
     if not op.exists(op.join(report_root , 'sub-' + subject)):
         os.makedirs(op.join(report_root , 'sub-' + subject))
     report_folder = op.join(report_root , 'sub-' + subject)

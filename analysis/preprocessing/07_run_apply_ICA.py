@@ -58,12 +58,11 @@ elif platform == 'mac':
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
 if pilot:
-    data_root = op.join(project_root, 'Data/pilot-data/AO')
+    bids_root = op.join(project_root, 'data', 'pilot-BIDS')
 else:
-    data_root = op.join(project_root, 'Data/real-data')
+    bids_root = op.join(project_root, 'data', 'BIDS')
 
 # Specify specific file names
-bids_root = op.join(project_root, 'Data', 'BIDS')
 bids_path = BIDSPath(subject=subject, session=session,
                      task=task, run=run, root=bids_root, 
                      datatype ='eeg', suffix=eeg_suffix)
