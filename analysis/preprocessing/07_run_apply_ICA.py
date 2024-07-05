@@ -42,7 +42,7 @@ eeg_extension = '.vhdr'
 deriv_suffix = 'ica'
 extension = '.fif'
 
-pilot = True  # is it pilot data or real data?
+pilot = False  # is it pilot data or real data?
 summary_rprt = True  # do you want to add evokeds figures to the summary report?
 platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
 
@@ -88,15 +88,20 @@ bad_channels = True  # are there any bad channels?
 # Mark bad channels before ICA
 if bad_channels:
     original_bads = deepcopy(raw.info["bads"])
-    bad_chs = ['FCz']
-    raw.info["bads"].append(bad_chs[0])  # add a single channel
-# raw.info["bads"].extend(["EEG 051", "EEG 052"])  # add a list of channels - should there be more than one channel to drop
+    bad_chs = ["T7", "FT10"]
+    raw.copy().pick(bad_chs).compute_psd().plot()  # double check bad channels
+    if len(bad_chs) == 1:
+        raw.info["bads"].append(bad_chs[0])  # add a single channel
+    else:
+        raw.info["bads"].extend(bad_chs)  # add a list of channels - should there be more than one channel to drop
 
 """
 list bad channels for all participants:
 {
-sub-01_ses-01_run-01: ['FCz'],
-sub-02_ses-01_run-01: [],
+pilot_BIDS/sub-01_ses-01_run-01: ["FCz"],
+pilot_BIDS/sub-02_ses-01_run-01: [],
+BIDS/sub-01_ses-01_run-01: ["T7", "FT10"]
+
 } """
 
 # Resample and filtering
@@ -108,18 +113,19 @@ because that's what we need
 raw_resmpld = raw.copy().resample(200).filter(1, 40)
 
 # Apply ICA and identify artifact components
-ica = ICA(method='fastica', random_state=97, n_components=30, verbose=True)
+ica = ICA(method='fastica', random_state=97, verbose=True)
 ica.fit(raw_resmpld, verbose=True)
 ica.plot_sources(raw_resmpld, title='ICA')
 ica.plot_components()
 
-ICA_rej_dic = {f'sub-{subject}_ses-{session}':[2,5]} # manually selected bad ICs or from sub config file 
+ICA_rej_dic = {f'sub-{subject}_ses-{session}':[0, 1, 2]} # manually selected bad ICs or from sub config file 
 artifact_ICs = ICA_rej_dic[f'sub-{subject}_ses-{session}']
 """
 list bad ICA components for all participants:
 {
-'sub-01_ses-01_run-01': [2, 5],  # 2:blink, 5:saccades
-'sub-02_ses-01_run-01': [1, 4],  # 1:blink, 4:saccades
+'pilot_BIDS/sub-01_ses-01_run-01': [2, 5],  # 2:blink, 5:saccades
+'pilot_BIDS/sub-02_ses-01_run-01': [1, 4],  # 1:blink, 4:saccades
+'BIDS/sub-01_ses-01_run-01': [0, 1, 2], # 0:blink, 1:saccades, 2:blink/saccades
 } """
 
 # Double check the manually selected artifactual ICs
@@ -151,7 +157,7 @@ fig_ica = ica.plot_components(picks=artifact_ICs, title='removed components')
 
 # Filter data for the report
 if summary_rprt:
-    report_root = op.join(project_root, 'results/reports')  # RDS folder for reports
+    report_root = op.join(project_root, 'derivatives/reports')  # RDS folder for reports
    
     if not op.exists(op.join(report_root , 'sub-' + subject)):
         os.makedirs(op.join(report_root , 'sub-' + subject))
