@@ -391,12 +391,12 @@ if summary_rprt:
                      tags=('mi'),
                      section='MI'  
                      )  
-    report.add_figure(fig=fig_mi_overtime, title='MI over time',
-                     caption='MI average on occipital channels \
-                     in PAF ', 
-                     tags=('mi'),
-                     section='MI'  
-                     )
+#    report.add_figure(fig=fig_mi_overtime, title='MI over time',
+#                     caption='MI average on occipital channels \
+#                     in PAF ', 
+#                     tags=('mi'),
+#                     section='MI'  
+#                     )
 
     report.save(report_fname, overwrite=True)
     report.save(html_report_fname, overwrite=True, open_browser=True)  # to check how the report looks
