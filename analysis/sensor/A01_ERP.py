@@ -25,7 +25,7 @@ from mne_bids import BIDSPath
 
 
 # BIDS settings: fill these out 
-subject = '01'
+subject = '02'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -69,33 +69,19 @@ epochs = mne.read_epochs(input_fname, verbose=True, preload=True)  # -.7 to 1.7s
 
 if test_plot:
     # ==================================== RIGHT LEFT SEPARATELY ==============================================
-    evoked_right = epochs['cue_onset_right'].copy().average(method='mean').filter(0.0,60).crop(-.2,1.7) 
-    evoked_left = epochs['cue_onset_left'].copy().average(method='mean').filter(0.0,60).crop(-.2,1.7)
+    evoked_right = epochs['cue_onset_right'].copy().average(method='mean').filter(0.0,60).crop(-.7,1.7) 
+    evoked_left = epochs['cue_onset_left'].copy().average(method='mean').filter(0.0,60).crop(-.7,1.7)
     evokeds = [evoked_right, evoked_left]
 
-    # Plot evoked data
-    epochs['cue_onset_right'].copy().filter(0.0,30).crop(-.2,1.7).plot_image(vmin=-200, vmax=200)
+    # Plot evoked_right data
+    epochs['cue_onset_right'].copy().filter(0.0,30).crop(-.2,1.7).plot_image()
     evoked_right.copy().apply_baseline(baseline=(-.5,-.2))
     evoked_right.copy().plot_topo(title='cue onset right')
     evoked_right.copy().plot_topomap(.1, time_unit='s')
 
-
-    # Explore the epoched dataset
-    resampled_epochs = epochs.copy().resample(200)
-    resampled_epochs.compute_psd(fmin=1.0, fmax=30.0).plot(spatial_colors=True)  # explore the frequency content of the epochs
-    resampled_epochs.compute_psd().plot_topomap(normalize=False)  # spatial distribution of the PSD
-
     # Plot magnetometers for summary report
-    fig_right_mag = evoked_right.copy().plot_joint(times=[0.150,0.270,0.410])
-    fig_left_mag = evoked_left.copy().plot_joint(times=[0.150,0.255,0.395])
-
-    # Plot and combine gradiometers for summary report
-    fig_right_grad = evoked_right.copy().plot_joint(
-        times=[0.150,0.270,0.410], 
-        topomap_args={'vlim':(0,140)})
-    fig_left_grad = evoked_left.copy().plot_joint(
-        times=[0.150,0.255,0.395],
-        topomap_args={'vlim':(0,140)})
+    fig_right = evoked_right.copy().plot_joint(times=[0.150,0.270,0.410])
+    fig_left = evoked_left.copy().plot_joint(times=[0.150,0.255,0.395])
 
 # ==================================== RIGHT LEFT TOGETHER ==============================================
 # Make evoked data for conditions of interest and save

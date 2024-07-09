@@ -37,17 +37,18 @@ from mne_bids import (BIDSPath, write_raw_bids, read_raw_bids)
 import matplotlib.pyplot as plt
 
 # Fill these out
-subj_code = 'sub01'  # subject code assigned to by Benchi's group
-base_fname = '1_ao_mo'  # the name of the eeg file for 01_ly to sub05 should be manually copied here
+subj_code = 'sub02'  # subject code assigned to by Benchi's group
+base_fname = 'ao_02_swf'  # the name of the eeg file for 01_ly to sub05 should be manually copied here
 
 # Stimulation sequence
 """copy the stim sequence for each participant from here: 
 https://github.com/tghafari/STN-stimulation-oscillation/wiki/Stimulation-table"""
-stim_sequence = {'no_stim-left rec', 'no_stim-right rec', 'Right stim- no rec', 'Left stim- no rec'}  
+stim_sequence = {'sub-01':["no_stim-left rec", "no_stim-right rec", "Right stim- no rec", "Left stim- no rec"],
+                 'sub-02':["no_stim-left rec", "no_stim-right rec", "Left stim- no rec", "Right stim- no rec"]}  
 
 
 # BIDS settings
-subject = '01'
+subject = '02'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -148,9 +149,9 @@ event_dict = {'cue_onset_right':1,
            'response_press_onset':8,
            'block_onset':20,
            'block_end':21,
-           'experiment_end':30,
+           #'experiment_end':30,  #sub02 does not have this
            #'abort':31,  # participant 04_wmf has abort
-           'new_stim_segment_maybe':10001,  # sub01 has an extra trigger
+           #'new_stim_segment_maybe':10001,  # sub01 has an extra trigger
            'new_stim_segment':99999,
         }
 _, events_id = mne.events_from_annotations(raw, event_id=event_dict)

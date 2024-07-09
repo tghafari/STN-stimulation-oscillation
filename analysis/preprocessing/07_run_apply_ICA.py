@@ -33,7 +33,7 @@ from copy import deepcopy
 from mne_bids import BIDSPath, read_raw_bids
 
 # BIDS settings: fill these out 
-subject = '01'
+subject = '02'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -87,7 +87,7 @@ bad_channels = True  # are there any bad channels?
 # Mark bad channels before ICA
 if bad_channels:
     original_bads = deepcopy(raw.info["bads"])
-    bad_chs = ["T7", "FT10"]
+    bad_chs = ["TP10"]
     raw.copy().pick(bad_chs).compute_psd().plot()  # double check bad channels
     if len(bad_chs) == 1:
         raw.info["bads"].append(bad_chs[0])  # add a single channel
@@ -99,8 +99,8 @@ list bad channels for all participants:
 {
 pilot_BIDS/sub-01_ses-01_run-01: ["FCz"],
 pilot_BIDS/sub-02_ses-01_run-01: [],
-BIDS/sub-01_ses-01_run-01: ["T7", "FT10"]
-
+BIDS/sub-01_ses-01_run-01: ["T7", "FT10"],
+BIDS/sub-02_ses-01_run-01: ["TP10"]
 } """
 
 # Resample and filtering
@@ -117,7 +117,7 @@ ica.fit(raw_resmpld, verbose=True)
 ica.plot_sources(raw_resmpld, title='ICA')
 ica.plot_components()
 
-ICA_rej_dic = {f'sub-{subject}_ses-{session}':[0, 1, 2]} # manually selected bad ICs or from sub config file 
+ICA_rej_dic = {f'sub-{subject}_ses-{session}':[0, 1, 2, 3, 4]} # manually selected bad ICs or from sub config file 
 artifact_ICs = ICA_rej_dic[f'sub-{subject}_ses-{session}']
 """
 list bad ICA components for all participants:
@@ -125,6 +125,7 @@ list bad ICA components for all participants:
 'pilot_BIDS/sub-01_ses-01_run-01': [2, 5],  # 2:blink, 5:saccades
 'pilot_BIDS/sub-02_ses-01_run-01': [1, 4],  # 1:blink, 4:saccades
 'BIDS/sub-01_ses-01_run-01': [0, 1, 2], # 0:blink, 1:saccades, 2:blink/saccades
+'BIDS/sub-02_ses-01_run-01': [0, 1, 2, 3, 4], # 0:blink, 1:saccades, 2:blink/saccades, 3&4: empty
 } """
 
 # Double check the manually selected artifactual ICs
@@ -167,7 +168,7 @@ if summary_rprt:
     html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_1.html')
     
     report = mne.open_report(report_fname)
-    report.add_figure(fig_ica, title="removed ICA components (saccade, blink)",
+    report.add_figure(fig_ica, title="removed ICA components (saccade, blink, noise)",
                       tags=('ica'), image_format="PNG")
     report.add_raw(raw=raw_ica.filter(0.3, 100), title='raw after ICA', 
                    psd=True, 
