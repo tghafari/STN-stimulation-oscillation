@@ -26,7 +26,6 @@ written by Tara Ghafari
 ToDos:
 
 questions?
-    can we actually rely on posterior sensors and alpha lateralisation and alpha peak? given the smearing of signal in eeg?
 
 """
 
@@ -40,7 +39,7 @@ from mne_bids import BIDSPath
 import matplotlib.pyplot as plt
 
 # BIDS settings: fill these out 
-subject = '01'
+subject = '02'
 session = '01'
 task = 'SpAtt'
 run = '01'
