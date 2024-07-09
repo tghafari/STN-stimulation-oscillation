@@ -33,7 +33,7 @@ from copy import deepcopy
 from mne_bids import BIDSPath, read_raw_bids
 
 # BIDS settings: fill these out 
-subject = '02'
+subject = '05'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -100,7 +100,8 @@ list bad channels for all participants:
 pilot_BIDS/sub-01_ses-01_run-01: ["FCz"],
 pilot_BIDS/sub-02_ses-01_run-01: [],
 BIDS/sub-01_ses-01_run-01: ["T7", "FT10"],
-BIDS/sub-02_ses-01_run-01: ["TP10"]
+BIDS/sub-02_ses-01_run-01: ["TP10"],
+BIDS/sub-05_ses-01_run-01: ["almost all channels look terrible in psd"],
 } """
 
 # Resample and filtering
@@ -117,7 +118,18 @@ ica.fit(raw_resmpld, verbose=True)
 ica.plot_sources(raw_resmpld, title='ICA')
 ica.plot_components()
 
-ICA_rej_dic = {f'sub-{subject}_ses-{session}':[0, 1, 2, 3, 4]} # manually selected bad ICs or from sub config file 
+for comp in range(59):
+    explained_var_ratio = ica.get_explained_variance_ratio(
+        raw_resmpld, components=comp, ch_type="eeg"
+    )
+    # This time, print as percentage.
+    ratio_percent = round(100 * explained_var_ratio["eeg"])
+    print(
+        f"Fraction of variance in EEG signal explained by component: {comp}"
+        f"{ratio_percent}%"
+    )
+
+ICA_rej_dic = {f'sub-{subject}_ses-{session}':[0, 1, 8, 58, 59]} # manually selected bad ICs or from sub config file 
 artifact_ICs = ICA_rej_dic[f'sub-{subject}_ses-{session}']
 """
 list bad ICA components for all participants:
@@ -126,6 +138,7 @@ list bad ICA components for all participants:
 'pilot_BIDS/sub-02_ses-01_run-01': [1, 4],  # 1:blink, 4:saccades
 'BIDS/sub-01_ses-01_run-01': [0, 1, 2], # 0:blink, 1:saccades, 2:blink/saccades
 'BIDS/sub-02_ses-01_run-01': [0, 1, 2, 3, 4], # 0:blink, 1:saccades, 2:blink/saccades, 3&4: empty
+'BIDS/sub-05_ses-01_run-01': [0, 1, 8, 58, 59], # don't know-almost all look terrible
 } """
 
 # Double check the manually selected artifactual ICs

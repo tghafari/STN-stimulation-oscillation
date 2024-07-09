@@ -31,7 +31,7 @@ from autoreject import get_rejection_threshold
 
 
 # BIDS settings: fill these out 
-subject = '02'
+subject = '05'
 session = '01'
 task = 'SpAtt'
 run = '01'

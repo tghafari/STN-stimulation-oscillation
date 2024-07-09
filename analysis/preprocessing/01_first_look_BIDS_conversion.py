@@ -37,18 +37,18 @@ from mne_bids import (BIDSPath, write_raw_bids, read_raw_bids)
 import matplotlib.pyplot as plt
 
 # Fill these out
-subj_code = 'sub02'  # subject code assigned to by Benchi's group
-base_fname = 'ao_02_swf'  # the name of the eeg file for 01_ly to sub05 should be manually copied here
+subj_code = 'sub05'  # subject code assigned to by Benchi's group
+base_fname = '5.15_5_AO'  # the name of the eeg file for 01_ly to sub05 should be manually copied here
 
 # Stimulation sequence
 """copy the stim sequence for each participant from here: 
 https://github.com/tghafari/STN-stimulation-oscillation/wiki/Stimulation-table"""
 stim_sequence = {'sub-01':["no_stim-left rec", "no_stim-right rec", "Right stim- no rec", "Left stim- no rec"],
-                 'sub-02':["no_stim-left rec", "no_stim-right rec", "Left stim- no rec", "Right stim- no rec"]}  
-
+                 'sub-02':["no_stim-left rec", "no_stim-right rec", "Left stim- no rec", "Right stim- no rec"],
+                 'sub-05':["Left stim- no rec", "Right stim- no rec", "no_stim-left rec", "no_stim-right rec"]}  
 
 # BIDS settings
-subject = '02'
+subject = '05'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -134,6 +134,10 @@ n_fft = int(raw.info['sfreq']*2)  # to ensure window size = 2
 psd_fig = raw.copy().compute_psd(n_fft=n_fft,  # default method is welch here (multitaper for epoch)
                                  n_overlap=int(n_fft/2),
                                  fmax=105).plot()  
+
+#sub-05 first 1300seconds are before the task starts.
+if subj_code == 'sub05':    
+    raw.crop(tmin=1380)
                                                                                          
 # Save a non-bids raw just in case 
 raw.save(annotated_raw_fname, overwrite=True)  # note that the event_id is incorrect here, use the event_id dict if needed
@@ -152,7 +156,7 @@ event_dict = {'cue_onset_right':1,
            #'experiment_end':30,  #sub02 does not have this
            #'abort':31,  # participant 04_wmf has abort
            #'new_stim_segment_maybe':10001,  # sub01 has an extra trigger
-           'new_stim_segment':99999,
+           'new_stim_segment':99999, 
         }
 _, events_id = mne.events_from_annotations(raw, event_id=event_dict)
 
@@ -176,13 +180,14 @@ events_file = pd.read_csv(events_bids_path, sep='\t')
 event_onsets = events_file[['onset', 'value', 'trial_type']]        
 
 # Check event durations
-durations_onset = ['cue', 'catch', 'stim', 'dot', 'response_press']
+durations_onset = ['cue', 'catch', 'stim', 'dot', 'response_press','trial']
 direction_onset = ['cue_onset', 'dot_onset']
 events_dict = {}
 
 for dur in durations_onset:    
     events_dict[dur + "_onset"] = event_onsets.loc[event_onsets['trial_type'].str.contains(f'{dur}_onset'),
                                                 'onset'].to_numpy()
+
 for dirs in direction_onset:
     events_dict[dirs + "_right"] = event_onsets.loc[event_onsets['trial_type'].str.contains(f'{dirs}_right'),
                                                 'onset'].to_numpy()
@@ -208,15 +213,14 @@ if sanity_test:
     # cheat line to add extra elements for easier calculation of RTs:
     # events_dict['dot_onset'] = np.insert(events_dict['dot_onset'], index_onset_should_be_added_before, onset)
 
-    # Plot all durations
-    for dur in ['cue_onset_right', 'cue_onset_left', 'dot_onset_right', 'dot_onset_left', 
-                        'response_press_onset']:#, 'RT']:
-        fig, ax = plt.subplots()
-        plt.hist(events_dict[dur])
-        plt.title(dur)
-        plt.xlabel('time in sec')
-        plt.ylabel('number of events')
-        plt.show()
+    # Plot  durations
+    events_dict["dur_cue_onset"] = events_dict['cue_onset'] - events_dict['trial_onset']
+    fig, ax = plt.subplots()
+    plt.hist(events_dict["dur_cue_onset"])
+    plt.title("dur_cue_onset")
+    plt.xlabel('time in sec')
+    plt.ylabel('number of events')
+    plt.show()
 
 
 if summary_rprt:

@@ -39,7 +39,7 @@ from mne_bids import BIDSPath
 import matplotlib.pyplot as plt
 
 # BIDS settings: fill these out 
-subject = '02'
+subject = '05'
 session = '01'
 task = 'SpAtt'
 run = '01'

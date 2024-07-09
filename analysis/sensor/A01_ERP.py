@@ -25,7 +25,7 @@ from mne_bids import BIDSPath
 
 
 # BIDS settings: fill these out 
-subject = '02'
+subject = '05'
 session = '01'
 task = 'SpAtt'
 run = '01'
