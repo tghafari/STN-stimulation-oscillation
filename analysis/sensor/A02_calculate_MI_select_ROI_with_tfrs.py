@@ -314,7 +314,7 @@ fig_mi.suptitle('attention right - attention left (PAF range on occipital channe
 plt.show()  
 
 # ========================================= MI OVER TIME AND SIXTH PLOT =======================================
-# Don't plot now, it looks terrible for sub01 and sub02
+# Don't plot now, it looks terrible 
 # Plot MI avg across ROI over time
 fig, axs = plt.subplots(figsize=(12, 6))
 
@@ -344,7 +344,7 @@ plt.show()
 
 if summary_rprt:
 
-    report_root = op.join(project_root, 'results/reports')  
+    report_root = op.join(project_root, 'derivatives/reports')  
     if not op.exists(op.join(report_root , 'sub-' + subject)):
         os.makedirs(op.join(report_root , 'sub-' + subject))
     report_folder = op.join(report_root , 'sub-' + subject)
