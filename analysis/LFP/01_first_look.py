@@ -48,7 +48,7 @@ stim_sequence = {'sub-01':["no_stim-left rec", "no_stim-right rec", "Right stim-
                  'sub-05':["Left stim- no rec", "Right stim- no rec", "no_stim-left rec", "no_stim-right rec"]}  
 
 # BIDS settings
-subject = '05'
+subject = '01'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -56,6 +56,7 @@ run = '01'
 # BIDS events
 events_suffix = 'events'  
 events_extension = '.tsv'
+base_fname = 'sub-01_ses-01_task-SpAtt_run-01_lfp'
 
 platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
 pilot = False  # is it pilot data or real data?
@@ -69,20 +70,15 @@ elif platform == 'mac':
     rds_dir = '/Volumes/jenseno-avtemporal-attention'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
-if pilot:
-    data_root = op.join(project_root, 'data/pilot-data')
-else:
-    data_root = op.join(project_root, 'data/real-data')
 
-bids_root = op.join(project_root, 'data', 'BIDS')
-base_fpath = op.join(data_root, subj_code, f'EEG_{subj_code}')  
-eeg_fname = op.join(base_fpath, base_fname + '.eeg')  
-vhdr_fname = op.join(base_fpath, base_fname + '.vhdr')
+bids_root = op.join(project_root, 'data', 'pilot-BIDS')
+base_fpath = op.join(project_root, 'data/original-data-wetransfer/LFP')  
+lfp_fname = op.join(base_fpath, base_fname + '.edf') 
 events_fname = op.join(base_fpath, base_fname + '-eve.fif')
-annotated_raw_fname = op.join(base_fpath, base_fname + '_eeg.fif')
+annotated_raw_fname = op.join(base_fpath, base_fname + '_ann.fif')
 
 # Read raw file in BrainVision (.vhdr, .vmrk, .eeg) format
-raw = mne.io.read_raw_edf(vhdr_fname, eog=('HEOGL', 'HEOGR', 'VEOGb'), preload=True)
+raw = mne.io.read_raw_edf(lfp_fname, preload=True)
 raw.plot()  # first thing first
 
 # Read events from raw object
@@ -99,10 +95,10 @@ mapping = {1:'cue_onset_right',
            8:'response_press_onset',
            20:'block_onset',
            21:'block_end',
-           30:'experiment_end',
+           #30:'experiment_end',
            #31: 'abort',  # participant 04_wmf has abort
-           10001:'new_stim_segment_maybe',  # sub01 has an extra trigger           
-           99999:'new_stim_segment',
+           #10001:'new_stim_segment_maybe',  # sub01 has an extra trigger           
+           #99999:'new_stim_segment',
         }
 annotations_from_events = mne.annotations_from_events(events=events,
                                                     event_desc=mapping,
@@ -134,11 +130,7 @@ n_fft = int(raw.info['sfreq']*2)  # to ensure window size = 2
 psd_fig = raw.copy().compute_psd(n_fft=n_fft,  # default method is welch here (multitaper for epoch)
                                  n_overlap=int(n_fft/2),
                                  fmax=105).plot()  
-
-#sub-05 first 1300seconds are before the task starts.
-if subj_code == 'sub05':    
-    raw.crop(tmin=1380)
-                                                                                         
+                                                                                      
 # Save a non-bids raw just in case 
 raw.save(annotated_raw_fname, overwrite=True)  # note that the event_id is incorrect here, use the event_id dict if needed
 
