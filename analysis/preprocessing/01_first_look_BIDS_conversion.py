@@ -83,6 +83,7 @@ annotated_raw_fname = op.join(base_fpath, base_fname + '_eeg.fif')
 
 # Read raw file in BrainVision (.vhdr, .vmrk, .eeg) format
 raw = mne.io.read_raw_brainvision(vhdr_fname, eog=('HEOGL', 'HEOGR', 'VEOGb'), preload=True)
+
 raw.plot()  # first thing first
 
 # Read events from raw object
@@ -99,10 +100,10 @@ mapping = {1:'cue_onset_right',
            8:'response_press_onset',
            20:'block_onset',
            21:'block_end',
-           30:'experiment_end',
+           #30:'experiment_end',
            #31: 'abort',  # participant 04_wmf has abort
            #10001:'new_stim_segment_maybe',  # sub01 has an extra trigger           
-           #99999:'new_stim_segment',
+           99999:'new_stim_segment',
         }
 annotations_from_events = mne.annotations_from_events(events=events,
                                                     event_desc=mapping,

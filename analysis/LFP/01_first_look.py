@@ -99,48 +99,48 @@ events_unique_len = len(events)
 annotations_unique = cropped_raw.annotations.count()  # both should have 10 unique events
 annotations_unique_len = cropped_raw.annotations
 
-#some events are missing after running events_from_annotations (217 in raw.annotations to 170 in events_from_annotations)
 # Create Annotation object with correct labels
-"""list of triggers https://github.com/tghafari/STN-stimulation-oscillation/blob/main/Instructions/triggers.md"""
+"""use values in events variable. events_from_annotations assigns values from 1 to 
+however many events are in the raw file in some order I don't understand.
+(from mne: Map descriptions to unique integer values based on their sorted order.)"""
+
 mapping = {1:'cue_onset_right',
-           2:'cue_onset_left',
-           3:'trial_onset',
-           4:'stim_onset',
-           5:'catch_onset',
-           6:'dot_onset_right',
-           7:'dot_onset_left',
-           8:'response_press_onset',
-           20:'block_onset',
-           21:'block_end',
-           #30:'experiment_end',
-           #31: 'abort',  # participant 04_wmf has abort
-           #10001:'new_stim_segment_maybe',  # sub01 has an extra trigger           
+           4:'cue_onset_left',
+           5:'trial_onset',
+           6:'stim_onset',
+           7:'catch_onset',
+           8:'dot_onset_right',
+           9:'dot_onset_left',
+           10:'response_press_onset',
+           2:'block_onset',
+           3:'block_end',         
         }
-annotations_from_events_none = mne.annotations_from_events(events=events,
-                                                    event_desc=None,
+#annotations_from_events with mapping decreases events 217->170 and messes up the ids
+annotations_from_events = mne.annotations_from_events(events=events,
+                                                    event_desc=mapping,
                                                     sfreq=cropped_raw.info["sfreq"],
                                                     orig_time=cropped_raw.info["meas_date"],
                                                     )
-cropped_raw_copy = cropped_raw.copy()
-cropped_raw_copy.set_annotations(annotations_from_events_none)
+cropped_raw.set_annotations(annotations_from_events)
 
 
 mne.write_events(events_fname, events, overwrite=True)  # write events in a separate file
 
 # Filter raw data (130Hz is stimulation frequency)
-raw.filter(0.3,100)
+cropped_raw.load_data().filter(0.3,100)  # data should be loaded
 
 # Plot to test
-raw.plot(title="raw") 
-n_fft = int(raw.info['sfreq']*2)  # to ensure window size = 2
-psd_fig = raw.copy().compute_psd(n_fft=n_fft,  # default method is welch here (multitaper for epoch)
-                                 n_overlap=int(n_fft/2),
-                                 fmax=105).plot()  
+cropped_raw.plot(title="raw") 
+n_fft = int(cropped_raw.info['sfreq']*2)  # to ensure window size = 2
+psd_fig = cropped_raw.copy().compute_psd(n_fft=n_fft,  # default method is welch here (multitaper for epoch)
+                                         n_overlap=int(n_fft/2),
+                                         fmax=105).plot()  
                                                                                       
 # Save a non-bids raw just in case 
-raw.save(annotated_raw_fname, overwrite=True)  # note that the event_id is incorrect here, use the event_id dict if needed
+cropped_raw.save(annotated_raw_fname, overwrite=True)  # note that the event_id is incorrect here, use the event_id dict if needed
 
 # Have to explicitly assign values to events for brainvision data
+"""list of triggers https://github.com/tghafari/STN-stimulation-oscillation/blob/main/Instructions/triggers.md"""
 event_dict = {'cue_onset_right':1,
            'cue_onset_left':2,
            'trial_onset':3,
