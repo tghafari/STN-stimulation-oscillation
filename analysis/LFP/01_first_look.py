@@ -30,15 +30,15 @@ they only responded to right dot not left.
 # Import relevant Python modules
 import os.path as op
 import os
-import pandas as pd
 
-import mne
-from mne_bids import (BIDSPath, write_raw_bids, read_raw_bids)
+import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 
-# Fill these out
-subj_code = 'sub05'  # subject code assigned to by Benchi's group
-base_fname = '5.15_5_AO'  # the name of the eeg file for 01_ly to sub05 should be manually copied here
+import mne
+from mne_bids import BIDSPath, print_dir_tree, write_raw_bids
+from mne_bids.stats import count_events
+
 
 # Stimulation sequence
 """copy the stim sequence for each participant from here: 
@@ -48,7 +48,7 @@ stim_sequence = {'sub-01':["no_stim-left rec", "no_stim-right rec", "Right stim-
                  'sub-05':["Left stim- no rec", "Right stim- no rec", "no_stim-left rec", "no_stim-right rec"]}  
 
 # BIDS settings
-subject = '01'
+subject = '02'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -56,7 +56,7 @@ run = '01'
 # BIDS events
 events_suffix = 'events'  
 events_extension = '.tsv'
-base_fname = 'sub-01_ses-01_task-SpAtt_run-01_lfp'
+base_fname = 'sub-02_ses-01_task-SpAtt_run-01_lfp'
 
 platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
 pilot = False  # is it pilot data or real data?
@@ -78,11 +78,28 @@ events_fname = op.join(base_fpath, base_fname + '-eve.fif')
 annotated_raw_fname = op.join(base_fpath, base_fname + '_ann.fif')
 
 # Read raw file in BrainVision (.vhdr, .vmrk, .eeg) format
-raw = mne.io.read_raw_edf(lfp_fname, preload=True)
+raw = mne.io.read_raw_edf(lfp_fname, preload=False)
 raw.plot()  # first thing first
 
+# Remove the first few seconds while the LFP is warming up.
+cropped_raw = raw.copy().crop(tmin=90, tmax=180)
+cropped_raw.plot()
+
+cropped_raw.info["line_freq"] = 50  # specify power line frequency as required by BIDS
+
 # Read events from raw object
-events, _ = mne.events_from_annotations(raw, event_id='auto')
+"""Note that events_from_annotations messes up the 
+event values. We still have to proceed with this method as
+there's no other way to retrieve events from the
+raw object as there are no stim channels."""
+events, _ = mne.events_from_annotations(cropped_raw, event_id='auto')
+
+events_unique = np.unique(events[:,2])  # just to check how many unique events are in the raw- should be equal to the next line
+events_unique_len = len(events)
+annotations_unique = cropped_raw.annotations.count()  # both should have 10 unique events
+annotations_unique_len = cropped_raw.annotations
+
+#some events are missing after running events_from_annotations (217 in raw.annotations to 170 in events_from_annotations)
 # Create Annotation object with correct labels
 """list of triggers https://github.com/tghafari/STN-stimulation-oscillation/blob/main/Instructions/triggers.md"""
 mapping = {1:'cue_onset_right',
@@ -98,26 +115,15 @@ mapping = {1:'cue_onset_right',
            #30:'experiment_end',
            #31: 'abort',  # participant 04_wmf has abort
            #10001:'new_stim_segment_maybe',  # sub01 has an extra trigger           
-           #99999:'new_stim_segment',
         }
-annotations_from_events = mne.annotations_from_events(events=events,
-                                                    event_desc=mapping,
-                                                    sfreq=raw.info["sfreq"],
-                                                    orig_time=raw.info["meas_date"],
+annotations_from_events_none = mne.annotations_from_events(events=events,
+                                                    event_desc=None,
+                                                    sfreq=cropped_raw.info["sfreq"],
+                                                    orig_time=cropped_raw.info["meas_date"],
                                                     )
-raw.set_annotations(annotations_from_events)
+cropped_raw_copy = cropped_raw.copy()
+cropped_raw_copy.set_annotations(annotations_from_events_none)
 
-## Set Fz reference 
-"""you will have to drop (Fz) for plotting if you add it to the ch_names"""
-"""
-# - not for now - we'l decide later if we want to do common average reference
-raw.add_reference_channels(ref_channels=['Fz'])  # the reference channel is not by default in the channel list
-raw.set_eeg_reference(ref_channels=['Fz'], projection=False, verbose=False)
-
-# Preparing the brainvision data format to standard
-montage = mne.channels.make_standard_montage("easycap-M1")
-raw.set_montage(montage, verbose=False)
-"""
 
 mne.write_events(events_fname, events, overwrite=True)  # write events in a separate file
 
@@ -148,7 +154,7 @@ event_dict = {'cue_onset_right':1,
            #'experiment_end':30,  #sub02 does not have this
            #'abort':31,  # participant 04_wmf has abort
            #'new_stim_segment_maybe':10001,  # sub01 has an extra trigger
-           'new_stim_segment':99999, 
+           #'new_stim_segment':99999, 
         }
 _, events_id = mne.events_from_annotations(raw, event_id=event_dict)
 
