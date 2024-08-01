@@ -15,7 +15,7 @@ if strcmp(cfgExp.answer.pc,'win')
     cfgFile.res = [cd, '\Results\'] ; 
     cfgFile.stim = [cd, '\Stimuli\Visual_Stimuli\'];
     cfgFile.cue = [cd, '\Stimuli\Cue_Stimuli\'];
-elseif strcmp(cfgExp.answer.pc,'MEG')
+else strcmp(cfgExp.answer.pc,'EEG')
     cfgFile.res = [cd, '\Results\'] ; 
     cfgFile.stim = [cd, '\Stimuli\Visual_Stimuli\'];
     cfgFile.cue = [cd, '\Stimuli\Cue_Stimuli\'];

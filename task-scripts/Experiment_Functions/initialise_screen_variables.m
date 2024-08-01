@@ -30,6 +30,6 @@ cfgScreen.fntSize = 50;
 if cfgExp.task || cfgExp.train
         cfgScreen.fullScrn = [0, 0, cfgScreen.resolution.width, cfgScreen.resolution.height];  % full screen for task/ train
 else
-        cfgScreen.fullScrn = [300, 300, 900, 900];  % use a smaller screen during testing
+        cfgScreen.fullScrn = [300, 300, 1200, 1200];  % use a smaller screen during testing
 end
 

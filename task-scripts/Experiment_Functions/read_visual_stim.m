@@ -1,4 +1,4 @@
-function [cfgStim, cfgExp, cfgTrigger] = read_visual_stim(cfgFile, cfgExp, cfgStim, cfgTrigger)
+function [cfgStim, cfgExp, cfgTrigger] = read_visual_stim(cfgFile, cfgExp, cfgStim, cfgTrigger,randidx)
 % [cfgStim, cfgExp, cfgTrigger] = read_visual_stim(cfgFile, cfgExp, cfgStim, cfgTrigger)
 % randomly reads the visual stimuli
 % inputs are the directory of stimuli images and number of trials/stim
@@ -18,13 +18,12 @@ for spd = 1:cfgStim.stimRotSpeed:length(cfgStim.fNameStimSortd)
 end
 cfgStim.visStim = cfgStim.visStim(~cellfun('isempty', cfgStim.visStim'));  % remove indices that are empty due to reading images based on speed
 
-rng('shuffle');
-cfgStim.cueRndIdx = randperm(cfgExp.numStim);  % random index for cue - 1:right, 2:left
-
-% Make sure there's an equal number of 1 and 2 in cfgStim.cueRndIdx
-cfgStim.cueRndIdx(mod(cfgStim.cueRndIdx, 2) == 0) = 2;
-cfgStim.cueRndIdx(mod(cfgStim.cueRndIdx, 2) ~= 0) = 1;
-
+rng('shuffle')
+right = ones(20,1);left = 2*ones(20,1); cue = squeeze(cat(1,right,left)); 
+for i = 1:cfgExp.numBlock
+shuffcue(:,i) = cue(cfgExp.randid(:,i),:);
+end
+cfgStim.cueRndIdx = reshape(shuffcue,[],1);%randi(2, cfgExp.numStim, 1);  % random index for cue - 1:right, 2:left %%%%need to modify
 for stim = 1:cfgExp.numStim
     cfgStim.cueStim{stim,1} = imread(fileDirCue(cfgStim.cueRndIdx(stim)).name);  % read cue randomly
 end
