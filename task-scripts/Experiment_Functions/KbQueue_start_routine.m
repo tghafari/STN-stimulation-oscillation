@@ -13,9 +13,9 @@ cfgExp.activeKeys = [cfgExp.quitKey, cfgExp.respKey, cfgExp.yesKey, cfgExp.noKey
 
 % only listen for specific keys
 cfgExp.deviceNum = -1;  % listen to all devices during test/train
-scanList = zeros(1,256);
+scanList = zeros(1, 256);
 scanList(cfgExp.activeKeys) = 1;
-KbQueueCreate(cfgExp.deviceNum,scanList);  % create queue
+KbQueueCreate(cfgExp.deviceNum, scanList);  % create queue
 KbQueueStart;  % start listening to input
 KbQueueFlush;  % clear all keyboard presses so far
 

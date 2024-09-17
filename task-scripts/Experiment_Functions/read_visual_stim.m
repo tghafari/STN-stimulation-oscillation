@@ -18,12 +18,18 @@ for spd = 1:cfgStim.stimRotSpeed:length(cfgStim.fNameStimSortd)
 end
 cfgStim.visStim = cfgStim.visStim(~cellfun('isempty', cfgStim.visStim'));  % remove indices that are empty due to reading images based on speed
 
+% Ensure equal number of right and left cues
 rng('shuffle')
-right = ones(20,1);left = 2*ones(20,1); cue = squeeze(cat(1,right,left)); 
+right_cue = ones(cfgExp.numTrial/2, 1);  % random index for cue - 1:right, 2:left
+left_cue = 2 * ones(cfgExp.numTrial/2, 1); 
+both_cues = squeeze(cat(1, right_cue, left_cue)); 
+
 for i = 1:cfgExp.numBlock
-shuffcue(:,i) = cue(cfgExp.randid(:,i),:);
+    randomised_cue(:,i) = both_cues(cfgExp.randid(:, i), :);  % randomise using the same random idx from initialise_exp_vars
 end
-cfgStim.cueRndIdx = reshape(shuffcue,[],1);%randi(2, cfgExp.numStim, 1);  % random index for cue - 1:right, 2:left %%%%need to modify
+
+cfgStim.cueRndIdx = reshape(randomised_cue, [], 1); 
+
 for stim = 1:cfgExp.numStim
     cfgStim.cueStim{stim,1} = imread(fileDirCue(cfgStim.cueRndIdx(stim)).name);  % read cue randomly
 end
@@ -39,12 +45,12 @@ cfgExp.cuesDir(find(cfgStim.cueRndIdx == 2), 1) = {'Left'};
 cfgExp.cuesDir(find(cfgExp.corrResp == 0), 1) = {'no resp'};
 cfgTrigger.cuesDir(find(cfgStim.cueRndIdx == 1), 1) = {'1'};  % EEG trigger codes are 1 -> cue right, 2 -> cue left
 cfgTrigger.cuesDir(find(cfgStim.cueRndIdx == 2), 1) = {'2'};  % EEG trigger codes are 1 -> cue right, 2 -> cue left
-cfgTrigger.cuesDir(find(cfgStim.cueRndIdx == 1), 2) = {'Right'};  % trigger message for Eyelink
-cfgTrigger.cuesDir(find(cfgStim.cueRndIdx == 2), 2) = {'Left'};  
+cfgTrigger.cuesDir(find(cfgStim.cueRndIdx == 1), 2) = {'cue_right'};  % trigger message for Eyelink
+cfgTrigger.cuesDir(find(cfgStim.cueRndIdx == 2), 2) = {'cue_left'};  
 cfgTrigger.dotDir(find(cfgStim.cueRndIdx == 1), 1) = {'6'};  % EEG trigger codes are 6 -> dot right, 7 -> dot left
 cfgTrigger.dotDir(find(cfgStim.cueRndIdx == 2), 1) = {'7'};  % EEG trigger codes are 6 -> dot right, 7 -> dot left
-cfgTrigger.dotDir(find(cfgStim.cueRndIdx == 1), 2) = {'Right'};  % trigger message for Eyelink
-cfgTrigger.dotDir(find(cfgStim.cueRndIdx == 2), 2) = {'Left'};  
+cfgTrigger.dotDir(find(cfgStim.cueRndIdx == 1), 2) = {'dot_right'};  % trigger message for Eyelink
+cfgTrigger.dotDir(find(cfgStim.cueRndIdx == 2), 2) = {'dot_left'};  
 cfgTrigger.dotDir(find(cfgExp.corrResp == 0), [1, 2]) = {'no resp'};
 
 end
