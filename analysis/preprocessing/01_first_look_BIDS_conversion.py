@@ -36,26 +36,24 @@ import mne
 from mne_bids import (BIDSPath, write_raw_bids, read_raw_bids)
 import matplotlib.pyplot as plt
 
-# Fill these out
-subj_code = 'sub05'  # subject code assigned to by Benchi's group
-base_fname = '5.15_5_AO'  # the name of the eeg file for 01_ly to sub05 should be manually copied here
+# # Fill these out - for older subjects- before 105
+# subj_code = '108'  # subject code assigned to by Benchi's group
+# base_fname = '5.15_5_AO'  # the name of the eeg file for 01_ly to sub05 should be manually copied here
 
 # Stimulation sequence
 """copy the stim sequence for each participant from here: 
 https://github.com/tghafari/STN-stimulation-oscillation/wiki/Stimulation-table"""
 stim_sequence = {'sub-01':["no_stim-left rec", "no_stim-right rec", "Right stim- no rec", "Left stim- no rec"],
                  'sub-02':["no_stim-left rec", "no_stim-right rec", "Left stim- no rec", "Right stim- no rec"],
-                 'sub-05':["Left stim- no rec", "Right stim- no rec", "no_stim-left rec", "no_stim-right rec"]}  
+                 'sub-05':["Left stim- no rec", "Right stim- no rec", "no_stim-left rec", "no_stim-right rec"],
+                 'sub-08':["no_stim-right rec", "no_stim-left rec", "left stim- no rec", "right stim- no rec"]} 
 
 # BIDS settings
-subject = '05'
+subject = '108'
 session = '01'
 task = 'SpAtt'
 run = '01'
-
-# BIDS events
-events_suffix = 'events'  
-events_extension = '.tsv'
+modality = 'eeg'
 
 platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
 pilot = False  # is it pilot data or real data?
@@ -74,12 +72,17 @@ if pilot:
 else:
     data_root = op.join(project_root, 'data/real-data')
 
-bids_root = op.join(project_root, 'data', 'BIDS')
-base_fpath = op.join(data_root, subj_code, f'EEG_{subj_code}')  
+base_fpath = op.join(data_root, f'sub-{subject}', f'ses-{session}', f'{modality}')  
+base_fname = f'sub-{subject}_ses-{session}_task-{task}_run-{run}_{modality}'
 eeg_fname = op.join(base_fpath, base_fname + '.eeg')  
 vhdr_fname = op.join(base_fpath, base_fname + '.vhdr')
 events_fname = op.join(base_fpath, base_fname + '-eve.fif')
 annotated_raw_fname = op.join(base_fpath, base_fname + '_eeg.fif')
+
+# BIDS events
+events_suffix = 'events'  
+events_extension = '.tsv'
+bids_root = op.join(project_root, 'data', 'BIDS')
 
 # Read raw file in BrainVision (.vhdr, .vmrk, .eeg) format
 raw = mne.io.read_raw_brainvision(vhdr_fname, eog=('HEOGL', 'HEOGR', 'VEOGb'), preload=True)

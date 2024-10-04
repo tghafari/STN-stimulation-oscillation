@@ -43,20 +43,21 @@ from mne_bids.stats import count_events
 # Stimulation sequence
 """copy the stim sequence for each participant from here: 
 https://github.com/tghafari/STN-stimulation-oscillation/wiki/Stimulation-table"""
-stim_sequence = {'sub-01':["no_stim-left rec", "no_stim-right rec", "Right stim- no rec", "Left stim- no rec"],
-                 'sub-02':["no_stim-left rec", "no_stim-right rec", "Left stim- no rec", "Right stim- no rec"],
-                 'sub-05':["Left stim- no rec", "Right stim- no rec", "no_stim-left rec", "no_stim-right rec"]}  
+stim_sequence = {'sub-01':["no_stim-left rec", "no_stim-right rec", "right stim- no rec", "left stim- no rec"],
+                 'sub-02':["no_stim-left rec", "no_stim-right rec", "left stim- no rec", "right stim- no rec"],
+                 'sub-05':["left stim- no rec", "right stim- no rec", "no_stim-left rec", "no_stim-right rec"],
+                 'sub-08':["no_stim-right rec", "no_stim-left rec", "left stim- no rec", "right stim- no rec"]}  
 
 # BIDS settings
-subject = '03'
+subject = '108'
 session = '01'
 task = 'SpAtt'
 run = '01'
+modality = 'lfp'
 
 # BIDS events
 events_suffix = 'events'  
 events_extension = '.tsv'
-base_fname = 'sub-03_ses-01_task-SpAtt_run-01_lfp'
 
 platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
 pilot = False  # is it pilot data or real data?
@@ -70,9 +71,15 @@ elif platform == 'mac':
     rds_dir = '/Volumes/jenseno-avtemporal-attention'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
+if pilot:
+    data_root = op.join(project_root, 'data/pilot-data')
+else:
+    data_root = op.join(project_root, 'data/real-data')
 
 bids_root = op.join(project_root, 'data', 'pilot-BIDS')
-base_fpath = op.join(project_root, 'data/original-data-wetransfer/LFP')  
+base_fpath = op.join(data_root, f'sub-{subject}', f'ses-{session}', f'{modality}')  
+base_fname = '1010P23812_2024_09_19_15_09_12_uv'
+#f'sub-{subject}_ses-{session}_task-{task}_run-{run}_{modality}'
 lfp_fname = op.join(base_fpath, base_fname + '.edf') 
 events_fname = op.join(base_fpath, base_fname + '-eve.fif')
 annotated_raw_fname = op.join(base_fpath, base_fname + '_ann.fif')
@@ -82,7 +89,7 @@ raw = mne.io.read_raw_edf(lfp_fname, preload=True)
 raw.plot()  # first thing first
 
 # Remove the first few seconds while the LFP is warming up.
-cropped_raw = raw.copy().crop(tmin=90, tmax=180)
+cropped_raw = raw.copy().crop(tmin=65, tmax=980)
 cropped_raw.plot()
 
 cropped_raw.info["line_freq"] = 50  # specify power line frequency as required by BIDS
