@@ -33,7 +33,7 @@ from copy import deepcopy
 from mne_bids import BIDSPath, read_raw_bids
 
 # BIDS settings: fill these out 
-subject = '05'
+subject = '108'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -87,7 +87,7 @@ bad_channels = True  # are there any bad channels?
 # Mark bad channels before ICA
 if bad_channels:
     original_bads = deepcopy(raw.info["bads"])
-    bad_chs = ["TP10"]
+    bad_chs = ["FT9", "T8", "T7"]  # write the name of the bad channels here
     raw.copy().pick(bad_chs).compute_psd().plot()  # double check bad channels
     if len(bad_chs) == 1:
         raw.info["bads"].append(bad_chs[0])  # add a single channel
@@ -102,6 +102,7 @@ pilot_BIDS/sub-02_ses-01_run-01: [],
 BIDS/sub-01_ses-01_run-01: ["T7", "FT10"],
 BIDS/sub-02_ses-01_run-01: ["TP10"],
 BIDS/sub-05_ses-01_run-01: ["almost all channels look terrible in psd"],
+BIDS/sub-108_ses-01_run-01: ["FT9", "T8", "T7"],
 } """
 
 # Resample and filtering
@@ -129,7 +130,7 @@ for comp in range(59):
         f"{ratio_percent}%"
     )
 
-ICA_rej_dic = {f'sub-{subject}_ses-{session}':[0, 1, 8, 58, 59]} # manually selected bad ICs or from sub config file 
+ICA_rej_dic = {f'sub-{subject}_ses-{session}':[0, 1, 2, 4, 7, 8]} # manually selected bad ICs or from sub config file 
 artifact_ICs = ICA_rej_dic[f'sub-{subject}_ses-{session}']
 """
 list bad ICA components for all participants:
@@ -139,6 +140,7 @@ list bad ICA components for all participants:
 'BIDS/sub-01_ses-01_run-01': [0, 1, 2], # 0:blink, 1:saccades, 2:blink/saccades
 'BIDS/sub-02_ses-01_run-01': [0, 1, 2, 3, 4], # 0:blink, 1:saccades, 2:blink/saccades, 3&4: empty
 'BIDS/sub-05_ses-01_run-01': [0, 1, 8, 58, 59], # don't know-almost all look terrible
+BIDS/sub-108_ses-01_run-01': [0, 1, 2, 4, 7, 8], # don't know-almost all look terrible
 } """
 
 # Double check the manually selected artifactual ICs

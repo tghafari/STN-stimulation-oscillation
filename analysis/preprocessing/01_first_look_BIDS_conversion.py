@@ -79,6 +79,7 @@ eeg_fname = op.join(base_fpath, base_fname + '.eeg')
 vhdr_fname = op.join(base_fpath, base_fname + '.vhdr')
 events_fname = op.join(base_fpath, base_fname + '-eve.fif')
 annotated_raw_fname = op.join(base_fpath, base_fname + extension)
+beh_fig_fname = op.join(project_root, 'derivatives/figures', f'sub-{subject}-beh-performance.png')  # where you save the matlab output of behavioural performance plots
 
 # BIDS events
 events_suffix = 'events'  
@@ -215,6 +216,7 @@ plt.xticks(range(len(numbers_dict)), list(numbers_dict.keys()), rotation=45)
 ax.bar_label(bars)
 plt.show()
 
+
 if sanity_test:
     # Check duration of cue presentation  
     events_dict['stim_to_dot_duration'] = events_dict['dot_onset'] - events_dict['stim_onset']
@@ -244,6 +246,10 @@ if summary_rprt:
     html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_1.html')
     
     report = mne.Report(title=f'Subject {subject}')
+    report.add_image(beh_fig_fname,
+                    title='RT and performance',
+                    caption='reaction time and behavioural performance',
+                    tags=('beh'))
     if eve_rprt:
         report.add_events(events=events, 
                         event_id=events_id, 

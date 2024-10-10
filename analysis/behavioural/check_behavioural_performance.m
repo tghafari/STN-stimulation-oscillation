@@ -35,14 +35,14 @@ FNR = sum(FB == -1) ./ length(FB);  % FNR = 0 - 1
 % Histogram in two subplots RTs with performance measures
 figure;
 subplot(2,1,1)
-title('RT from keyboard presses')
 histogram(RT_KbQueue, 25);
+title('RT from keyboard presses')
 text(min(xlim), max(ylim), sprintf('True Positive Rate = %0.2f%s ', TPR*100, '%'), 'Horiz','left', 'Vert','top')
 text(min(xlim), max(ylim)-20, sprintf('False Positive Rate = %0.2f%s ', FPR*100, '%'), 'Horiz','left', 'Vert','top')
 
 subplot(2,1,2)
-title('RT from triggers')
 histogram(RT_trig, 25);
+title('RT from triggers')
 text(min(xlim), max(ylim), sprintf('True Negative Rate = %0.2f%s ', TNR*100, '%'), 'Horiz','left', 'Vert','top')
 text(min(xlim), max(ylim)-20, sprintf('False Negative Rate = %0.2f%s ', FNR*100, '%'), 'Horiz','left', 'Vert','top')
 
