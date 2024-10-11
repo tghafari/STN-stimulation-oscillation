@@ -42,6 +42,7 @@ deriv_suffix = 'epo'
 extension = '.fif'
 
 pilot = False  # is it pilot data or real data?
+find_bad_chns = True  # do you want to check if there are a few channels that have most of bad epochs and mark them as bad?
 summary_rprt = True # do you want to add evokeds figures to the summary report?
 platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
 test_plot = False
@@ -72,13 +73,31 @@ deriv_fname = op.join(deriv_folder, bids_path.basename + '_' + deriv_suffix + ex
 
 # read annotated data
 raw_ica = mne.io.read_raw_fif(input_fname, verbose=True, preload=True)
+raw_ica.filter(l_freq=0.1, h_freq=100),  # get rid of stim frequency before epoching:
+                                         # unfiltered epochs had >%61 bad epochs (sub108)
+print(f'double checking bad channels: {raw_ica.info['bads']}')
 
 events, events_id = mne.events_from_annotations(raw_ica, event_id='auto')
 
+# Reject threshold from mne-python website
+"""https://mne.tools/stable/auto_tutorials/intro/10_overview.html#sphx-glr-auto-tutorials-intro-10-overview-py"""
+reject_mne_python = dict(mag=4000e-15,  # 4000 fT
+                    grad=4000e-13,  # 4000 fT/cm
+                    eeg=150e-6,  # 150 µV
+                    eog=250e-6,  # 250 µV
+                    )  
+# Reject threshold from FLUX
+reject_FLUX = dict(#grad=5000e-13,  # unit: T / m (gradiometers)
+              #mag=4e-12,  # unit: T (magnetometers)
+              eeg=40e-6,  # unit: V (EEG channels)
+              #eog=250e-6  # unit: V (EOG channels)
+                )
+# Neither FLUX nor mne-python thresholds work as they drop all epochs!
+
 # Make epochs (1.7 seconds on cue onset)
-epochs = mne.Epochs(raw_ica, 
+epochs = mne.Epochs(raw_ica,
                     events, 
-                    events_id,   # select events_picks and events_picks_id                   
+                    events_id,  # select events_picks and events_picks_id                   
                     tmin=-0.7, 
                     tmax=1.7,
                     baseline=None, 
@@ -91,16 +110,39 @@ epochs = mne.Epochs(raw_ica,
                     preload=True, 
                     verbose=True)
 
-reject = get_rejection_threshold(epochs, 
-                                 decim=10)
+if find_bad_chns:  
+    reject_temp = get_rejection_threshold(epochs)  # removed detrend=10 to ensure no antialiasing happens                                     
 
-# Drop bad epochs based on peak-to-peak magnitude
+    # Drop bad epochs based on peak-to-peak magnitude
+    epochs_temp = deepcopy(epochs)  # this is temporary to find bad channels
+    print(f"\n\n Numer of epochs BEFORE rejection: {len(epochs.events)} \n\n")
+    epochs_temp.drop_bad(reject=reject_temp)
+    print(f"\n\n Numer of epochs AFTER rejection: {len(epochs.events)} \n\n")
+
+    # Check if a few channles have most of bad epochs and mark them as bad
+    # instead of dropping epochs 
+    fig_bads_temp = epochs_temp.plot_drop_log()  # rejected epochs
+
+    bad_channels = True  # are there any bad channels after rejecting bad epochs?
+    # Mark bad channels before ICA
+    if bad_channels:
+        original_bads = deepcopy(epochs.info["bads"])
+        bad_chs = ["FT10"]  # write the name of the bad channels here
+        epochs.copy().pick(bad_chs).compute_psd(fmin=0.1, fmax=100).plot()  # double check bad channels
+        if len(bad_chs) == 1:
+            print('one bad channel removing')
+            epochs.info["bads"].append(bad_chs[0])  # add a single channel
+        else:
+            print(f'{len(bad_chs)} bad channels removing')
+            epochs.info["bads"].extend(bad_chs)  # add a list of channels - should there be more than one channel to drop
+
+reject = get_rejection_threshold(epochs)  # reject without bad channels                               
 print(f"\n\n Numer of epochs BEFORE rejection: {len(epochs.events)} \n\n")
 epochs.drop_bad(reject=reject)
 print(f"\n\n Numer of epochs AFTER rejection: {len(epochs.events)} \n\n")
-
-# Save the epoched data 
 fig_bads = epochs.plot_drop_log()  # rejected epochs
+fig_psd = epochs.compute_psd(fmin=0.1,fmax=100,method='welch',n_fft=int(2*epochs.info['sfreq'])).plot()
+# Save the epoched data
 epochs.save(deriv_fname, overwrite=True)
 
 if test_plot:
@@ -136,7 +178,12 @@ if summary_rprt:
     report = mne.open_report(report_fname)
 
     report.add_figure(fig=fig_bads, title='dropped epochs',
-                    caption='epochs dropped and reason', 
+                    caption='epochs dropped and channel-one bad channel (FT10) added after plotting bad epochs', 
+                    tags=('epo'),
+                    section='epocheds'
+                    )
+    report.add_figure(fig=fig_psd, title='psd after dropped',
+                    caption='psd with bad channels marked after dropping bad epochs', 
                     tags=('epo'),
                     section='epocheds'
                     )

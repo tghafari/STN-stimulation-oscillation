@@ -83,15 +83,16 @@ raw.copy().compute_psd(n_fft=n_fft,  # default method is welch here (multitaper 
                     fmin=0.1, fmax=105).plot()  
 
 bad_channels = True  # are there any bad channels?
-
 # Mark bad channels before ICA
 if bad_channels:
     original_bads = deepcopy(raw.info["bads"])
     bad_chs = ["FT9", "T8", "T7"]  # write the name of the bad channels here
     raw.copy().pick(bad_chs).compute_psd().plot()  # double check bad channels
     if len(bad_chs) == 1:
+        print('one bad channel removing')
         raw.info["bads"].append(bad_chs[0])  # add a single channel
     else:
+        print(f'{len(bad_chs)} bad channels removing')
         raw.info["bads"].extend(bad_chs)  # add a list of channels - should there be more than one channel to drop
 
 """
@@ -111,15 +112,15 @@ we down sample the data in order to make ICA run faster,
 highpass filter at 1Hz to remove slow drifts and lowpass 40Hz
 because that's what we need
 """
-raw_resmpld = raw.copy().resample(200).filter(1, 40)
+raw_resmpld = deepcopy(raw).resample(200).filter(0.1, 40)
 
 # Apply ICA and identify artifact components
-ica = ICA(method='fastica', random_state=97, verbose=True)
+ica = ICA(method='fastica', random_state=97, n_components=30, verbose=True)
 ica.fit(raw_resmpld, verbose=True)
 ica.plot_sources(raw_resmpld, title='ICA')
 ica.plot_components()
 
-for comp in range(59):
+for comp in range(30):
     explained_var_ratio = ica.get_explained_variance_ratio(
         raw_resmpld, components=comp, ch_type="eeg"
     )
@@ -130,7 +131,7 @@ for comp in range(59):
         f"{ratio_percent}%"
     )
 
-ICA_rej_dic = {f'sub-{subject}_ses-{session}':[0, 1, 2, 4, 7, 8]} # manually selected bad ICs or from sub config file 
+ICA_rej_dic = {f'sub-{subject}_ses-{session}':[0, 1, 2, 4, 6, 9]} # manually selected bad ICs or from sub config file 
 artifact_ICs = ICA_rej_dic[f'sub-{subject}_ses-{session}']
 """
 list bad ICA components for all participants:
@@ -140,7 +141,7 @@ list bad ICA components for all participants:
 'BIDS/sub-01_ses-01_run-01': [0, 1, 2], # 0:blink, 1:saccades, 2:blink/saccades
 'BIDS/sub-02_ses-01_run-01': [0, 1, 2, 3, 4], # 0:blink, 1:saccades, 2:blink/saccades, 3&4: empty
 'BIDS/sub-05_ses-01_run-01': [0, 1, 8, 58, 59], # don't know-almost all look terrible
-BIDS/sub-108_ses-01_run-01': [0, 1, 2, 4, 7, 8], # don't know-almost all look terrible
+BIDS/sub-108_ses-01_run-01': [0, 1, 2, 4, 6, 9], # don't know-almost all look terrible
 } """
 
 # Double check the manually selected artifactual ICs
@@ -155,7 +156,7 @@ ica.plot_properties(raw_resmpld, picks=artifact_ICs)
 
 # Exclude ICA components
 ica.exclude = artifact_ICs
-raw_ica = raw.copy()
+raw_ica = deepcopy(raw)
 ica.apply(raw_ica)
 
 # Save the ICA cleaned data
@@ -183,7 +184,7 @@ if summary_rprt:
     html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_1.html')
     
     report = mne.open_report(report_fname)
-    report.add_figure(fig_ica, title="removed ICA components (saccade, blink, noise)",
+    report.add_figure(fig_ica, title="removed ICA components (filtered:0.1-40)",
                       tags=('ica'), image_format="PNG")
     report.add_raw(raw=raw_ica.filter(0.3, 100), title='raw after ICA', 
                    psd=True, 
