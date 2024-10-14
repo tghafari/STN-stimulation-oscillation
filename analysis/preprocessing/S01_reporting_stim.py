@@ -7,14 +7,17 @@ This code will:
 
     1. read in the ica (from fif file)
     2. epoch again with reject_by_annotation=False
-    3. divide stim epochs from no stim epochs
-    based on the psd (with or without 130Hz peak)
-    4. plot psd
-    5. plot mean psd on parieto occipital 
-    channels
-    6. plots TFR plot_topo
-    7. plots TFR on representative channels
-    8. MI topographically 
+    3. plot raw_ica and manually note down the
+    time points in which stimulation started
+    or ended.
+    4. crop the data into stimulation and 
+    no-stimulation parts.
+    5. plot psd for each part separately to
+    double check if 130Hz peak exists or not.
+    6. save the cropped data.
+
+    Cropped data will then be loaded into
+    08_epoching_SpAtt.py for further analyses.
 
 
 written by Tara Ghafari
@@ -37,17 +40,18 @@ from autoreject import get_rejection_threshold
 
 
 # BIDS settings: fill these out 
-subject = '02'
+subject = '108'
 session = '01'
 task = 'SpAtt'
 run = '01'
 eeg_suffix = 'eeg'
 eeg_extension = '.vhdr'
 input_suffix = 'ica'
-deriv_suffix = 'stm-epo'
+no_stim_suffix = 'no_stim'
+stim_suffix = 'stim'
 extension = '.fif'
 
-pilot = True  # is it pilot data or real data?
+pilot = False  # is it pilot data or real data?
 summary_rprt = True  # do you want to add evokeds figures to the summary report?
 platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
 test_plot = False
@@ -76,60 +80,28 @@ bids_path = BIDSPath(subject=subject, session=session,
                      datatype ='eeg', suffix=eeg_suffix)
 deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
 input_fname = op.join(deriv_folder, bids_path.basename + '_' + input_suffix + extension)
-deriv_fname = op.join(deriv_folder, bids_path.basename + '_' + deriv_suffix + extension)  # prone to change if annotation worked for eeg brainvision
+no_stim_fname = op.join(deriv_folder, bids_path.basename + '_' + no_stim_suffix + extension)  
+stim_fname = op.join(deriv_folder, bids_path.basename + '_' + stim_suffix + extension)  
 
-peak_alpha_fname = op.join(ROI_dir, f'sub-{subject}_peak_alpha.npz')  # 2 numpy arrays saved into an uncompressed file
-
-# read annotated data
+# Read ica cleaned data
 raw_ica = mne.io.read_raw_fif(input_fname, verbose=True, preload=True)
-events, events_id = mne.events_from_annotations(raw_ica, event_id='auto')
-              
-# epoch ica data to make sure an entire block epoch is not rejected by annotation
-epochs_block_onset_end = mne.Epochs(raw_ica, 
-                    events, 
-                    events_id,   # select only block_onset(3) and block_end(2) events                   
-                    tmin=-0.7, 
-                    tmax=1.7,
-                    baseline=None, 
-                    proj=True,  
-                    picks='all', 
-                    detrend=1, 
-                    event_repeated='error',
-                    reject=None,  # we'll reject after calculating the threshold
-                    reject_by_annotation=False,
-                    preload=True, 
-                    verbose=True)
 
-# separately plot psd for each block: which block is stim on which stim off?
+# Plot to find the points to crop
+raw_ica.plot()
 
+# Record the cropped time points for each subject
+stimulation_cropped_time = {"sub-108_no-stim": [8, 890],
+                            "sub-108_stim": [930, 1882]}
 
+no_stim_segment = raw_ica.copy().crop(tmin=stimulation_cropped_time[f'sub-{subject}_no-stim'][0], 
+                                      tmax=stimulation_cropped_time[f'sub-{subject}_no-stim'][1])
+no_stim_segment.compute_psd().plot()  # double check and save if ok
+no_stim_segment.save(no_stim_fname)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+stim_segment = raw_ica.copy().crop(tmin=stimulation_cropped_time[f'sub-{subject}_stim'][0],
+                                   tmax=stimulation_cropped_time[f'sub-{subject}_stim'][1])
+stim_segment.compute_psd().plot() 
+stim_segment.save(stim_fname)
 
 
 if summary_rprt:
@@ -144,12 +116,6 @@ if summary_rprt:
     html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_1.html')
     
     report = mne.Report(title=f'Subject {subject}')
-    if eve_rprt:
-        report.add_events(events=events, 
-                        event_id=events_id, 
-                        tags=('eve'),
-                        title='events from "events"', 
-                        sfreq=raw.info['sfreq'])
     report.add_raw(raw=raw.filter(0.3, 100), title='raw with bad channels', 
                    psd=True, 
                    butterfly=False, 

@@ -22,8 +22,6 @@ import numpy as np
 import mne
 from mne_bids import BIDSPath
 
-
-
 # BIDS settings: fill these out 
 subject = '108'
 session = '01'

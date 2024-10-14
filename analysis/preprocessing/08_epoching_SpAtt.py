@@ -110,6 +110,11 @@ epochs = mne.Epochs(raw_ica,
                     preload=True, 
                     verbose=True)
 
+# Validate stimulation sequence - which segment has a peak at 130Hz in psd?
+new_seg = epochs["new_stim_segment"]
+for seg in range(len(new_seg)):
+    epochs[seg].compute_psd(tmin=0).plot()  # remove leakage from previous segment
+
 if find_bad_chns:  
     reject_temp = get_rejection_threshold(epochs)  # removed detrend=10 to ensure no antialiasing happens                                     
 
