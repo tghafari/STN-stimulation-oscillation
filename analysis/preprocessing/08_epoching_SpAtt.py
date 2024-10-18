@@ -6,6 +6,10 @@
 This code will epoch continuous EEG based
 on conditions that are annotated in the
 data and generates  an HTML report about epochs.
+IMO, cleanest way is to epoch based on all events,
+calculate reject threshold, find channel with most 
+bad epochs, remove channel, calculate threshold 
+again, apply on epochs.
 
 written by Tara Ghafari
 adapted from flux pipeline
@@ -78,6 +82,7 @@ raw_ica.filter(l_freq=0.1, h_freq=100),  # get rid of stim frequency before epoc
 print(f'double checking bad channels: {raw_ica.info['bads']}')
 
 events, events_id = mne.events_from_annotations(raw_ica, event_id='auto')
+events_id_to_consider = {'cue_onset_left': 4, 'cue_onset_right': 5}
 
 # Reject threshold from mne-python website
 """https://mne.tools/stable/auto_tutorials/intro/10_overview.html#sphx-glr-auto-tutorials-intro-10-overview-py"""
@@ -86,7 +91,6 @@ reject_mne_python = dict(mag=4000e-15,  # 4000 fT
                     eeg=150e-6,  # 150 µV
                     eog=250e-6,  # 250 µV
                     )  
-# Reject threshold from FLUX
 reject_FLUX = dict(#grad=5000e-13,  # unit: T / m (gradiometers)
               #mag=4e-12,  # unit: T (magnetometers)
               eeg=40e-6,  # unit: V (EEG channels)
@@ -110,7 +114,7 @@ epochs = mne.Epochs(raw_ica,
                     preload=True, 
                     verbose=True)
 
-# Validate stimulation sequence - which segment has a peak at 130Hz in psd?
+# Validate stimulation sequence - which segment has a peak at 130Hz in psd? - only works for all event epochs
 new_seg = epochs["new_stim_segment"]
 for seg in range(len(new_seg)):
     epochs[seg].compute_psd(tmin=0).plot()  # remove leakage from previous segment
@@ -169,6 +173,11 @@ if test_plot:
     epochs['cue_onset_left'].average().copy().filter(1,60).plot()
     epochs['cue_onset_right'].average().copy().filter(1,60).plot()
 
+# for checking which method to drop bad channels
+epochs_cue_before = op.join(project_root,'derivatives/figures/only-cue-epochs-reject-before-badchannel.png')
+epochs_cue_after = op.join(project_root, 'derivatives/figures/only-cue-epochs-reject-after-badchannel.png')
+epochs_all_before = op.join(project_root, 'derivatives/figures/all-epochs-reject-before-badchannel.png')
+
 if summary_rprt:
 
     report_root = op.join(project_root, 'derivatives/reports')  
@@ -192,5 +201,18 @@ if summary_rprt:
                     tags=('epo'),
                     section='epocheds'
                     )
+    # report.add_image(epochs_cue_before,
+    #                 title='epoched on cues',
+    #                 caption='epoched on cues, threshold for reject calculated before dropping bad epoch channel',
+    #                 tags=('epo'))
+    # report.add_image(epochs_cue_after,
+    #             title='epoched on cues',
+    #             caption='epoched on cues, threshold for reject calculated after dropping bad epoch channel',
+    #             tags=('epo'))
+    # report.add_image(epochs_all_before,
+    #             title='epoched on all events',
+    #             caption='epoched on alle events, threshold for reject calculated before dropping bad epoch channel',
+    #             tags=('epo'))
+ 
     report.save(report_fname, overwrite=True, open_browser=True)
     report.save(html_report_fname, overwrite=True, open_browser=True)  # to check how the report looks

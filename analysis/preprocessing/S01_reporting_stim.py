@@ -103,7 +103,6 @@ stim_segment = raw_ica.copy().crop(tmin=stimulation_cropped_time[f'sub-{subject}
 stim_segment.compute_psd().plot() 
 stim_segment.save(stim_fname)
 
-# plot_topo all sensors
 
 
 if summary_rprt:
