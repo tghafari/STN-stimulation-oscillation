@@ -180,8 +180,6 @@ if test_plot:
 if summary_rprt:
 
     report_root = op.join(project_root, 'derivatives/reports')  
-    if not op.exists(op.join(report_root , 'sub-' + subject)):
-        os.makedirs(op.join(report_root , 'sub-' + subject))
     report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 

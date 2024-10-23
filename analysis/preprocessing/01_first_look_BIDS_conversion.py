@@ -116,17 +116,14 @@ annotations_from_events = mne.annotations_from_events(events=events,
                                                     )
 raw.set_annotations(annotations_from_events)
 
-## Set Fz reference 
-"""you will have to drop (Fz) for plotting if you add it to the ch_names"""
-"""
-# - not for now - we'l decide later if we want to do common average reference
+# Set average reference 
 raw.add_reference_channels(ref_channels=['Fz'])  # the reference channel is not by default in the channel list
 raw.set_eeg_reference(ref_channels=['Fz'], projection=False, verbose=False)
 
 # Preparing the brainvision data format to standard
 montage = mne.channels.make_standard_montage("easycap-M1")
 raw.set_montage(montage, verbose=False)
-"""
+
 mne.write_events(events_fname, events, overwrite=True)  # write events in a separate file
 
 

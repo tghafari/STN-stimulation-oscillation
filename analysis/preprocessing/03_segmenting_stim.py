@@ -92,20 +92,17 @@ stimulation_cropped_time = {"sub-108_no-stim": [8, 890],
 # Crop and save segments separately
 no_stim_segment = raw_ica.copy().crop(tmin=stimulation_cropped_time[f'sub-{subject}_no-stim'][0], 
                                       tmax=stimulation_cropped_time[f'sub-{subject}_no-stim'][1])
-no_stim_segment.compute_psd().plot()  # double check and save if ok
+fig_no_stim_psd = no_stim_segment.compute_psd(fmin=0.1, fmax=200).plot()  # double check and save if ok
 no_stim_segment.save(no_stim_fname)
 
 stim_segment = raw_ica.copy().crop(tmin=stimulation_cropped_time[f'sub-{subject}_stim'][0],
                                    tmax=stimulation_cropped_time[f'sub-{subject}_stim'][1])
-stim_segment.compute_psd().plot() 
+fig_stim_psd = stim_segment.compute_psd(fmin=0.1, fmax=200).plot() 
 stim_segment.save(stim_fname)
 
 
 if summary_rprt:
-    report_root = op.join(project_root, 'results/reports')  # RDS folder for reports
-   
-    if not op.exists(op.join(report_root , 'sub-' + subject)):
-        os.makedirs(op.join(report_root , 'sub-' + subject))
+    report_root = op.join(project_root, 'derivatives/reports')  
     report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 
@@ -113,9 +110,15 @@ if summary_rprt:
     html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_1.html')
     
     report = mne.Report(title=f'Subject {subject}')
-    report.add_raw(raw=raw.filter(0.3, 100), title='raw with bad channels', 
-                   psd=True, 
-                   butterfly=False, 
-                   tags=('raw'))
+    report.add_figure(fig=fig_no_stim_psd, title='no stimulation psd',
+                    caption='psd of no stimulation segment after ica', 
+                    tags=('stim'),
+                    section='stim'
+                    ) 
+    report.add_figure(fig=fig_stim_psd, title='stimulation psd',
+                    caption='psd of stimulation segment after ica', 
+                    tags=('stim'),
+                    section='stim'
+                    )     
     report.save(report_fname, overwrite=True)
     report.save(html_report_fname, overwrite=True, open_browser=True)  # to check how the report looks
