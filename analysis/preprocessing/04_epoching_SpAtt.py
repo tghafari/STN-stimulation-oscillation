@@ -67,9 +67,7 @@ def finding_bad_channel(epochs):
     reject_temp = get_rejection_threshold(epochs)  # removed detrend=10 to ensure no antialiasing happens                                     
     # Drop bad epochs based on peak-to-peak magnitude
     epochs_temp = deepcopy(epochs)  # this is temporary to find bad channels
-    print(f"\n\n Numer of epochs BEFORE rejection: {len(epochs.events)} \n\n")
     epochs_temp.drop_bad(reject=reject_temp)
-    print(f"\n\n Numer of epochs AFTER rejection: {len(epochs.events)} \n\n")
 
     # Check if a few channles have most of bad epochs and mark them as bad
     # instead of dropping epochs 
@@ -85,13 +83,12 @@ def cleaning_epochs(stim, epochs):
         deriv_fname = op.join(deriv_folder, bids_path.basename 
                                + '_' + no_stim_suffix + '_' + deriv_suffix + extension)  
 
-    bad_channels = input('Are there any bad channels \
-                         after rejecting bad epochs? name of channel, e.g. ["FT10"]')
+    bad_channels = input('Are there any bad channels after rejecting bad epochs? name of channel, e.g. FT10:  ')
     # Mark bad channels before ICA
     if len(bad_channels) > 0:
         original_bads = deepcopy(epochs.info["bads"])
         print(f'These are the original bads: {original_bads}')
-        bad_chs = bad_channels #["FT10"]  
+        bad_chs = [bad_channels] #["FT10"]  
         epochs.copy().pick(bad_chs).compute_psd(fmin=0.1, fmax=100).plot()  # double check bad channels
         if len(bad_chs) == 1:
             print('one bad channel removing')
@@ -123,10 +120,13 @@ no_stim_suffix = 'no-stim'
 deriv_suffix = 'epo'
 extension = '.fif'
 
+runs = ['01']
+stim_segments_ls = [True, False]
+
 pilot = False  # is it pilot data or real data?
 summary_rprt = True # do you want to add evokeds figures to the summary report?
-platform = 'mac'  # are you using 'bluebear' or 'mac'?
 test_plot = False
+platform = 'mac'  # are you using 'bluebear' or 'mac'?
 
 if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
@@ -142,18 +142,18 @@ else:
     bids_root = op.join(project_root, 'data', 'BIDS')
 
 # Specify specific file names
-bids_path = BIDSPath(subject=subject, session=session,
-                     task=task, run=run, root=bids_root, 
-                     datatype ='eeg', suffix=eeg_suffix)
-deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
 
 # Epoch stim segments
-run = '01'
-stim_segments_ls = [True, False]
 for stim in stim_segments_ls:
-    epochs, events, events_id = segment_epoching(stim)
-    fig_bads_temp = finding_bad_channel(epochs)
-    fig_bads, fig_psd, epochs = cleaning_epochs(stim, epochs)
+    for run in runs:
+        bids_path = BIDSPath(subject=subject, session=session,
+                     task=task, run=run, root=bids_root, 
+                     datatype ='eeg', suffix=eeg_suffix)
+        deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
+
+        epochs, events, events_id = segment_epoching(stim)
+        fig_bads_temp = finding_bad_channel(epochs)
+        fig_bads, fig_psd, epochs = cleaning_epochs(stim, epochs)
 
 
 
