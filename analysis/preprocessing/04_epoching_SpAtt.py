@@ -89,11 +89,12 @@ def cleaning_epochs(stim, epochs):
         original_bads = deepcopy(epochs.info["bads"])
         print(f'These are the original bads: {original_bads}')
         bad_chs = [bad_channels] #["FT10"]  
+        print(f'{len(bad_chs)}')
         epochs.copy().pick(bad_chs).compute_psd(fmin=0.1, fmax=100).plot()  # double check bad channels
         if len(bad_chs) == 1:
             print('one bad channel removing')
             epochs.info["bads"].append(bad_chs[0])  # add a single channel
-        else:
+        elif len(bad_chs) > 1:
             print(f'{len(bad_chs)} bad channels removing')
             epochs.info["bads"].extend(bad_chs)  # add a list of channels - should there be more than one channel to drop
 
