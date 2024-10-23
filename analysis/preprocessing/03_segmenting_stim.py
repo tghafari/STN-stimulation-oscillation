@@ -36,34 +36,30 @@ import pandas as pd
 import mne
 from mne_bids import BIDSPath
 import matplotlib.pyplot as plt
-from autoreject import get_rejection_threshold
 
 
 # BIDS settings: fill these out 
 subject = '108'
 session = '01'
 task = 'SpAtt'
-run = '01'
+run = '01'  # change this for subjects with two stim or two no-stim segments
 eeg_suffix = 'eeg'
 eeg_extension = '.vhdr'
 input_suffix = 'ica'
-no_stim_suffix = 'no_stim'
-stim_suffix = 'stim'
+no_stim_suffix = 'no-stim_ica'
+stim_suffix = 'stim_ica'
 extension = '.fif'
 
 pilot = False  # is it pilot data or real data?
 summary_rprt = True  # do you want to add evokeds figures to the summary report?
-platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
+platform = 'mac'  # are you using 'bluebear' or 'mac'?
 test_plot = False
 
 if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
     camcan_dir = '/rds/projects/q/quinna-camcan/dataman/data_information'
-elif platform == 'windows':
-    rds_dir = 'Z:'
-    camcan_dir = 'X:/dataman/data_information'
 elif platform == 'mac':
-    rds_dir = '/Volumes/jenseno-avtemporal-attention'
+    rds_dir = '/Volumes/jenseno-avtemporal-attention-1'
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
@@ -89,10 +85,11 @@ raw_ica = mne.io.read_raw_fif(input_fname, verbose=True, preload=True)
 # Plot to find the points to crop
 raw_ica.plot()
 
-# Record the cropped time points for each subject
+# Record the cropped time points for each subject 
 stimulation_cropped_time = {"sub-108_no-stim": [8, 890],
                             "sub-108_stim": [930, 1882]}
 
+# Crop and save segments separately
 no_stim_segment = raw_ica.copy().crop(tmin=stimulation_cropped_time[f'sub-{subject}_no-stim'][0], 
                                       tmax=stimulation_cropped_time[f'sub-{subject}_no-stim'][1])
 no_stim_segment.compute_psd().plot()  # double check and save if ok
@@ -102,7 +99,6 @@ stim_segment = raw_ica.copy().crop(tmin=stimulation_cropped_time[f'sub-{subject}
                                    tmax=stimulation_cropped_time[f'sub-{subject}_stim'][1])
 stim_segment.compute_psd().plot() 
 stim_segment.save(stim_fname)
-
 
 
 if summary_rprt:
