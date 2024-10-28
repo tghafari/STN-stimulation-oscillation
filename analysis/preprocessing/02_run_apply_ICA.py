@@ -33,7 +33,7 @@ from copy import deepcopy
 from mne_bids import BIDSPath, read_raw_bids
 
 # BIDS settings: fill these out 
-subject = '108'
+subject = '107'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -82,7 +82,7 @@ raw.copy().compute_psd(n_fft=n_fft,  # default method is welch here (multitaper 
                     n_overlap=int(n_fft/2), 
                     fmin=0.1, fmax=105).plot()  
 
-bad_channels = True  # are there any bad channels?
+bad_channels = False  # are there any bad channels?
 # Mark bad channels before ICA
 if bad_channels:
     original_bads = deepcopy(raw.info["bads"])
@@ -103,6 +103,7 @@ pilot_BIDS/sub-02_ses-01_run-01: [],
 BIDS/sub-01_ses-01_run-01: ["T7", "FT10"],
 BIDS/sub-02_ses-01_run-01: ["TP10"],
 BIDS/sub-05_ses-01_run-01: ["almost all channels look terrible in psd"],
+BIDS/sub-107_ses-01_run-01: ["all good!"],
 BIDS/sub-108_ses-01_run-01: ["FT9", "T8", "T7"],
 } """
 
@@ -115,23 +116,12 @@ because that's what we need
 raw_resmpld = deepcopy(raw).resample(200).filter(0.1, 40)
 
 # Apply ICA and identify artifact components
-ica = ICA(method='fastica', random_state=97, n_components=30, verbose=True)
+ica = ICA(method='fastica', random_state=97, n_components=0.99, verbose=True)
 ica.fit(raw_resmpld, verbose=True)
 ica.plot_sources(raw_resmpld, title='ICA')
 ica.plot_components()
 
-for comp in range(30):
-    explained_var_ratio = ica.get_explained_variance_ratio(
-        raw_resmpld, components=comp, ch_type="eeg"
-    )
-    # This time, print as percentage.
-    ratio_percent = round(100 * explained_var_ratio["eeg"])
-    print(
-        f"Fraction of variance in EEG signal explained by component: {comp}"
-        f"{ratio_percent}%"
-    )
-
-ICA_rej_dic = {f'sub-{subject}_ses-{session}':[0, 1, 2, 4, 6, 9]} # manually selected bad ICs or from sub config file 
+ICA_rej_dic = {f'sub-{subject}_ses-{session}':[21]} # manually selected bad ICs or from sub config file 
 artifact_ICs = ICA_rej_dic[f'sub-{subject}_ses-{session}']
 """
 list bad ICA components for all participants:
@@ -141,6 +131,7 @@ list bad ICA components for all participants:
 'BIDS/sub-01_ses-01_run-01': [0, 1, 2], # 0:blink, 1:saccades, 2:blink/saccades
 'BIDS/sub-02_ses-01_run-01': [0, 1, 2, 3, 4], # 0:blink, 1:saccades, 2:blink/saccades, 3&4: empty
 'BIDS/sub-05_ses-01_run-01': [0, 1, 8, 58, 59], # don't know-almost all look terrible
+BIDS/sub-107_ses-01_run-01': [21], # maybe eye movement? low amplitude, maybe due to referencing. 
 BIDS/sub-108_ses-01_run-01': [0, 1, 2, 4, 6, 9], # don't know-almost all look terrible
 } """
 
@@ -184,9 +175,12 @@ if summary_rprt:
     html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_1.html')
     
     report = mne.open_report(report_fname)
-    report.add_figure(fig_ica, title="removed ICA components (filtered:0.1-40)",
-                      tags=('ica'), image_format="PNG")
-    report.add_raw(raw=raw_ica.filter(0.3, 100), title='raw after ICA', 
+    report.add_figure(fig_ica, 
+                      title="removed ICA components (filtered:0.1-40)",
+                      caption="removed ICA components: saccade (low IC amplitude maybe due to referencing)",
+                      tags=('ica'), 
+                      image_format="PNG")
+    report.add_raw(raw=raw_ica.filter(0.3, 100), title='raw after ICA (avg reference)', 
                    psd=True, 
                    butterfly=False, 
                    tags=('ica'))

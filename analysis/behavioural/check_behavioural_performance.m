@@ -6,7 +6,7 @@
 % On the same plot we display performance (%correct).
 
 % Load the behavioural data
-subject = '108';
+subject = '107';
 session = '01';
 task = 'spatt';
 run = '01';
@@ -26,7 +26,7 @@ RT_KbQueue = beh.cfgOutput.RT_KbQueue;  % RT from keyboard
 RT_trig = beh.cfgOutput.RT_trig;  % RT from triggers
 
 % Calculate preformance 
-FB = cfgOutput.presd - cfgExp.corrResp';
+FB = beh.cfgOutput.presd - beh.cfgExp.corrResp(:);
 TPR = sum(FB == 1) ./ length(FB);  % because pressed is stored as 2, TPR = 2 - 1
 TNR = sum(FB == 0) ./ length(FB);  % TNR = 0 - 0
 FPR = sum(FB == 2) ./ length(FB);  % FPR = 2 - 0

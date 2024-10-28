@@ -35,6 +35,7 @@ import pandas as pd
 import mne
 from mne_bids import (BIDSPath, write_raw_bids, read_raw_bids)
 import matplotlib.pyplot as plt
+from copy import deepcopy
 
 # # Fill these out - for older subjects- before 105
 # subj_code = 'sub05'  # subject code assigned to by Benchi's group- only for subjects before 5 (inc)
@@ -46,10 +47,11 @@ https://github.com/tghafari/STN-stimulation-oscillation/wiki/Stimulation-table""
 stim_sequence = {'sub-01':["no_stim-left rec", "no_stim-right rec", "Right stim- no rec", "Left stim- no rec"],
                  'sub-02':["no_stim-left rec", "no_stim-right rec", "Left stim- no rec", "Right stim- no rec"],
                  'sub-05':["Left stim- no rec", "Right stim- no rec", "no_stim-left rec", "no_stim-right rec"],
-                 'sub-08':["no_stim-right rec", "no_stim-left rec", "left stim- no rec", "right stim- no rec"]} 
+                 'sub-107':["no_stim-right rec", "no_stim-left rec", "Right stim- no rec", "Left stim- no rec"],
+                 'sub-108':["no_stim-right rec", "no_stim-left rec", "left stim- no rec", "right stim- no rec"]} 
 
 # BIDS settings
-subject = '108'
+subject = '107'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -75,8 +77,9 @@ else:
 
 base_fpath = op.join(data_root, f'sub-{subject}', f'ses-{session}', f'{modality}')  
 base_fname = f'sub-{subject}_ses-{session}_task-{task}_run-{run}_{modality}'
-eeg_fname = op.join(base_fpath, base_fname + '.eeg')  
-vhdr_fname = op.join(base_fpath, base_fname + '.vhdr')
+brainVision_basename = f'ao_{subject[-2:]}'
+eeg_fname = op.join(base_fpath, brainVision_basename + '.eeg')  
+vhdr_fname = op.join(base_fpath, brainVision_basename + '.vhdr')
 events_fname = op.join(base_fpath, base_fname + '-eve.fif')
 annotated_raw_fname = op.join(base_fpath, base_fname + extension)
 beh_fig_fname = op.join(project_root, 'derivatives/figures', f'sub-{subject}-beh-performance.png')  # where you save the matlab output of behavioural performance plots
@@ -116,23 +119,48 @@ annotations_from_events = mne.annotations_from_events(events=events,
                                                     )
 raw.set_annotations(annotations_from_events)
 
-# Set average reference 
-raw.add_reference_channels(ref_channels=['Fz'])  # the reference channel is not by default in the channel list
-raw.set_eeg_reference(ref_channels=['Fz'], projection=False, verbose=False)
-
-# Preparing the brainvision data format to standard
-montage = mne.channels.make_standard_montage("easycap-M1")
-raw.set_montage(montage, verbose=False)
-
-mne.write_events(events_fname, events, overwrite=True)  # write events in a separate file
-
+# Write events in a separate file
+mne.write_events(events_fname, events, overwrite=True)  
 
 #sub-05 first 1300seconds are before the task starts.
 # if subj_code == 'sub05':    
 #     raw.crop(tmin=1380)
-                                                                                         
+
+# Set average reference 
+# First, plot the channel layout
+mne.viz.plot_sensors(raw.info, 
+                     ch_type='all', 
+                     show_names=True, 
+                     ch_groups='position',
+                     to_sphere=False,  # the sensor array appears similar as to looking downwards straight above the subject’s head.
+                     linewidth=0,
+                     )
+channels_are_even = True
+# If channels distrubited evenly, do average reference (eeglab resources)
+if channels_are_even:
+    raw_referenced = raw.copy()
+    raw_referenced.set_eeg_reference(ref_channels="average")
+    raw_referenced.plot(title='Average reference raw')
+
+# if not evenly distributed, do Fz reference
+else:
+    raw_referenced = raw.copy()
+    raw_referenced.add_reference_channels(ref_channels=['Fz']) # the reference channel is not by default in the channel list
+    raw_referenced.set_eeg_reference(ref_channels=['Fz'], projection=False, verbose=False)
+    raw_referenced.plot(title='Fz reference raw')
+
+
+# How does it look with new ref
+raw.plot(title='No reference raw')
+
+# # Preparing the brainvision data format to standard
+# montage = mne.channels.make_standard_montage("easycap-M1")
+# raw_referenced.set_montage(montage, verbose=False)
+# montage.plot()  # 2D
+# fig = montage.plot(kind="3d")  # 3D
+
 # Save a non-bids raw just in case 
-raw.save(annotated_raw_fname, overwrite=True)  # note that the event_id is incorrect here, use the event_id dict if needed
+raw_referenced.save(annotated_raw_fname, overwrite=True)  # note that the event_id is incorrect here, use the event_id dict if needed
 
 # Have to explicitly assign values to events for brainvision data
 event_dict = {'cue_onset_right':1,
@@ -161,8 +189,8 @@ bids_path = BIDSPath(subject=subject,
                      root=bids_root)
 
 # Write to BIDS format
-raw.set_annotations(None)  # have to remove annotations to prevent duplicating when converting to BIDS
-write_raw_bids(raw, 
+raw_referenced.set_annotations(None)  # have to remove annotations to prevent duplicating when converting to BIDS
+write_raw_bids(raw_referenced, 
                bids_path, 
                events=events_fname, 
                event_id=events_id, 
@@ -171,14 +199,14 @@ write_raw_bids(raw,
                format='BrainVision')
 
 # Plot to test, filter raw data (130Hz is stimulation frequency)
-raw.copy().filter(0.3,100).plot(title="raw")  # does not contain triggers
-n_fft = int(raw.info['sfreq']*2)  # to ensure window size = 2sec
-psd_fig = raw.copy().filter(0.3,100).compute_psd(n_fft=n_fft,  # default method is welch here (multitaper for epoch)
+raw_referenced.copy().filter(0.3,100).plot(title="raw")  # does not contain triggers
+n_fft = int(raw_referenced.info['sfreq']*2)  # to ensure window size = 2sec
+psd_fig = raw_referenced.copy().filter(0.3,100).compute_psd(n_fft=n_fft,  # default method is welch here (multitaper for epoch)
                                                 n_overlap=int(n_fft/2),
                                                 fmax=105).plot()  
 
 # Plot all events
-fig = mne.viz.plot_events(events, sfreq=raw.info["sfreq"], first_samp=raw.first_samp, event_id=events_id)
+fig = mne.viz.plot_events(events, sfreq=raw_referenced.info["sfreq"], first_samp=raw_referenced.first_samp, event_id=events_id)
 
 # Plot triggers from bids .tsv file
 events_bids_path = bids_path.copy().update(suffix=events_suffix,
@@ -252,12 +280,12 @@ if summary_rprt:
                         event_id=events_id, 
                         tags=('eve'),
                         title='events from "events"', 
-                        sfreq=raw.info['sfreq'])
+                        sfreq=raw_referenced.info['sfreq'])
         report.add_figure(eve_fig,
                           title='Number of events',
                           caption='number of events in total',
                           tags=('eve'))
-    report.add_raw(raw=raw.filter(0.3, 100), title='raw with bad channels', 
+    report.add_raw(raw=raw_referenced.filter(0.3, 100), title='raw referenced with bad channels', 
                    psd=True, 
                    butterfly=False, 
                    tags=('raw'))
