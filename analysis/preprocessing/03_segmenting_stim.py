@@ -39,7 +39,7 @@ import matplotlib.pyplot as plt
 
 
 # BIDS settings: fill these out 
-subject = '108'
+subject = '107'
 session = '01'
 task = 'SpAtt'
 run = '01'  # change this for subjects with two stim or two no-stim segments
@@ -59,7 +59,7 @@ if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
     camcan_dir = '/rds/projects/q/quinna-camcan/dataman/data_information'
 elif platform == 'mac':
-    rds_dir = '/Volumes/jenseno-avtemporal-attention-1'
+    rds_dir = '/Volumes/jenseno-avtemporal-attention'
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
@@ -70,7 +70,7 @@ else:
 
 # Specify specific file names
 ROI_dir = op.join(project_root, 'results/lateralisation-indices')
-bids_root = op.join(project_root, 'Data', 'BIDS')
+bids_root = op.join(project_root, 'data', 'BIDS')
 bids_path = BIDSPath(subject=subject, session=session,
                      task=task, run=run, root=bids_root, 
                      datatype ='eeg', suffix=eeg_suffix)
@@ -86,7 +86,9 @@ raw_ica = mne.io.read_raw_fif(input_fname, verbose=True, preload=True)
 raw_ica.plot()
 
 # Record the cropped time points for each subject 
-stimulation_cropped_time = {"sub-108_no-stim": [8, 890],
+stimulation_cropped_time = {"sub-107_no-stim": [15, 974],
+                            "sub-107_stim": [1000, 1845],
+                            "sub-108_no-stim": [8, 890],
                             "sub-108_stim": [930, 1882]}
 
 # Crop and save segments separately
@@ -109,14 +111,14 @@ if summary_rprt:
                         f'sub-{subject}_preproc_1.hdf5')    # it is in .hdf5 for later adding images
     html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_1.html')
     
-    report = mne.Report(title=f'Subject {subject}')
+    report = mne.open_report(title=f'Subject {subject}')
     report.add_figure(fig=fig_no_stim_psd, title='no stimulation psd',
                     caption='psd of no stimulation segment after ica', 
                     tags=('stim'),
                     section='stim'
                     ) 
     report.add_figure(fig=fig_stim_psd, title='stimulation psd',
-                    caption='psd of stimulation segment after ica', 
+                    caption='psd of stimulated segment after ica', 
                     tags=('stim'),
                     section='stim'
                     )     

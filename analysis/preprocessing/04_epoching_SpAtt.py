@@ -83,7 +83,7 @@ def cleaning_epochs(stim, epochs):
         deriv_fname = op.join(deriv_folder, bids_path.basename 
                                + '_' + no_stim_suffix + '_' + deriv_suffix + extension)  
 
-    bad_channels = input('Are there any bad channels after rejecting bad epochs? name of channel, e.g. FT10:  ')
+    bad_channels = input('Are there any bad channels after rejecting bad epochs? name of channel, e.g. FT10:  (return if none)')
     # Mark bad channels before ICA
     if len(bad_channels) > 0:
         original_bads = deepcopy(epochs.info["bads"])
@@ -110,7 +110,7 @@ def cleaning_epochs(stim, epochs):
     return fig_bads, fig_psd, epochs
 
 # BIDS settings: fill these out 
-subject = '108'
+subject = '107'
 session = '01'
 task = 'SpAtt'
 eeg_suffix = 'eeg'
@@ -142,9 +142,16 @@ if pilot:
 else:
     bids_root = op.join(project_root, 'data', 'BIDS')
 
-# Specify specific file names
+# Epoch stim segments and add to report
+report_root = op.join(project_root, 'derivatives/reports')  
+report_folder = op.join(report_root , 'sub-' + subject)
 
-# Epoch stim segments
+report_fname = op.join(report_folder, 
+                    f'sub-{subject}_preproc_1.hdf5')    # it is in .hdf5 for later adding images
+html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_1.html')
+
+report = mne.open_report(report_fname)
+
 for stim in stim_segments_ls:
     for run in runs:
         bids_path = BIDSPath(subject=subject, session=session,
@@ -155,6 +162,19 @@ for stim in stim_segments_ls:
         epochs, events, events_id = segment_epoching(stim)
         fig_bads_temp = finding_bad_channel(epochs)
         fig_bads, fig_psd, epochs = cleaning_epochs(stim, epochs)
+        report.add_figure(fig=fig_bads, title='dropped epochs',
+                    caption=f'stim: {stim}: epochs dropped- no bad channels', 
+                    tags=('epo'),
+                    section='stim'
+                    )
+        report.add_figure(fig=fig_psd, title='psd after dropped',
+                    caption=f'stim: {stim}: psd with bad epochs dropped and no bad channels', 
+                    tags=('epo'),
+                    section='stim'
+                    ) 
+
+report.save(report_fname, overwrite=True, open_browser=True)
+report.save(html_report_fname, overwrite=True, open_browser=True)  # to check how the report looks
 
 
 
@@ -178,26 +198,7 @@ if test_plot:
     epochs['cue_onset_left'].average().copy().filter(1,60).plot()
     epochs['cue_onset_right'].average().copy().filter(1,60).plot()
 
-if summary_rprt:
 
-    report_root = op.join(project_root, 'derivatives/reports')  
-    report_folder = op.join(report_root , 'sub-' + subject)
 
-    report_fname = op.join(report_folder, 
-                        f'sub-{subject}_preproc_1.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_1.html')
 
-    report = mne.open_report(report_fname)
 
-    report.add_figure(fig=fig_bads, title='dropped epochs',
-                    caption='epochs dropped and channel-one bad channel (FT10) added after plotting bad epochs', 
-                    tags=('epo'),
-                    section='epocheds'
-                    )
-    report.add_figure(fig=fig_psd, title='psd after dropped',
-                    caption='psd with bad channels marked after dropping bad epochs', 
-                    tags=('epo'),
-                    section='epocheds'
-                    ) 
-    report.save(report_fname, overwrite=True, open_browser=True)
-    report.save(html_report_fname, overwrite=True, open_browser=True)  # to check how the report looks

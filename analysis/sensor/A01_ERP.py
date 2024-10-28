@@ -23,7 +23,7 @@ import mne
 from mne_bids import BIDSPath
 
 # BIDS settings: fill these out 
-subject = '108'
+subject = '107'
 session = '01'
 task = 'SpAtt'
 run = '01'
