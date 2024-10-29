@@ -22,6 +22,28 @@ import numpy as np
 import mne
 from mne_bids import BIDSPath
 
+
+def reading_epochs_evoking(stim, test_plot):
+    if stim:
+        input_fname = op.join(deriv_folder, bids_path.basename
+                               + '_' + stim_suffix + '_' + input_suffix + extension)
+        deriv_fname = op.join(deriv_folder, bids_path.basename 
+                               + '_' + stim_suffix + '_' + deriv_suffix + extension)  
+    else:
+        input_fname = op.join(deriv_folder, bids_path.basename
+                               + '_' + no_stim_suffix + '_' + input_suffix + extension)
+        deriv_fname = op.join(deriv_folder, bids_path.basename 
+                               + '_' + no_stim_suffix + '_' + deriv_suffix + extension)  
+
+    # Read epoched data
+    epochs = mne.read_epochs(input_fname, verbose=True, preload=True)  # -.7 to 1.7sec
+
+    # Make evoked data for conditions of interest and save
+    evoked = epochs['cue_onset_right','cue_onset_left'].copy().average(method='mean').filter(0.0,100).crop(-.5,1.7)  
+    mne.write_evokeds(deriv_fname, evoked, verbose=True, overwrite=True)
+
+    return epochs, evokeds
+
 # BIDS settings: fill these out 
 subject = '107'
 session = '01'
@@ -29,9 +51,14 @@ task = 'SpAtt'
 run = '01'
 eeg_suffix = 'eeg'
 eeg_extension = '.vhdr'
+stim_suffix = 'stim'
+no_stim_suffix = 'no-stim'
 input_suffix = 'epo'
 deriv_suffix = 'evo'
 extension = '.fif'
+
+runs = ['01']
+stim_segments_ls = [True, False]
 
 pilot = False  # is it pilot data or real data?
 summary_rprt = True  # do you want to add evokeds figures to the summary report?
@@ -62,8 +89,24 @@ deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder
 input_fname = op.join(deriv_folder, bids_path.basename + '_' + input_suffix + extension)
 deriv_fname = op.join(deriv_folder, bids_path.basename + '_' + deriv_suffix + extension)  # prone to change if annotation worked for eeg brainvision
 
-# Read epoched data
-epochs = mne.read_epochs(input_fname, verbose=True, preload=True)  # -.7 to 1.7sec
+# Epoch stim segments and add to report
+report_root = op.join(project_root, 'derivatives/reports')  
+report_folder = op.join(report_root , 'sub-' + subject)
+
+report_fname = op.join(report_folder, 
+                    f'sub-{subject}_preproc_1.hdf5')    # it is in .hdf5 for later adding images
+html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_1.html')
+
+report = mne.open_report(report_fname)
+
+for stim in stim_segments_ls:
+    for run in runs:
+        bids_path = BIDSPath(subject=subject, session=session,
+                     task=task, run=run, root=bids_root, 
+                     datatype ='eeg', suffix=eeg_suffix)
+        deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
+
+        epochs, evoked = reading_epochs_evoking(stim)
 
 if test_plot:
     # ==================================== RIGHT LEFT SEPARATELY ==============================================
@@ -82,11 +125,7 @@ if test_plot:
     fig_left = evoked_left.copy().plot_joint(times=[0.150,0.255,0.395])
 
 # ==================================== RIGHT LEFT TOGETHER ==============================================
-# Make evoked data for conditions of interest and save
-evoked = epochs['cue_onset_right','cue_onset_left'].copy().average(method='mean').filter(0.0,60).crop(-.5,1.7)  
-mne.write_evokeds(deriv_fname, evoked, verbose=True, overwrite=True)
 
-if test_plot:
     # Plot evoked data
     evoked.copy().apply_baseline(baseline=(-.5,-.2))
     evoked.copy().plot_topo(title='Evoked response')
@@ -96,6 +135,7 @@ if test_plot:
     resampled_epochs = epochs.copy().resample(200)  
     resampled_epochs.compute_psd(fmin=1.0, fmax=60.0).plot(spatial_colors=True)  # explore the frequency content of the epochs
     resampled_epochs.compute_psd().plot_topomap(normalize=False)  # spatial distribution of the PSD
+
 
 # Plot ERF for summary report
 topos_times = np.arange(50,450,30)*0.001
