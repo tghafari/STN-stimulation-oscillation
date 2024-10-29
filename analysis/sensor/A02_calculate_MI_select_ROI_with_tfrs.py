@@ -420,7 +420,7 @@ bids_path = BIDSPath(subject=subject, session=session,
                      datatype ='eeg', suffix=eeg_suffix)
 deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
 input_fname = op.join(deriv_folder, bids_path.basename + '_' + input_suffix + extension)
-deriv_fname = op.join(deriv_folder, bids_path.basename + '_' + deriv_suffix + extension)  # prone to change if annotation worked for eeg brainvision
+deriv_fname = op.join(deriv_folder, bids_path.basename + '_' + deriv_suffix + extension) 
 
 peak_alpha_fname = op.join(ROI_dir, f'sub-{subject}_peak_alpha.npz')  # 2 numpy arrays saved into an uncompressed file
 
