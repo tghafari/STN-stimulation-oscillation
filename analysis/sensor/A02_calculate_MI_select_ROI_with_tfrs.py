@@ -376,8 +376,6 @@ def MI_overtime_sixth_plot(tfr_alpha_MI_occ_chans, report):
     return report
 
 # =================================================================================================================
-
-
 # BIDS settings: fill these out 
 subject = '107'
 session = '01'
