@@ -39,15 +39,20 @@ from mne_bids import BIDSPath
 import matplotlib.pyplot as plt
 
 # BIDS settings: fill these out 
-subject = '108'
+subject = '107'
 session = '01'
 task = 'SpAtt'
 run = '01'
 eeg_suffix = 'eeg'
 eeg_extension = '.vhdr'
+stim_suffix = 'stim'
+no_stim_suffix = 'no-stim'
 input_suffix = 'epo'
 deriv_suffix = 'tfr'
 extension = '.fif'
+
+runs = ['01']
+stim_segments_ls = [True, False]
 
 pilot = False  # is it pilot data or real data?
 summary_rprt = True  # do you want to add evokeds figures to the summary report?
@@ -81,53 +86,67 @@ deriv_fname = op.join(deriv_folder, bids_path.basename + '_' + deriv_suffix + ex
 
 peak_alpha_fname = op.join(ROI_dir, f'sub-{subject}_peak_alpha.npz')  # 2 numpy arrays saved into an uncompressed file
 
-# Read epoched data
-epochs = mne.read_epochs(input_fname, verbose=True, preload=True)  # epochs are from -.7 to 1.7sec
+def tfr_calculation_first_plot(stim):
+    if stim:
+        input_fname = op.join(deriv_folder, bids_path.basename
+                               + '_' + stim_suffix + '_' + input_suffix + extension)
+        deriv_fname = op.join(deriv_folder, bids_path.basename 
+                               + '_' + stim_suffix + '_' + deriv_suffix + extension)  
+    else:
+        input_fname = op.join(deriv_folder, bids_path.basename
+                               + '_' + no_stim_suffix + '_' + input_suffix + extension)
+        deriv_fname = op.join(deriv_folder, bids_path.basename 
+                               + '_' + no_stim_suffix + '_' + deriv_suffix + extension)  
 
-# ========================================= TFR CALCULATIONS AND FIRST PLOT (PLOT_TOPO) ====================================
-# Calculate tfr for post cue alpha
-tfr_params = dict(use_fft=True, return_itc=False, average=True, decim=2, n_jobs=4, verbose=True)
+    # Read epoched data
+    epochs = mne.read_epochs(input_fname, verbose=True, preload=True)  # epochs are from -.7 to 1.7sec
 
-freqs = np.arange(2,31,1)  # the frequency range over which we perform the analysis
-n_cycles = freqs / 2  # the length of sliding window in cycle units. 
-time_bandwidth = 2.0  # '(2deltaTdeltaF) number of DPSS tapers to be used + 1.'
-                      # 'it relates to the temporal (deltaT) and spectral (deltaF)' 
-                      # 'smoothing'
-                      # 'the more tapers, the more smooth'->useful for high freq data
-                      
-tfr_slow_cue_right = mne.time_frequency.tfr_multitaper(epochs['cue_onset_right'],  
-                                                  freqs=freqs, 
-                                                  n_cycles=n_cycles,
-                                                  time_bandwidth=time_bandwidth, 
-                                                  **tfr_params                                                  
-                                                  )
-                                                
-tfr_slow_cue_left = mne.time_frequency.tfr_multitaper(epochs['cue_onset_left'],  
-                                                  freqs=freqs, 
-                                                  n_cycles=n_cycles,
-                                                  time_bandwidth=time_bandwidth, 
-                                                  **tfr_params                                                  
-                                                  )
+    # ========================================= TFR CALCULATIONS AND FIRST PLOT (PLOT_TOPO) ====================================
+    # Calculate tfr for post cue alpha
+    tfr_params = dict(use_fft=True, return_itc=False, average=True, decim=2, n_jobs=4, verbose=True)
 
-# Plot TFR on all sensors and check
-fig_plot_topo_right = tfr_slow_cue_right.plot_topo(tmin=-.5, 
-                                                   tmax=1.5, 
-                                                   baseline=[-.5,-.2], 
-                                                   mode='percent',
-                                                   fig_facecolor='w', 
-                                                   font_color='k',
-                                                   vmin=-1, 
-                                                   vmax=1, 
-                                                   title='TFR of power < 30Hz - cue right')
-fig_plot_topo_left = tfr_slow_cue_left.plot_topo(tmin=-.5, 
-                                                 tmax=1.5,
-                                                 baseline=[-.5,-.2], 
-                                                 mode='percent',
-                                                 fig_facecolor='w', 
-                                                 font_color='k',
-                                                 vmin=-1, 
-                                                 vmax=1, 
-                                                 title='TFR of power < 30Hz - cue left')
+    freqs = np.arange(2,31,1)  # the frequency range over which we perform the analysis
+    n_cycles = freqs / 2  # the length of sliding window in cycle units. 
+    time_bandwidth = 2.0  # '(2deltaTdeltaF) number of DPSS tapers to be used + 1.'
+                        # 'it relates to the temporal (deltaT) and spectral (deltaF)' 
+                        # 'smoothing'
+                        # 'the more tapers, the more smooth'->useful for high freq data
+                        
+    tfr_slow_cue_right = mne.time_frequency.tfr_multitaper(epochs['cue_onset_right'],  
+                                                    freqs=freqs, 
+                                                    n_cycles=n_cycles,
+                                                    time_bandwidth=time_bandwidth, 
+                                                    **tfr_params                                                  
+                                                    )
+                                                    
+    tfr_slow_cue_left = mne.time_frequency.tfr_multitaper(epochs['cue_onset_left'],  
+                                                    freqs=freqs, 
+                                                    n_cycles=n_cycles,
+                                                    time_bandwidth=time_bandwidth, 
+                                                    **tfr_params                                                  
+                                                    )
+
+    # Plot TFR on all sensors and check
+    fig_plot_topo_right = tfr_slow_cue_right.plot_topo(tmin=-.5, 
+                                                    tmax=1.5, 
+                                                    baseline=[-.5,-.2], 
+                                                    mode='percent',
+                                                    fig_facecolor='w', 
+                                                    font_color='k',
+                                                    vmin=-1, 
+                                                    vmax=1, 
+                                                    title='TFR of power < 30Hz - cue right')
+    fig_plot_topo_left = tfr_slow_cue_left.plot_topo(tmin=-.5, 
+                                                    tmax=1.5,
+                                                    baseline=[-.5,-.2], 
+                                                    mode='percent',
+                                                    fig_facecolor='w', 
+                                                    font_color='k',
+                                                    vmin=-1, 
+                                                    vmax=1, 
+                                                    title='TFR of power < 30Hz - cue left')
+    
+    return tfr_slow_cue_right, tfr_slow_cue_left, fig_plot_topo_right, fig_plot_topo_left
 
 # ========================================= SECOND PLOT (REPRESENTATIVE SENSROS) ====================================
 # Plot TFR for representative sensors - same in all participants

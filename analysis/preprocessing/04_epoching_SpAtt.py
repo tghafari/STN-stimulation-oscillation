@@ -125,7 +125,6 @@ runs = ['01']
 stim_segments_ls = [True, False]
 
 pilot = False  # is it pilot data or real data?
-summary_rprt = True # do you want to add evokeds figures to the summary report?
 test_plot = False
 platform = 'mac'  # are you using 'bluebear' or 'mac'?
 
@@ -168,15 +167,13 @@ for stim in stim_segments_ls:
                     section='stim'
                     )
         report.add_figure(fig=fig_psd, title='psd after dropped',
-                    caption=f'stim: {stim}: psd with bad epochs dropped and no bad channels', 
+                    caption=f'stim: {stim}, psd with bad epochs dropped and no bad channels', 
                     tags=('epo'),
                     section='stim'
                     ) 
 
 report.save(report_fname, overwrite=True, open_browser=True)
 report.save(html_report_fname, overwrite=True, open_browser=True)  # to check how the report looks
-
-
 
 
 if test_plot:
