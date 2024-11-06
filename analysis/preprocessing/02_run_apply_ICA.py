@@ -53,7 +53,7 @@ elif platform == 'windows':
     rds_dir = 'Z:'
     camcan_dir = 'X:/dataman/data_information'
 elif platform == 'mac':
-    rds_dir = '/Volumes/jenseno-avtemporal-attention'
+    rds_dir = '/Volumes/jenseno-avtemporal-attention-1'
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
@@ -103,7 +103,7 @@ pilot_BIDS/sub-02_ses-01_run-01: [],
 BIDS/sub-01_ses-01_run-01: ["T7", "FT10"],
 BIDS/sub-02_ses-01_run-01: ["TP10"],
 BIDS/sub-05_ses-01_run-01: ["almost all channels look terrible in psd"],
-BIDS/sub-107_ses-01_run-01: ["all good!"],
+BIDS/sub-107_ses-01_run-01: [], #"all good!"
 BIDS/sub-108_ses-01_run-01: ["FT9", "T8", "T7"],
 } """
 
@@ -116,12 +116,12 @@ because that's what we need
 raw_resmpld = deepcopy(raw).resample(200).filter(0.1, 40)
 
 # Apply ICA and identify artifact components
-ica = ICA(method='fastica', random_state=97, n_components=0.99, verbose=True)
+ica = ICA(method='fastica', random_state=97, n_components=30, verbose=True)
 ica.fit(raw_resmpld, verbose=True)
 ica.plot_sources(raw_resmpld, title='ICA')
 ica.plot_components()
 
-ICA_rej_dic = {f'sub-{subject}_ses-{session}':[21]} # manually selected bad ICs or from sub config file 
+ICA_rej_dic = {f'sub-{subject}_ses-{session}':[28]} # manually selected bad ICs or from sub config file 
 artifact_ICs = ICA_rej_dic[f'sub-{subject}_ses-{session}']
 """
 list bad ICA components for all participants:
@@ -131,8 +131,8 @@ list bad ICA components for all participants:
 'BIDS/sub-01_ses-01_run-01': [0, 1, 2], # 0:blink, 1:saccades, 2:blink/saccades
 'BIDS/sub-02_ses-01_run-01': [0, 1, 2, 3, 4], # 0:blink, 1:saccades, 2:blink/saccades, 3&4: empty
 'BIDS/sub-05_ses-01_run-01': [0, 1, 8, 58, 59], # don't know-almost all look terrible
-BIDS/sub-107_ses-01_run-01': [21], # maybe eye movement? low amplitude, maybe due to referencing. 
-BIDS/sub-108_ses-01_run-01': [0, 1, 2, 4, 6, 9], # don't know-almost all look terrible
+BIDS/sub-107_ses-01_run-01': [28], # maybe eye movement?  
+BIDS/sub-108_ses-01_run-01': [1, 13], # don't know-almost all look terrible
 } """
 
 # Double check the manually selected artifactual ICs
@@ -171,13 +171,13 @@ if summary_rprt:
     report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 
-                        f'sub-{subject}_preproc_1.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_1.html')
+                        f'sub-{subject}_preproc.hdf5')    # it is in .hdf5 for later adding images
+    html_report_fname = op.join(report_folder, f'sub-{subject}_preproc.html')
     
     report = mne.open_report(report_fname)
     report.add_figure(fig_ica, 
                       title="removed ICA components (filtered:0.1-40)",
-                      caption="removed ICA components: saccade (low IC amplitude maybe due to referencing)",
+                      caption="removed ICA components: eye movement(?)",
                       tags=('ica'), 
                       image_format="PNG")
     report.add_raw(raw=raw_ica.filter(0.3, 100), title='raw after ICA (avg reference)', 

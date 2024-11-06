@@ -59,7 +59,7 @@ if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
     camcan_dir = '/rds/projects/q/quinna-camcan/dataman/data_information'
 elif platform == 'mac':
-    rds_dir = '/Volumes/jenseno-avtemporal-attention'
+    rds_dir = '/Volumes/jenseno-avtemporal-attention-1'
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
@@ -95,12 +95,12 @@ stimulation_cropped_time = {"sub-107_no-stim": [15, 974],
 no_stim_segment = raw_ica.copy().crop(tmin=stimulation_cropped_time[f'sub-{subject}_no-stim'][0], 
                                       tmax=stimulation_cropped_time[f'sub-{subject}_no-stim'][1])
 fig_no_stim_psd = no_stim_segment.compute_psd(fmin=0.1, fmax=200).plot()  # double check and save if ok
-no_stim_segment.save(no_stim_fname)
+no_stim_segment.save(no_stim_fname, overwrite=True)
 
 stim_segment = raw_ica.copy().crop(tmin=stimulation_cropped_time[f'sub-{subject}_stim'][0],
                                    tmax=stimulation_cropped_time[f'sub-{subject}_stim'][1])
 fig_stim_psd = stim_segment.compute_psd(fmin=0.1, fmax=200).plot() 
-stim_segment.save(stim_fname)
+stim_segment.save(stim_fname, overwrite=True)
 
 
 if summary_rprt:
@@ -108,10 +108,10 @@ if summary_rprt:
     report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 
-                        f'sub-{subject}_preproc_1.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_1.html')
+                        f'sub-{subject}_preproc.hdf5')    # it is in .hdf5 for later adding images
+    html_report_fname = op.join(report_folder, f'sub-{subject}_preproc.html')
     
-    report = mne.open_report(title=f'Subject {subject}')
+    report = mne.open_report(report_fname)
     report.add_figure(fig=fig_no_stim_psd, title='no stimulation psd',
                     caption='psd of no stimulation segment after ica', 
                     tags=('stim'),

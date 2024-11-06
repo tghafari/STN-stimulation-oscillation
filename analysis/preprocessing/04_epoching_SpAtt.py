@@ -39,8 +39,8 @@ def segment_epoching(stim):
 
     # Read ica data
     segmented_ica = mne.io.read_raw_fif(input_fname, verbose=True, preload=True)
-    segmented_ica.filter(l_freq=0.1, h_freq=100),  # get rid of stim frequency before epoching:
-                                            # unfiltered epochs had >%61 bad epochs (sub108)
+    segmented_ica.filter(l_freq=0.1, h_freq=100),  # get rid of stim frequency before epoching, otherwise too many bad channels
+
     print(f'double checking bad channels: {segmented_ica.info['bads']}')
 
     events, events_id = mne.events_from_annotations(segmented_ica, event_id='auto')
@@ -82,8 +82,8 @@ def cleaning_epochs(stim, epochs):
     else:
         deriv_fname = op.join(deriv_folder, bids_path.basename 
                                + '_' + no_stim_suffix + '_' + deriv_suffix + extension)  
-
-    bad_channels = input('Are there any bad channels after rejecting bad epochs? name of channel, e.g. FT10:  (return if none)')
+    # Might need to reconsider this section. might not even be needed
+    bad_channels = input('Are there any bad channels after rejecting bad epochs? name of channel, e.g. FT10:  (return if none). n.b. Make sure to remove from both stim and no-stim')
     # Mark bad channels before ICA
     if len(bad_channels) > 0:
         original_bads = deepcopy(epochs.info["bads"])
@@ -122,7 +122,7 @@ deriv_suffix = 'epo'
 extension = '.fif'
 
 runs = ['01']
-stim_segments_ls = [True, False]
+stim_segments_ls = [False, True]
 
 pilot = False  # is it pilot data or real data?
 test_plot = False
@@ -132,7 +132,7 @@ if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
     camcan_dir = '/rds/projects/q/quinna-camcan/dataman/data_information'
 elif platform == 'mac':
-    rds_dir = '/Volumes/jenseno-avtemporal-attention'
+    rds_dir = '/Volumes/jenseno-avtemporal-attention-1'
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
@@ -146,8 +146,8 @@ report_root = op.join(project_root, 'derivatives/reports')
 report_folder = op.join(report_root , 'sub-' + subject)
 
 report_fname = op.join(report_folder, 
-                    f'sub-{subject}_preproc_1.hdf5')    # it is in .hdf5 for later adding images
-html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_1.html')
+                    f'sub-{subject}_preproc.hdf5')    # it is in .hdf5 for later adding images
+html_report_fname = op.join(report_folder, f'sub-{subject}_preproc.html')
 
 report = mne.open_report(report_fname)
 
@@ -161,12 +161,12 @@ for stim in stim_segments_ls:
         epochs, events, events_id = segment_epoching(stim)
         fig_bads_temp = finding_bad_channel(epochs)
         fig_bads, fig_psd, epochs = cleaning_epochs(stim, epochs)
-        report.add_figure(fig=fig_bads, title='dropped epochs',
+        report.add_figure(fig=fig_bads, title=f'stim: {stim}, dropped epochs',
                     caption=f'stim: {stim}: epochs dropped- no bad channels', 
                     tags=('epo'),
                     section='stim'
                     )
-        report.add_figure(fig=fig_psd, title='psd after dropped',
+        report.add_figure(fig=fig_psd, title=f'stim: {stim}, psd after dropped',
                     caption=f'stim: {stim}, psd with bad epochs dropped and no bad channels', 
                     tags=('epo'),
                     section='stim'

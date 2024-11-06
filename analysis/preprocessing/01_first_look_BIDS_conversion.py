@@ -22,9 +22,6 @@ t.ghafari@bham.ac.uk
 ==============================================  
 
 ToDos:
-- avg RT is very long
-- number of button presses = right dot, as if 
-they only responded to right dot not left.
 """
 
 # Import relevant Python modules
@@ -67,7 +64,7 @@ summary_rprt = True
 if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
 elif platform == 'mac':
-    rds_dir = '/Volumes/jenseno-avtemporal-attention'
+    rds_dir = '/Volumes/jenseno-avtemporal-attention-1'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
 if pilot:
@@ -149,14 +146,15 @@ else:
     raw_referenced.set_eeg_reference(ref_channels=['Fz'], projection=False, verbose=False)
     raw_referenced.plot(title='Fz reference raw')
 
-
-# How does it look with new ref
+# How does it look without new ref
 raw.plot(title='No reference raw')
 
-# # Preparing the brainvision data format to standard
-# montage = mne.channels.make_standard_montage("easycap-M1")
-# raw_referenced.set_montage(montage, verbose=False)
-# montage.plot()  # 2D
+# Preparing the brainvision data format to standard
+"""it is important to bring the montage to the standard space. Otherwise the 
+ICA and PSDs look weird."""
+montage = mne.channels.make_standard_montage("easycap-M1")
+raw_referenced.set_montage(montage, verbose=False)
+montage.plot()  # 2D
 # fig = montage.plot(kind="3d")  # 3D
 
 # Save a non-bids raw just in case 
@@ -267,24 +265,23 @@ if summary_rprt:
     report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 
-                        f'sub-{subject}_preproc_1.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_1.html')
+                        f'sub-{subject}_preproc.hdf5')    # it is in .hdf5 for later adding images
+    html_report_fname = op.join(report_folder, f'sub-{subject}_preproc.html')
     
     report = mne.Report(title=f'Subject {subject}')
     report.add_image(beh_fig_fname,
                     title='RT and performance',
                     caption='reaction time and behavioural performance',
                     tags=('beh'))
-    if eve_rprt:
-        report.add_events(events=events, 
-                        event_id=events_id, 
-                        tags=('eve'),
-                        title='events from "events"', 
-                        sfreq=raw_referenced.info['sfreq'])
-        report.add_figure(eve_fig,
-                          title='Number of events',
-                          caption='number of events in total',
-                          tags=('eve'))
+    report.add_events(events=events, 
+                    event_id=events_id, 
+                    tags=('eve'),
+                    title='events from "events"', 
+                    sfreq=raw_referenced.info['sfreq'])
+    report.add_figure(eve_fig,
+                        title='Number of events',
+                        caption='number of events in total',
+                        tags=('eve'))
     report.add_raw(raw=raw_referenced.filter(0.3, 100), title='raw referenced with bad channels', 
                    psd=True, 
                    butterfly=False, 
