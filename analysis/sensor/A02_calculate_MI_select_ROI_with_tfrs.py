@@ -390,7 +390,7 @@ deriv_suffix = 'tfr'
 extension = '.fif'
 
 runs = ['01']
-stim_segments_ls = [True, False]
+stim_segments_ls = [False, True]
 
 pilot = False  # is it pilot data or real data?
 summary_rprt = True  # do you want to add evokeds figures to the summary report?
@@ -400,11 +400,8 @@ test_plot = False
 if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
     camcan_dir = '/rds/projects/q/quinna-camcan/dataman/data_information'
-elif platform == 'windows':
-    rds_dir = 'Z:'
-    camcan_dir = 'X:/dataman/data_information'
 elif platform == 'mac':
-    rds_dir = '/Volumes/jenseno-avtemporal-attention'
+    rds_dir = '/Volumes/jenseno-avtemporal-attention-1'
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
@@ -435,8 +432,8 @@ tfr_params = dict(use_fft=True, return_itc=False, average=True, decim=2, n_jobs=
 report_root = op.join(project_root, 'derivatives/reports')  
 report_folder = op.join(report_root , 'sub-' + subject)
 report_fname = op.join(report_folder, 
-                    f'sub-{subject}_preproc_1.hdf5')    # it is in .hdf5 for later adding images
-html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_1.html')
+                    f'sub-{subject}_preproc.hdf5')    # it is in .hdf5 for later adding images
+html_report_fname = op.join(report_folder, f'sub-{subject}_preproc.html')
 
 report = mne.open_report(report_fname)
 
@@ -468,10 +465,10 @@ for stim in stim_segments_ls:
                                                                    epochs, 
                                                                    occipital_channels,
                                                                    report)
-        report = MI_overtime_sixth_plot(tfr_alpha_MI_occ_chans, report)
+        #report = MI_overtime_sixth_plot(tfr_alpha_MI_occ_chans, report)
 
-        report.save(report_fname, overwrite=True)
-        report.save(html_report_fname, overwrite=True, open_browser=True)  # to check how the report looks
+report.save(report_fname, overwrite=True)
+report.save(html_report_fname, overwrite=True, open_browser=True)  # to check how the report looks
 
 
 

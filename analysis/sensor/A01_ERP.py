@@ -58,7 +58,7 @@ deriv_suffix = 'ave'
 extension = '.fif'
 
 runs = ['01']
-stim_segments_ls = [True, False]
+stim_segments_ls = [False, True]
 
 pilot = False  # is it pilot data or real data?
 platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
@@ -67,11 +67,8 @@ test_plot = False
 if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
     camcan_dir = '/rds/projects/q/quinna-camcan/dataman/data_information'
-elif platform == 'windows':
-    rds_dir = 'Z:'
-    camcan_dir = 'X:/dataman/data_information'
 elif platform == 'mac':
-    rds_dir = '/Volumes/jenseno-avtemporal-attention'
+    rds_dir = '/Volumes/jenseno-avtemporal-attention-1'
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
@@ -85,8 +82,8 @@ report_root = op.join(project_root, 'derivatives/reports')
 report_folder = op.join(report_root , 'sub-' + subject)
 
 report_fname = op.join(report_folder, 
-                    f'sub-{subject}_preproc_1.hdf5')    # it is in .hdf5 for later adding images
-html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_1.html')
+                    f'sub-{subject}_preproc.hdf5')    # it is in .hdf5 for later adding images
+html_report_fname = op.join(report_folder, f'sub-{subject}_preproc.html')
 
 report = mne.open_report(report_fname)
 
@@ -111,9 +108,6 @@ for stim in stim_segments_ls:
                             tags=('evo'),
                             section='stim'
                             )
-
-        report.save(report_fname, overwrite=True)
-        report.save(html_report_fname, overwrite=True, open_browser=True)  # to check how the report looks
 
         if test_plot:
             # ==================================== RIGHT LEFT SEPARATELY ==============================================
@@ -141,3 +135,6 @@ for stim in stim_segments_ls:
             resampled_epochs = epochs.copy().resample(200)  
             resampled_epochs.compute_psd(fmin=1.0, fmax=60.0).plot(spatial_colors=True)  # explore the frequency content of the epochs
             resampled_epochs.compute_psd().plot_topomap(normalize=False)  # spatial distribution of the PSD
+
+report.save(report_fname, overwrite=True)
+report.save(html_report_fname, overwrite=True, open_browser=True)  # to check how the report looks
