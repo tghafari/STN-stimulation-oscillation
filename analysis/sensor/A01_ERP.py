@@ -37,10 +37,10 @@ def reading_epochs_evoking(stim):
 
     # Read epoched data and equalize right and left
     epochs = mne.read_epochs(input_fname, verbose=True, preload=True)  # -.7 to 1.7sec
-    mne.epochs.equalize_epoch_counts([epochs['cue_onset_right'], epochs['cue_onset_left']])
 
     # Make evoked data for conditions of interest and save
-    evoked = epochs['cue_onset_right','cue_onset_left'].copy().average(method='mean').filter(0.0,100).crop(-.5,1.7)  
+    evoked = epochs['cue_onset_right','cue_onset_left'].copy().average(method='mean').filter(0.0,100).crop(-.5,1.7)
+    evoked = evoked.apply_baseline(-.1,0) 
     mne.write_evokeds(deriv_fname, evoked, verbose=True, overwrite=True)
 
     return epochs, evoked

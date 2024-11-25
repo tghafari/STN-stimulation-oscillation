@@ -5,15 +5,17 @@
 
 This code will epoch continuous EEG based
 on conditions that are annotated in the
-data and generates  an HTML report about epochs.
+data and generates an HTML report about epochs.
 
 IMO, cleanest way is to epoch based on all events,
 calculate reject threshold, find channel with most 
 bad epochs, remove channel, calculate threshold 
-again, apply on epochs.
+again, apply on epochs. To ensure only clean
+epochs are selected, last step do a visual 
+inspection and annotation.
+
 
 written by Tara Ghafari
-adapted from flux pipeline
 ==============================================
 ToDos:
 
@@ -83,10 +85,11 @@ def cleaning_epochs(stim, epochs):
         deriv_fname = op.join(deriv_folder, bids_path.basename 
                                + '_' + no_stim_suffix + '_' + deriv_suffix + extension)  
     # Might need to reconsider this section. might not even be needed
+    original_bads = deepcopy(epochs.info["bads"])
+    print(f'These are the original bads: {original_bads}')
     bad_channels = input('Are there any bad channels after rejecting bad epochs? name of channel, e.g. FT10:  (return if none). n.b. Make sure to remove from both stim and no-stim')
     # Mark bad channels before ICA
     if len(bad_channels) > 0:
-        original_bads = deepcopy(epochs.info["bads"])
         print(f'These are the original bads: {original_bads}')
         bad_chs = [bad_channels] #["FT10"]  
         print(f'{len(bad_chs)}')
@@ -161,6 +164,12 @@ for stim in stim_segments_ls:
         epochs, events, events_id = segment_epoching(stim)
         fig_bads_temp = finding_bad_channel(epochs)
         fig_bads, fig_psd, epochs = cleaning_epochs(stim, epochs)
+        manual_annotation = input('Do you want to visually inspect the clean epochs? y/n')
+        if manual_annotation == 'y':
+            mne.epochs.equalize_epoch_counts([epochs['cue_onset_right'], epochs['cue_onset_left']])
+            epochs['cue_onset_left','cue_onset_right'].plot()
+            input("Press return when you're done annotating bad segments...")
+
         report.add_figure(fig=fig_bads, title=f'stim: {stim}, dropped epochs',
                     caption=f'stim: {stim}: epochs dropped- no bad channels', 
                     tags=('epo'),
