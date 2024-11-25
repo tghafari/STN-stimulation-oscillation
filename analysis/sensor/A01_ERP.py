@@ -35,8 +35,9 @@ def reading_epochs_evoking(stim):
         deriv_fname = op.join(deriv_folder, bids_path.basename 
                                + '_' + no_stim_suffix + '_' + deriv_suffix + extension)  
 
-    # Read epoched data
+    # Read epoched data and equalize right and left
     epochs = mne.read_epochs(input_fname, verbose=True, preload=True)  # -.7 to 1.7sec
+    mne.epochs.equalize_epoch_counts([epochs['cue_onset_right'], epochs['cue_onset_left']])
 
     # Make evoked data for conditions of interest and save
     evoked = epochs['cue_onset_right','cue_onset_left'].copy().average(method='mean').filter(0.0,100).crop(-.5,1.7)  
@@ -68,7 +69,7 @@ if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
     camcan_dir = '/rds/projects/q/quinna-camcan/dataman/data_information'
 elif platform == 'mac':
-    rds_dir = '/Volumes/jenseno-avtemporal-attention-1'
+    rds_dir = '/Volumes/jenseno-avtemporal-attention'
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
@@ -82,11 +83,12 @@ report_root = op.join(project_root, 'derivatives/reports')
 report_folder = op.join(report_root , 'sub-' + subject)
 
 report_fname = op.join(report_folder, 
-                    f'sub-{subject}_preproc.hdf5')    # it is in .hdf5 for later adding images
-html_report_fname = op.join(report_folder, f'sub-{subject}_preproc.html')
+                    f'sub-{subject}_preproc_ica.hdf5')    # it is in .hdf5 for later adding images
+html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_ica.html')
 
 report = mne.open_report(report_fname)
 
+evoked_list = []
 for stim in stim_segments_ls:
     print(f'Reading stim:{stim}')
     for run in runs:
@@ -97,17 +99,19 @@ for stim in stim_segments_ls:
         deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
 
         epochs, evoked = reading_epochs_evoking(stim)
+        evoked.comment = f'stim:{stim_segments_ls[stim]}'
+        evoked_list.append(evoked)  # append evokeds for later comparison
 
-        # Plot ERF for summary report
-        topos_times = np.arange(50,450,30)*0.001
-        fig_evo = evoked.copy().plot_joint(times=topos_times)
+        # # Plot ERF for summary report
+        # topos_times = np.arange(50,450,30)*0.001
+        # fig_evo = evoked.copy().plot_joint(times=topos_times)
        
-        report.add_figure(fig=fig_evo, title=f'stim:{stim}, evoked response',
-                            caption=f'evoked response for cue = 0-200ms\
-                                and stim = 1200ms', 
-                            tags=('evo'),
-                            section='stim'
-                            )
+        # report.add_figure(fig=fig_evo, title=f'stim:{stim}, evoked response',
+        #                     caption=f'evoked response for cue = 0-200ms\
+        #                         and stim = 1200ms', 
+        #                     tags=('evo'),
+        #                     section='stim'
+        #                     )
 
         if test_plot:
             # ==================================== RIGHT LEFT SEPARATELY ==============================================
@@ -135,6 +139,26 @@ for stim in stim_segments_ls:
             resampled_epochs = epochs.copy().resample(200)  
             resampled_epochs.compute_psd(fmin=1.0, fmax=60.0).plot(spatial_colors=True)  # explore the frequency content of the epochs
             resampled_epochs.compute_psd().plot_topomap(normalize=False)  # spatial distribution of the PSD
+
+# Select ROI sensors
+occipital_channels = ['O2', 'Oz', 'O1', 'PO8', 'PO4', 'POz', 'PO3', 'PO7', 'P8', 'P6', 'P4', 'P2',
+                    'Pz', 'P1', 'P3', 'P5', 'P7', 'TP10', 'TP8', 'CP6', 'CP4', 'CP2', 'CPz',
+                    'CP1', 'CP3', 'CP5', 'TP7', 'TP9']
+
+# Plot both stim and no stim evoked in one plot
+fig_comp = mne.viz.plot_compare_evokeds(evoked_list, 
+                                        picks=occipital_channels,
+                                        colors=['blue','orange'], 
+                                        combine="mean", 
+                                        ci=0.9,
+                                        show_sensors=True)
+
+report.add_figure(fig=fig_comp, title=f'compare evoked responses',
+                            caption=f'evoked response for cue = 0-200ms\
+                                and stim = 1200ms for both stim and no stimulation conditions', 
+                            tags=('evo'),
+                            section='stim'
+                            )
 
 report.save(report_fname, overwrite=True)
 report.save(html_report_fname, overwrite=True, open_browser=True)  # to check how the report looks

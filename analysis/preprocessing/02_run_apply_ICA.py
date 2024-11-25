@@ -53,7 +53,7 @@ elif platform == 'windows':
     rds_dir = 'Z:'
     camcan_dir = 'X:/dataman/data_information'
 elif platform == 'mac':
-    rds_dir = '/Volumes/jenseno-avtemporal-attention-1'
+    rds_dir = '/Volumes/jenseno-avtemporal-attention'
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
@@ -82,11 +82,11 @@ raw.copy().compute_psd(n_fft=n_fft,  # default method is welch here (multitaper 
                     n_overlap=int(n_fft/2), 
                     fmin=0.1, fmax=105).plot()  
 
-bad_channels = False  # are there any bad channels?
+bad_channels = True  # are there any bad channels?
 # Mark bad channels before ICA
 if bad_channels:
     original_bads = deepcopy(raw.info["bads"])
-    bad_chs = ["FT9", "T8", "T7"]  # write the name of the bad channels here
+    bad_chs = ["FT10"] # write the name of the bad channels here
     raw.copy().pick(bad_chs).compute_psd().plot()  # double check bad channels
     if len(bad_chs) == 1:
         print('one bad channel removing')
@@ -103,7 +103,7 @@ pilot_BIDS/sub-02_ses-01_run-01: [],
 BIDS/sub-01_ses-01_run-01: ["T7", "FT10"],
 BIDS/sub-02_ses-01_run-01: ["TP10"],
 BIDS/sub-05_ses-01_run-01: ["almost all channels look terrible in psd"],
-BIDS/sub-107_ses-01_run-01: [], #"all good!"
+BIDS/sub-107_ses-01_run-01: ["FT10"], #"all good!"
 BIDS/sub-108_ses-01_run-01: ["FT9", "T8", "T7"],
 } """
 
@@ -121,7 +121,7 @@ ica.fit(raw_resmpld, verbose=True)
 ica.plot_sources(raw_resmpld, title='ICA')
 ica.plot_components()
 
-ICA_rej_dic = {f'sub-{subject}_ses-{session}':[28]} # manually selected bad ICs or from sub config file 
+ICA_rej_dic = {f'sub-{subject}_ses-{session}':[14]} # manually selected bad ICs or from sub config file 
 artifact_ICs = ICA_rej_dic[f'sub-{subject}_ses-{session}']
 """
 list bad ICA components for all participants:
