@@ -43,7 +43,7 @@ def segment_epoching(stim):
     segmented_ica = mne.io.read_raw_fif(input_fname, verbose=True, preload=True)
     segmented_ica.filter(l_freq=0.1, h_freq=100),  # get rid of stim frequency before epoching, otherwise too many bad channels
 
-    print(f'double checking bad channels: {segmented_ica.info['bads']}')
+    print(f'double checking bad channels: {segmented_ica.info["bads"]}')
 
     events, events_id = mne.events_from_annotations(segmented_ica, event_id='auto')
 
@@ -53,7 +53,7 @@ def segment_epoching(stim):
                         events_id,  # events_id for all events, events_id_to_consider for only cue onsets                  
                         tmin=-0.7, 
                         tmax=1.7,
-                        baseline=None, 
+                        baseline=(-.1,0), # apply baseline in erp
                         proj=True, 
                         picks='all', 
                         detrend=1, 
@@ -129,7 +129,7 @@ stim_segments_ls = [False, True]
 
 pilot = False  # is it pilot data or real data?
 test_plot = False
-platform = 'mac'  # are you using 'bluebear' or 'mac'?
+platform = 'bluebear'  # are you using 'bluebear' or 'mac'?
 
 if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
@@ -162,13 +162,16 @@ for stim in stim_segments_ls:
         deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
 
         epochs, events, events_id = segment_epoching(stim)
-        fig_bads_temp = finding_bad_channel(epochs)
-        fig_bads, fig_psd, epochs = cleaning_epochs(stim, epochs)
+        mne.epochs.equalize_epoch_counts([epochs['cue_onset_right'], epochs['cue_onset_left']])
+        epochs_of_interest = epochs['cue_onset_right', 'cue_onset_left']
+
         manual_annotation = input('Do you want to visually inspect the clean epochs? y/n')
         if manual_annotation == 'y':
-            mne.epochs.equalize_epoch_counts([epochs['cue_onset_right'], epochs['cue_onset_left']])
-            epochs['cue_onset_left','cue_onset_right'].plot()
+            epochs_of_interest.plot()
             input("Press return when you're done annotating bad segments...")
+
+        fig_bads_temp = finding_bad_channel(epochs_of_interest)
+        fig_bads, fig_psd, epochs = cleaning_epochs(stim, epochs_of_interest)
 
         report.add_figure(fig=fig_bads, title=f'stim: {stim}, dropped epochs',
                     caption=f'stim: {stim}: epochs dropped- no bad channels', 

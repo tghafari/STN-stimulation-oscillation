@@ -40,7 +40,7 @@ def reading_epochs_evoking(stim):
 
     # Make evoked data for conditions of interest and save
     evoked = epochs['cue_onset_right','cue_onset_left'].copy().average(method='mean').filter(0.0,100).crop(-.5,1.7)
-    evoked = evoked.apply_baseline(-.1,0) 
+    # evoked = evoked.apply_baseline(-.1,0) 
     mne.write_evokeds(deriv_fname, evoked, verbose=True, overwrite=True)
 
     return epochs, evoked
@@ -62,7 +62,7 @@ runs = ['01']
 stim_segments_ls = [False, True]
 
 pilot = False  # is it pilot data or real data?
-platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
+platform = 'bluebear'  # are you using 'bluebear', 'mac', or 'windows'?
 test_plot = False
 
 if platform == 'bluebear':
@@ -141,9 +141,10 @@ for stim in stim_segments_ls:
             resampled_epochs.compute_psd().plot_topomap(normalize=False)  # spatial distribution of the PSD
 
 # Select ROI sensors
-occipital_channels = ['O2', 'Oz', 'O1', 'PO8', 'PO4', 'POz', 'PO3', 'PO7', 'P8', 'P6', 'P4', 'P2',
-                    'Pz', 'P1', 'P3', 'P5', 'P7', 'TP10', 'TP8', 'CP6', 'CP4', 'CP2', 'CPz',
-                    'CP1', 'CP3', 'CP5', 'TP7', 'TP9']
+occipital_channels = ['O2', 'Oz', 'O1']
+# , 'PO8', 'PO4', 'POz', 'PO3', 'PO7', 'P8', 'P6', 'P4', 'P2',
+#                     'Pz', 'P1', 'P3', 'P5', 'P7', 'TP10', 'TP8', 'CP6', 'CP4', 'CP2', 'CPz',
+#                     'CP1', 'CP3', 'CP5', 'TP7', 'TP9']
 
 # Plot both stim and no stim evoked in one plot
 fig_comp = mne.viz.plot_compare_evokeds(evoked_list, 

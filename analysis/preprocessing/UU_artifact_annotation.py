@@ -73,39 +73,45 @@ import mne
 from mne.preprocessing import annotate_muscle_zscore
 from mne_bids import BIDSPath, read_raw_bids
 
+
 # BIDS settings: fill these out 
-subject = '01'
+subject = '107'
 session = '01'
 task = 'SpAtt'
 run = '01'
 eeg_suffix = 'eeg'
 eeg_extension = '.vhdr'
 deriv_suffix = 'ann'
+extension = '.fif'
 
-platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
-pilot = True  # is it pilot data or real data?
-rprt = True
+pilot = False  # is it pilot data or real data?
+summary_rprt = True  # do you want to add evokeds figures to the summary report?
+platform = 'bluebear'  # are you using 'bluebear', 'mac', or 'windows'?
 
 if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
+    camcan_dir = '/rds/projects/q/quinna-camcan/dataman/data_information'
+elif platform == 'windows':
+    rds_dir = 'Z:'
+    camcan_dir = 'X:/dataman/data_information'
 elif platform == 'mac':
     rds_dir = '/Volumes/jenseno-avtemporal-attention'
+    camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
 if pilot:
-    data_root = op.join(project_root, 'Data/pilot-data/AO')
+    bids_root = op.join(project_root, 'data', 'pilot-BIDS')
 else:
-    data_root = op.join(project_root, 'Data/real-data')
+    bids_root = op.join(project_root, 'data', 'BIDS')
 
 # Specify specific file names
-bids_root = op.join(project_root, 'Data', 'BIDS')
 bids_path = BIDSPath(subject=subject, session=session,
                      task=task, run=run, root=bids_root, 
                      datatype ='eeg', suffix=eeg_suffix)
 deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
 if not op.exists(deriv_folder):
     os.makedirs(deriv_folder)
-deriv_fname = bids_path.basename + '_' + deriv_suffix
+deriv_fname = op.join(deriv_folder, bids_path.basename + '_' + deriv_suffix + extension)  # prone to change if annotation worked for eeg brainvision
 
 # Read raw data 
 raw = read_raw_bids(bids_path=bids_path, verbose=False, 

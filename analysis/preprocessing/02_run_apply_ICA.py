@@ -44,7 +44,7 @@ extension = '.fif'
 
 pilot = False  # is it pilot data or real data?
 summary_rprt = True  # do you want to add evokeds figures to the summary report?
-platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
+platform = 'bluebear'  # are you using 'bluebear', 'mac', or 'windows'?
 
 if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
