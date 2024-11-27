@@ -42,6 +42,8 @@ def tfr_calculation_first_plot(stim, report):
     if stim:
         input_fname = op.join(deriv_folder, bids_path.basename
                                + '_' + stim_suffix + '_' + input_suffix + extension)
+        deriv_fname_both = op.join(deriv_folder, bids_path.basename 
+                               + '_both_' + stim_suffix + '_' + deriv_suffix + extension) 
         deriv_fname_right = op.join(deriv_folder, bids_path.basename 
                                + '_right_' + stim_suffix + '_' + deriv_suffix + extension) 
         deriv_fname_left = op.join(deriv_folder, bids_path.basename 
@@ -49,6 +51,8 @@ def tfr_calculation_first_plot(stim, report):
     else:
         input_fname = op.join(deriv_folder, bids_path.basename
                                + '_' + no_stim_suffix + '_' + input_suffix + extension)
+        deriv_fname_both = op.join(deriv_folder, bids_path.basename 
+                               + '_both_' + stim_suffix + '_' + deriv_suffix + extension) 
         deriv_fname_right = op.join(deriv_folder, bids_path.basename 
                                + '_right_' + no_stim_suffix + '_' + deriv_suffix + extension)  
         deriv_fname_left = op.join(deriv_folder, bids_path.basename 
@@ -67,7 +71,15 @@ def tfr_calculation_first_plot(stim, report):
                         # 'it relates to the temporal (deltaT) and spectral (deltaF)' 
                         # 'smoothing'
                         # 'the more tapers, the more smooth'->useful for high freq data
-                        
+    
+    tfr_slow_cue_both = mne.time_frequency.tfr_multitaper(epochs['cue_onset_right','cue_onset_left'],  
+                                                    freqs=freqs, 
+                                                    n_cycles=n_cycles,
+                                                    time_bandwidth=time_bandwidth, 
+                                                    **tfr_params                                                  
+                                                    )
+    mne.time_frequency.write_tfrs(deriv_fname_both, tfr_slow_cue_both, overwrite=True)                                                
+
     tfr_slow_cue_right = mne.time_frequency.tfr_multitaper(epochs['cue_onset_right'],  
                                                     freqs=freqs, 
                                                     n_cycles=n_cycles,
@@ -85,6 +97,16 @@ def tfr_calculation_first_plot(stim, report):
     mne.time_frequency.write_tfrs(deriv_fname_left, tfr_slow_cue_right, overwrite=True)                                                
 
     # Plot TFR on all sensors and check
+    fig_plot_topo_both = tfr_slow_cue_both.plot_topo(tmin=-.5, 
+                                                    tmax=1.5, 
+                                                    baseline=[-.5,-.2], 
+                                                    mode='percent',
+                                                    fig_facecolor='w', 
+                                                    font_color='k',
+                                                    vmin=-1, 
+                                                    vmax=1, 
+                                                    title='TFR of power < 30Hz - cue both')
+     
     fig_plot_topo_right = tfr_slow_cue_right.plot_topo(tmin=-.5, 
                                                     tmax=1.5, 
                                                     baseline=[-.5,-.2], 
@@ -103,16 +125,24 @@ def tfr_calculation_first_plot(stim, report):
                                                     vmin=-1, 
                                                     vmax=1, 
                                                     title='TFR of power < 30Hz - cue left')
+    
+    report.add_figure(fig=fig_plot_topo_both, title=f'stim:{stim}, TFR of power < 30Hz - cue both',
+                        caption='Time Frequency Representation for \
+                        cue both- -0.5 to 1.5- baseline corrected (-.5,-.2)', 
+                        tags=('tfr'),
+                        section='TFR'  
+                        )
+
     report.add_figure(fig=fig_plot_topo_right, title=f'stim:{stim}, TFR of power < 30Hz - cue right',
                         caption='Time Frequency Representation for \
-                        cue right- -0.5 to 1.5- baseline corrected', 
+                        cue right- -0.5 to 1.5- baseline corrected (-.5,-.2)', 
                         tags=('tfr'),
                         section='TFR'  
                         )
     
     report.add_figure(fig=fig_plot_topo_left, title=f'stim:{stim}, TFR of power < 30Hz - cue left',
                         caption='Time Frequency Representation for \
-                            cue left- -0.5 to 1.5- baseline corrected', 
+                            cue left- -0.5 to 1.5- baseline corrected (-.5,-.2)', 
                         tags=('tfr'),
                         section='TFR'  
                         )
@@ -394,7 +424,7 @@ stim_segments_ls = [False, True]
 
 pilot = False  # is it pilot data or real data?
 summary_rprt = True  # do you want to add evokeds figures to the summary report?
-platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
+platform = 'bluebear'  # are you using 'bluebear', 'mac', or 'windows'?
 test_plot = False
 
 if platform == 'bluebear':
@@ -422,9 +452,10 @@ deriv_fname = op.join(deriv_folder, bids_path.basename + '_' + deriv_suffix + ex
 peak_alpha_fname = op.join(ROI_dir, f'sub-{subject}_peak_alpha.npz')  # 2 numpy arrays saved into an uncompressed file
 
 # Select ROI sensors
-occipital_channels = ['O2', 'Oz', 'O1', 'PO8', 'PO4', 'POz', 'PO3', 'PO7', 'P8', 'P6', 'P4', 'P2',
-                    'Pz', 'P1', 'P3', 'P5', 'P7', 'TP10', 'TP8', 'CP6', 'CP4', 'CP2', 'CPz',
-                    'CP1', 'CP3', 'CP5', 'TP7', 'TP9']
+occipital_channels = ['O2', 'Oz', 'O1']
+# , 'PO8', 'PO4', 'POz', 'PO3', 'PO7', 'P8', 'P6', 'P4', 'P2',
+#                     'Pz', 'P1', 'P3', 'P5', 'P7', 'TP10', 'TP8', 'CP6', 'CP4', 'CP2', 'CPz',
+#                     'CP1', 'CP3', 'CP5', 'TP7', 'TP9']
 
 tfr_params = dict(use_fft=True, return_itc=False, average=True, decim=2, n_jobs=4, verbose=True)
 

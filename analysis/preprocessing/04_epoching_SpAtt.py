@@ -162,7 +162,6 @@ for stim in stim_segments_ls:
         deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
 
         epochs, events, events_id = segment_epoching(stim)
-        mne.epochs.equalize_epoch_counts([epochs['cue_onset_right'], epochs['cue_onset_left']])
         epochs_of_interest = epochs['cue_onset_right', 'cue_onset_left']
 
         manual_annotation = input('Do you want to visually inspect the clean epochs? y/n')
@@ -170,6 +169,7 @@ for stim in stim_segments_ls:
             epochs_of_interest.plot()
             input("Press return when you're done annotating bad segments...")
 
+        mne.epochs.equalize_epoch_counts([epochs['cue_onset_right'], epochs['cue_onset_left']])
         fig_bads_temp = finding_bad_channel(epochs_of_interest)
         fig_bads, fig_psd, epochs = cleaning_epochs(stim, epochs_of_interest)
 
