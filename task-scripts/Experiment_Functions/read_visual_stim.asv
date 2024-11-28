@@ -37,14 +37,23 @@ cfgExp.cuesDir = cell(cfgExp.numStim, 1);  % Preallocate for exp info
 cfgTrigger.cuesDir = cell(cfgExp.numStim, 2);  % Preallocate for trigger info
 cfgTrigger.dotDir = cell(cfgExp.numStim, 2);  
 
-cfgExp.cuesDir(cfgExp.trialMatrix == 1, 1) = {'Right'};
-cfgExp.cuesDir(cfgExp.trialMatrix == 2, 1) = {'Left'};
-cfgExp.cuesDir(cfgExp.catchMatrix == 1, 1) = {'no_resp'};
-
-cfgTrigger.cuesDir(cfgExp.trialMatrix == 1, :) = {'1', 'cue_right'};  % EEG trigger codes are 1 -> cue right, 2 -> cue left + trigger message for Eyelink
+cfgTrigger.cuesDir(cfgExp.trialMatrix == 1, :) = {'1', 'cue_right'};
 cfgTrigger.cuesDir(cfgExp.trialMatrix == 2, :) = {'2', 'cue_left'};
-cfgTrigger.dotDir(cfgExp.trialMatrix == 1, :) = {'6', 'dot_right'};   % EEG trigger codes are 6 -> dot right, 7 -> dot left + trigger message for Eyelink
+cfgTrigger.dotDir(cfgExp.trialMatrix == 1, :) = {'6', 'dot_right'};
 cfgTrigger.dotDir(cfgExp.trialMatrix == 2, :) = {'7', 'dot_left'};
-cfgTrigger.dotDir(cfgExp.catchMatrix == 1, :) = {'no_resp', 'no_resp'};
+cfgTrigger.dotDir(cfgExp.catchMatrix == 1, :) = {'no resp', 'no resp'};
+
+cfgExp.cuesDir(find(cfgStim.cueRndIdx == 1), 1) = {'Right'};
+cfgExp.cuesDir(find(cfgStim.cueRndIdx == 2), 1) = {'Left'};
+cfgExp.cuesDir(find(cfgExp.corrResp == 0), 1) = {'no resp'};
+cfgTrigger.cuesDir(find(cfgStim.cueRndIdx == 1), 1) = {'1'};  % EEG trigger codes are 1 -> cue right, 2 -> cue left
+cfgTrigger.cuesDir(find(cfgStim.cueRndIdx == 2), 1) = {'2'};  % EEG trigger codes are 1 -> cue right, 2 -> cue left
+cfgTrigger.cuesDir(find(cfgStim.cueRndIdx == 1), 2) = {'cue_right'};  % trigger message for Eyelink
+cfgTrigger.cuesDir(find(cfgStim.cueRndIdx == 2), 2) = {'cue_left'};  
+cfgTrigger.dotDir(find(cfgStim.cueRndIdx == 1), 1) = {'6'};  % EEG trigger codes are 6 -> dot right, 7 -> dot left
+cfgTrigger.dotDir(find(cfgStim.cueRndIdx == 2), 1) = {'7'};  % EEG trigger codes are 6 -> dot right, 7 -> dot left
+cfgTrigger.dotDir(find(cfgStim.cueRndIdx == 1), 2) = {'dot_right'};  % trigger message for Eyelink
+cfgTrigger.dotDir(find(cfgStim.cueRndIdx == 2), 2) = {'dot_left'};  
+cfgTrigger.dotDir(find(cfgExp.corrResp == 0), [1, 2]) = {'no resp'};
 
 end
