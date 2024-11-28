@@ -56,7 +56,7 @@ end
 Screen('DrawTextures', cfgScreen.window, [presentingStr.visStimR{1}{2}, presentingStr.visStimL{2}{2}]...
     , [],[cfgStim.destVisStimR; cfgStim.destVisStimL]');
 Screen('FillOval', cfgScreen.window, [cfgScreen.fixDotColor, cfgScreen.fixDotFlashColor']...
-    , [cfgScreen.fixDotRect, cfgStim.rectRL(cfgStim.cueRndIdx(2),:)']);  % put the red dot according to the cue direction(cueRandIdx-> 1:left, 2:right)
+    , [cfgScreen.fixDotRect, cfgStim.rectRL(cfgExp.trialMatrix(2),:)']);  % put the red dot according to the cue direction(cueRandIdx-> 1:left, 2:right)
 Screen('Flip', cfgScreen.window, cfgScreen.vbl + (cfgScreen.waitFrm - 0.5) * cfgScreen.ifi);
 
 notWaiting = false;  % only enable the experimenter to continue/ start

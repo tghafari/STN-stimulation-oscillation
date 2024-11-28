@@ -18,7 +18,7 @@ if cfgExp.corrResp(nstim)
         Screen('DrawTextures', cfgScreen.window, [presentingStr.visStimR{nstim}{frmDot}, presentingStr.visStimL{nstim}{frmDot}]...
             , [],[cfgStim.destVisStimR; cfgStim.destVisStimL]');
         Screen('FillOval', cfgScreen.window, [cfgScreen.fixDotColor, cfgScreen.fixDotFlashColor']...
-            , [cfgScreen.fixDotRect, cfgStim.rectRL(cfgStim.cueRndIdx(nstim),:)']);  % put the red dot according to the cue direction(cueRandIdx-> 1:left, 2:right)
+            , [cfgScreen.fixDotRect, cfgStim.rectRL(cfgExp.trialMatrix(nstim),:)']);  % put the red dot according to the cue direction(cfgExp.trialMatrix-> 1:right, 2:left)
         Screen('Flip', cfgScreen.window, cfgScreen.vbl + (cfgScreen.waitFrm - 0.5) * cfgScreen.ifi);
     end
     cfgOutput.respStartTime(nstim) = GetSecs; % to get reaction times relative to stimulus offset

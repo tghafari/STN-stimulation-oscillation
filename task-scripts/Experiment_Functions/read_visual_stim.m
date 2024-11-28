@@ -6,11 +6,11 @@ function [cfgStim, cfgExp, cfgTrigger] = read_visual_stim(cfgFile, cfgExp, cfgSt
 
 % Get all .bmp files in the stimulus directory, excluding hidden files
 fileDirStim = dir([cfgFile.stim, '*.bmp']);
-fileDirStim = fileDirStim(arrayfun(@(x) ~strcmp(x.name(1), '.') && ~x.isdir && ~is_hidden_file(x), fileDirStim)); % Exclude hidden files
+fileDirStim = fileDirStim(arrayfun(@(x) ~strcmp(x.name(1), '.') && ~x.isdir, fileDirStim)); % Exclude hidden files
 
 % Get all .jpg files in the cue directory, excluding hidden files
 fileDirCue = dir([cfgFile.cue, '*.jpg']);
-fileDirCue = fileDirCue(arrayfun(@(x) ~strcmp(x.name(1), '.') && ~x.isdir && ~is_hidden_file(x), fileDirCue)); % Exclude hidden files
+fileDirCue = fileDirCue(arrayfun(@(x) ~strcmp(x.name(1), '.') && ~x.isdir, fileDirCue)); % Exclude hidden files
 
 % Sort stimuli by numerical order
 [~,idx] = sort(str2double(regexp({fileDirStim.name},'(?<=cube3D)\d+','match','once'))); 
@@ -40,11 +40,17 @@ cfgTrigger.dotDir = cell(cfgExp.numStim, 2);
 cfgExp.cuesDir(cfgExp.trialMatrix == 1, 1) = {'Right'};
 cfgExp.cuesDir(cfgExp.trialMatrix == 2, 1) = {'Left'};
 cfgExp.cuesDir(cfgExp.catchMatrix == 1, 1) = {'no_resp'};
+cfgExp.corrResp(cfgExp.catchMatrix == 1, 1) = 0;
+cfgExp.corrResp(cfgExp.catchMatrix == 0, 1) = 1;
 
-cfgTrigger.cuesDir(cfgExp.trialMatrix == 1, :) = {'1', 'cue_right'};  % EEG trigger codes are 1 -> cue right, 2 -> cue left + trigger message for Eyelink
-cfgTrigger.cuesDir(cfgExp.trialMatrix == 2, :) = {'2', 'cue_left'};
-cfgTrigger.dotDir(cfgExp.trialMatrix == 1, :) = {'6', 'dot_right'};   % EEG trigger codes are 6 -> dot right, 7 -> dot left + trigger message for Eyelink
-cfgTrigger.dotDir(cfgExp.trialMatrix == 2, :) = {'7', 'dot_left'};
-cfgTrigger.dotDir(cfgExp.catchMatrix == 1, :) = {'no_resp', 'no_resp'};
+cfgTrigger.cuesDir(cfgExp.trialMatrix == 1, 1) = {'1'}; % EEG trigger codes are 1 -> cue right, 2 -> cue left
+cfgTrigger.cuesDir(cfgExp.trialMatrix == 1, 2) = {'cue_right'};  % trigger message for Eyelink
+cfgTrigger.cuesDir(cfgExp.trialMatrix == 2, 1) = {'2'};
+cfgTrigger.cuesDir(cfgExp.trialMatrix == 2, 2) = {'cue_left'};
+cfgTrigger.dotDir(cfgExp.trialMatrix == 1, 1) = {'6'};   % EEG trigger codes are 6 -> dot right, 7 -> dot left
+cfgTrigger.dotDir(cfgExp.trialMatrix == 1, 2) = {'dot_right'};  % trigger message for Eyelink
+cfgTrigger.dotDir(cfgExp.trialMatrix == 2, 1) = {'7'};
+cfgTrigger.dotDir(cfgExp.trialMatrix == 2, 2) = {'dot_left'};
+cfgTrigger.dotDir(cfgExp.catchMatrix == 1, :) = {'no_resp'};
 
 end
