@@ -51,9 +51,9 @@ def segment_epoching(stim):
     epochs = mne.Epochs(segmented_ica,
                         events, 
                         events_id,  # events_id for all events, events_id_to_consider for only cue onsets                  
-                        tmin=-0.7, 
-                        tmax=1.7,
-                        baseline=(-.1,0), # apply baseline in erp
+                        tmin=-0.5, 
+                        tmax=1.5,
+                        baseline=None, # apply baseline in erp
                         proj=True, 
                         picks='all', 
                         detrend=1, 
@@ -91,7 +91,7 @@ def cleaning_epochs(stim, epochs):
     # Mark bad channels before ICA
     if len(bad_channels) > 0:
         print(f'These are the original bads: {original_bads}')
-        bad_chs = [bad_channels] #["FT10"]  
+        bad_chs = bad_channels #["FT10"]  
         print(f'{len(bad_chs)}')
         epochs.copy().pick(bad_chs).compute_psd(fmin=0.1, fmax=100).plot()  # double check bad channels
         if len(bad_chs) == 1:
@@ -121,7 +121,7 @@ eeg_extension = '.vhdr'
 input_suffix = 'ica'
 stim_suffix = 'stim'
 no_stim_suffix = 'no-stim'
-deriv_suffix = 'epo'
+deriv_suffix = 'epo-cue'
 extension = '.fif'
 
 runs = ['01']
@@ -129,7 +129,7 @@ stim_segments_ls = [False, True]
 
 pilot = False  # is it pilot data or real data?
 test_plot = False
-platform = 'bluebear'  # are you using 'bluebear' or 'mac'?
+platform = 'mac'  # are you using 'bluebear' or 'mac'?
 
 if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
