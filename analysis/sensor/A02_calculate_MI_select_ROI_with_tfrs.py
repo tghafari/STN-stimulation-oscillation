@@ -415,8 +415,6 @@ eeg_suffix = 'eeg'
 eeg_extension = '.vhdr'
 stim_suffix = 'stim'
 no_stim_suffix = 'no-stim'
-input_suffix = 'epo'
-deriv_suffix = 'tfr'
 extension = '.fif'
 
 runs = ['01']
@@ -424,7 +422,7 @@ stim_segments_ls = [False, True]
 
 pilot = False  # is it pilot data or real data?
 summary_rprt = True  # do you want to add evokeds figures to the summary report?
-platform = 'bluebear'  # are you using 'bluebear', 'mac', or 'windows'?
+platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
 test_plot = False
 
 if platform == 'bluebear':
@@ -453,9 +451,6 @@ peak_alpha_fname = op.join(ROI_dir, f'sub-{subject}_peak_alpha.npz')  # 2 numpy 
 
 # Select ROI sensors
 occipital_channels = ['O2', 'Oz', 'O1']
-# , 'PO8', 'PO4', 'POz', 'PO3', 'PO7', 'P8', 'P6', 'P4', 'P2',
-#                     'Pz', 'P1', 'P3', 'P5', 'P7', 'TP10', 'TP8', 'CP6', 'CP4', 'CP2', 'CPz',
-#                     'CP1', 'CP3', 'CP5', 'TP7', 'TP9']
 
 tfr_params = dict(use_fft=True, return_itc=False, average=True, decim=2, n_jobs=4, verbose=True)
 
@@ -468,35 +463,40 @@ html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_ica.html')
 
 report = mne.open_report(report_fname)
 
-for stim in stim_segments_ls:
-    print(f'Reading stim:{stim}')
-    for run in runs:
-        print(f'Reading run:{run}')
-        bids_path = BIDSPath(subject=subject, session=session,
-                     task=task, run=run, root=bids_root, 
-                     datatype ='eeg', suffix=eeg_suffix)
-        deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
+for epoching in epoching_list:
+    input_suffix = 'epo-' + epoching
+    deriv_suffix = 'tfr-' + epoching
+    evoked_list = []
 
-        epochs, tfr_slow_cue_right, tfr_slow_cue_left, report = tfr_calculation_first_plot(stim, report)
-        report = representative_sensors_second_plot(tfr_slow_cue_right, 
+    for stim in stim_segments_ls:
+        print(f'Reading stim:{stim}')
+        for run in runs:
+            print(f'Reading run:{run}')
+            bids_path = BIDSPath(subject=subject, session=session,
+                        task=task, run=run, root=bids_root, 
+                        datatype ='eeg', suffix=eeg_suffix)
+            deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
+
+            epochs, tfr_slow_cue_right, tfr_slow_cue_left, report = tfr_calculation_first_plot(stim, report)
+            report = representative_sensors_second_plot(tfr_slow_cue_right, 
+                                                        tfr_slow_cue_left, 
+                                                        report)
+            peak_alpha_freq_range, report = peak_alpha_calculation_third_plot(occipital_channels, 
+                                                                            tfr_slow_cue_right, 
+                                                                            tfr_slow_cue_left, 
+                                                                            epochs,
+                                                                            report)
+            report = topographic_maps_fourth_plot(peak_alpha_freq_range, 
+                                                    tfr_slow_cue_right, 
                                                     tfr_slow_cue_left, 
                                                     report)
-        peak_alpha_freq_range, report = peak_alpha_calculation_third_plot(occipital_channels, 
-                                                                        tfr_slow_cue_right, 
-                                                                        tfr_slow_cue_left, 
-                                                                        epochs,
-                                                                        report)
-        report = topographic_maps_fourth_plot(peak_alpha_freq_range, 
-                                                tfr_slow_cue_right, 
-                                                tfr_slow_cue_left, 
-                                                report)
-        
-        tfr_alpha_MI_occ_chans, report = MI_calculation_fifth_plot(tfr_params, 
-                                                                   peak_alpha_freq_range, 
-                                                                   epochs, 
-                                                                   occipital_channels,
-                                                                   report)
-        #report = MI_overtime_sixth_plot(tfr_alpha_MI_occ_chans, report)
+            
+            tfr_alpha_MI_occ_chans, report = MI_calculation_fifth_plot(tfr_params, 
+                                                                    peak_alpha_freq_range, 
+                                                                    epochs, 
+                                                                    occipital_channels,
+                                                                    report)
+            #report = MI_overtime_sixth_plot(tfr_alpha_MI_occ_chans, report)
 
 report.save(report_fname, overwrite=True)
 report.save(html_report_fname, overwrite=True, open_browser=True)  # to check how the report looks

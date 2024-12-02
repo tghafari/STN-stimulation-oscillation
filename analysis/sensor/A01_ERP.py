@@ -36,11 +36,11 @@ def reading_epochs_evoking(stim):
                                + '_' + no_stim_suffix + '_' + deriv_suffix + extension)  
 
     # Read epoched data and equalize right and left
-    epochs = mne.read_epochs(input_fname, verbose=True, preload=True)  # -.7 to 1.7sec
+    epochs = mne.read_epochs(input_fname, verbose=True, preload=True)  # -.5 to 1.5sec
 
     # Make evoked data for conditions of interest and save
     evoked = epochs['cue_onset_right','cue_onset_left'].copy().average(method='mean').filter(0.0,30).crop(-.1,1)
-    evoked = evoked.apply_baseline(-.1,0) 
+    evoked = evoked.apply_baseline(baseline=(-.1,0), verbose=True) 
     mne.write_evokeds(deriv_fname, evoked, verbose=True, overwrite=True)
 
     return epochs, evoked
@@ -54,15 +54,14 @@ eeg_suffix = 'eeg'
 eeg_extension = '.vhdr'
 stim_suffix = 'stim'
 no_stim_suffix = 'no-stim'
-input_suffix = 'epo'
-deriv_suffix = 'ave'
 extension = '.fif'
 
 runs = ['01']
 stim_segments_ls = [False, True]
+epoching_list = ['cue', 'stim']  # epoching on cue onset or stimulus onset
 
 pilot = False  # is it pilot data or real data?
-platform = 'bluebear'  # are you using 'bluebear', 'mac', or 'windows'?
+platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
 test_plot = False
 
 if platform == 'bluebear':
@@ -83,83 +82,59 @@ report_root = op.join(project_root, 'derivatives/reports')
 report_folder = op.join(report_root , 'sub-' + subject)
 
 report_fname = op.join(report_folder, 
-                    f'sub-{subject}_preproc_ica.hdf5')    # it is in .hdf5 for later adding images
-html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_ica.html')
+                    f'sub-{subject}_preproc.hdf5')    # it is in .hdf5 for later adding images
+html_report_fname = op.join(report_folder, f'sub-{subject}_preproc.html')
 
 report = mne.open_report(report_fname)
 
-evoked_list = []
-for stim in stim_segments_ls:
-    print(f'Reading stim:{stim}')
-    for run in runs:
-        print(f'Reading run:{run}')
-        bids_path = BIDSPath(subject=subject, session=session,
-                     task=task, run=run, root=bids_root, 
-                     datatype ='eeg', suffix=eeg_suffix)
-        deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
+for epoching in epoching_list:
+    print(f'Working on {epoching}')
+    input_suffix = 'epo-' + epoching
+    deriv_suffix = 'evo-' + epoching
+    evoked_list = []
 
-        epochs, evoked = reading_epochs_evoking(stim)
-        evoked.comment = f'stim:{stim_segments_ls[stim]}'
-        evoked_list.append(evoked)  # append evokeds for later comparison
+    for stim in stim_segments_ls:
+        print(f'Working on stim = {stim}')
 
-        # # Plot ERF for summary report
-        # topos_times = np.arange(50,450,30)*0.001
-        # fig_evo = evoked.copy().plot_joint(times=topos_times)
-       
-        # report.add_figure(fig=fig_evo, title=f'stim:{stim}, evoked response',
-        #                     caption=f'evoked response for cue = 0-200ms\
-        #                         and stim = 1200ms', 
-        #                     tags=('evo'),
-        #                     section='stim'
-        #                     )
+        for run in runs:
+            print(f'Reading run:{run}')
 
-        if test_plot:
-            # ==================================== RIGHT LEFT SEPARATELY ==============================================
-            evoked_right = epochs['cue_onset_right'].copy().average(method='mean').filter(0.0,60).crop(-.7,1.7) 
-            evoked_left = epochs['cue_onset_left'].copy().average(method='mean').filter(0.0,60).crop(-.7,1.7)
-            evokeds = [evoked_right, evoked_left]
+            bids_path = BIDSPath(subject=subject, session=session,
+                        task=task, run=run, root=bids_root, 
+                        datatype ='eeg', suffix=eeg_suffix)
+            deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
 
-            # Plot evoked_right data
-            epochs['cue_onset_right'].copy().filter(0.0,30).crop(-.2,1.7).plot_image()
-            evoked_right.copy().apply_baseline(baseline=(-.5,-.2))
-            evoked_right.copy().plot_topo(title='cue onset right')
-            evoked_right.copy().plot_topomap(.1, time_unit='s')
+            epochs, evoked = reading_epochs_evoking(stim)
+            evoked.comment = f'stim:{stim_segments_ls[stim]}, {epoching} onset'
+            evoked_list.append(evoked)  # append evokeds for later comparison
 
-            # Plot magnetometers for summary report
-            fig_right = evoked_right.copy().plot_joint(times=[0.150,0.270,0.410])
-            fig_left = evoked_left.copy().plot_joint(times=[0.150,0.255,0.395])
+            # Plot ERF for summary report
+            topos_times = np.arange(50, 450, 30)*0.001
+            fig_evo = evoked.copy().plot_joint(times=topos_times)
+        
+            report.add_figure(fig=fig_evo, title=f'stim:{stim}, evoked response',
+                                caption=f'evoked response for {epoching}- baseline=(-100,0), filter=(0,30) \
+                                        cue=200ms, ISI=1000, stim=1000-2000ms', 
+                                tags=('evo'),
+                                section='stim'
+                                )
 
-        # ==================================== RIGHT LEFT TOGETHER ==============================================
-            # Plot evoked data
-            evoked.copy().apply_baseline(baseline=(-.5,-.2))
-            evoked.copy().plot_topo(title='Evoked response')
-            evoked.copy().plot_topomap(.2, time_unit='s')
+        # Select ROI sensors
+        occipital_channels = ['O2', 'Oz', 'O1']
 
-            # Explore the epoched dataset
-            resampled_epochs = epochs.copy().resample(200)  
-            resampled_epochs.compute_psd(fmin=1.0, fmax=60.0).plot(spatial_colors=True)  # explore the frequency content of the epochs
-            resampled_epochs.compute_psd().plot_topomap(normalize=False)  # spatial distribution of the PSD
+        # Plot both stim and no stim evoked in one plot
+        fig_comp = mne.viz.plot_compare_evokeds(evoked_list, 
+                                                picks=occipital_channels,
+                                                colors=['blue','orange'], 
+                                                combine="mean", 
+                                                show_sensors=True)
 
-# Select ROI sensors
-occipital_channels = ['O2', 'Oz', 'O1']
-# , 'PO8', 'PO4', 'POz', 'PO3', 'PO7', 'P8', 'P6', 'P4', 'P2',
-#                     'Pz', 'P1', 'P3', 'P5', 'P7', 'TP10', 'TP8', 'CP6', 'CP4', 'CP2', 'CPz',
-#                     'CP1', 'CP3', 'CP5', 'TP7', 'TP9']
-
-# Plot both stim and no stim evoked in one plot
-fig_comp = mne.viz.plot_compare_evokeds(evoked_list, 
-                                        picks=occipital_channels,
-                                        colors=['blue','orange'], 
-                                        combine="mean", 
-                                        ci=0.9,
-                                        show_sensors=True)
-
-report.add_figure(fig=fig_comp, title=f'compare evoked responses',
-                            caption=f'evoked response for cue = 0-200ms\
-                                and stim = 1200ms for both stim and no stimulation conditions', 
-                            tags=('evo'),
-                            section='stim'
-                            )
+        report.add_figure(fig=fig_comp, title=f'compare evoked responses',
+                                    caption=f'evoked response for {epoching} \
+                                        cue=200ms, ISI=1000, stim=1000-2000ms', 
+                                    tags=('evo'),
+                                    section='stim'
+                                    )
 
 report.save(report_fname, overwrite=True)
 report.save(html_report_fname, overwrite=True, open_browser=True)  # to check how the report looks
