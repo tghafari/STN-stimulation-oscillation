@@ -45,10 +45,11 @@ stim_sequence = {'sub-01':["no_stim-left rec", "no_stim-right rec", "Right stim-
                  'sub-02':["no_stim-left rec", "no_stim-right rec", "Left stim- no rec", "Right stim- no rec"],
                  'sub-05':["Left stim- no rec", "Right stim- no rec", "no_stim-left rec", "no_stim-right rec"],
                  'sub-107':["no_stim-right rec", "no_stim-left rec", "Right stim- no rec", "Left stim- no rec"],
-                 'sub-108':["no_stim-right rec", "no_stim-left rec", "left stim- no rec", "right stim- no rec"]} 
+                 'sub-108':["no_stim-right rec", "no_stim-left rec", "left stim- no rec", "right stim- no rec"],
+                 } 
 
 # BIDS settings
-subject = '107'
+subject = '110'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -87,6 +88,10 @@ events_extension = '.tsv'
 bids_root = op.join(project_root, 'data', 'BIDS')
 
 # Read raw file in BrainVision (.vhdr, .vmrk, .eeg) format
+if subject == '110':
+    raw_fnames = eegbci.load_data(subject, runs)
+    raw = concatenate_raws([read_raw_edf(f, preload=True) for f in raw_fnames])
+    
 raw = mne.io.read_raw_brainvision(vhdr_fname, eog=('HEOGL', 'HEOGR', 'VEOGb'), preload=True)
 raw.plot()  # first thing first
 
