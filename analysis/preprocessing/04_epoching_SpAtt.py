@@ -77,7 +77,7 @@ def finding_bad_channel(epochs):
     
     return fig_bads_temp
 
-def cleaning_epochs(stim, epochs):
+def cleaning_and_saving_epochs(stim, epochs):
     if stim:
         deriv_fname = op.join(deriv_folder, bids_path.basename 
                                + '_' + stim_suffix + '_' + deriv_suffix + extension)  
@@ -113,7 +113,7 @@ def cleaning_epochs(stim, epochs):
     return fig_bads, fig_psd
 
 # BIDS settings: fill these out 
-subject = '107'
+subject = '108'
 session = '01'
 task = 'SpAtt'
 eeg_suffix = 'eeg'
@@ -180,7 +180,7 @@ for stim in stim_segments_ls:
                 mne.epochs.equalize_epoch_counts([epochs_of_interest['cue_onset_right'], epochs_of_interest['cue_onset_left']])
 
             fig_bads_temp = finding_bad_channel(epochs_of_interest)
-            fig_bads, fig_psd = cleaning_epochs(stim, epochs_of_interest)
+            fig_bads, fig_psd = cleaning_and_saving_epochs(stim, epochs_of_interest)
 
             report.add_figure(fig=fig_bads, title=f'stim: {stim}, dropped epochs',
                         caption=f'stim: {stim}: bad epochs and channels dropped-stim=0', 

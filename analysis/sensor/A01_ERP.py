@@ -39,14 +39,14 @@ def reading_epochs_evoking(stim):
     epochs = mne.read_epochs(input_fname, verbose=True, preload=True)  # -.5 to 1.5sec
 
     # Make evoked data for conditions of interest and save
-    evoked = epochs['cue_onset_right','cue_onset_left'].copy().average(method='mean').filter(0.0,30).crop(-.1,1)
+    evoked = epochs.copy().average(method='mean').filter(0.0,30).crop(-.1,1)
     evoked = evoked.apply_baseline(baseline=(-.1,0), verbose=True) 
     mne.write_evokeds(deriv_fname, evoked, verbose=True, overwrite=True)
 
     return epochs, evoked
 
 # BIDS settings: fill these out 
-subject = '107'
+subject = '108'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -63,6 +63,9 @@ epoching_list = ['cue', 'stim']  # epoching on cue onset or stimulus onset
 pilot = False  # is it pilot data or real data?
 platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
 test_plot = False
+
+# Select ROI sensors for erp
+occipital_channels = ['O2', 'Oz', 'O1']
 
 if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
@@ -82,8 +85,8 @@ report_root = op.join(project_root, 'derivatives/reports')
 report_folder = op.join(report_root , 'sub-' + subject)
 
 report_fname = op.join(report_folder, 
-                    f'sub-{subject}_preproc.hdf5')    # it is in .hdf5 for later adding images
-html_report_fname = op.join(report_folder, f'sub-{subject}_preproc.html')
+                    f'sub-{subject}_preproc1.hdf5')    # it is in .hdf5 for later adding images
+html_report_fname = op.join(report_folder, f'sub-{subject}_preproc1.html')
 
 report = mne.open_report(report_fname)
 
@@ -118,23 +121,24 @@ for epoching in epoching_list:
                                 tags=('evo'),
                                 section='stim'
                                 )
+            del epochs, evoked
 
-        # Select ROI sensors
-        occipital_channels = ['O2', 'Oz', 'O1']
+    # Plot both stim and no stim evoked in one plot
+    fig_comp = mne.viz.plot_compare_evokeds(evoked_list, 
+                                            picks=occipital_channels,
+                                            colors=['blue','orange'], 
+                                            combine="mean", 
+                                            show_sensors=True,
+                                            invert_y=False,
+                                            truncate_xaxis=False,
+                                            truncate_yaxis=False)
 
-        # Plot both stim and no stim evoked in one plot
-        fig_comp = mne.viz.plot_compare_evokeds(evoked_list, 
-                                                picks=occipital_channels,
-                                                colors=['blue','orange'], 
-                                                combine="mean", 
-                                                show_sensors=True)
-
-        report.add_figure(fig=fig_comp, title=f'compare evoked responses',
-                                    caption=f'evoked response for {epoching} \
-                                        cue=200ms, ISI=1000, stim=1000-2000ms', 
-                                    tags=('evo'),
-                                    section='stim'
-                                    )
+    report.add_figure(fig=fig_comp, title=f'compare evoked responses',
+                                caption=f'evoked response for {epoching} \
+                                    cue=200ms, ISI=1000, stim=1000-2000ms', 
+                                tags=('evo'),
+                                section='stim'
+                                )
 
 report.save(report_fname, overwrite=True)
 report.save(html_report_fname, overwrite=True, open_browser=True)  # to check how the report looks
