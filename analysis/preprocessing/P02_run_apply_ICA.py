@@ -33,7 +33,7 @@ from copy import deepcopy
 from mne_bids import BIDSPath, read_raw_bids
 
 # BIDS settings: fill these out 
-subject = '107'
+subject = '110'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -42,9 +42,8 @@ eeg_extension = '.vhdr'
 deriv_suffix = 'ica'
 extension = '.fif'
 
-pilot = False  # is it pilot data or real data?
 summary_rprt = True  # do you want to add evokeds figures to the summary report?
-platform = 'bluebear'  # are you using 'bluebear', 'mac', or 'windows'?
+platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
 
 if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
@@ -57,10 +56,7 @@ elif platform == 'mac':
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
-if pilot:
-    bids_root = op.join(project_root, 'data', 'pilot-BIDS')
-else:
-    bids_root = op.join(project_root, 'data', 'BIDS')
+bids_root = op.join(project_root, 'data', 'BIDS')
 
 # Specify specific file names
 bids_path = BIDSPath(subject=subject, session=session,
@@ -77,23 +73,28 @@ raw = read_raw_bids(bids_path=bids_path, verbose=False,
 
 # Plot to find bad channels and reject from data
 raw.plot(title="raw") 
+# Here crop any extra segments at the beginning or end of the recording
+raw.crop(tmin=290).plot()  # sub110
+
 n_fft = int(raw.info['sfreq']*2)  # to ensure window size = 2
 raw.copy().compute_psd(n_fft=n_fft,  # default method is welch here (multitaper for epoch)
                     n_overlap=int(n_fft/2), 
                     fmin=0.1, fmax=105).plot()  
 
-bad_channels = True  # are there any bad channels?
+bad_channels = True  # are there any bad channels from psd?
 # Mark bad channels before ICA
 if bad_channels:
     original_bads = deepcopy(raw.info["bads"])
-    bad_chs = ["FT10"] # write the name of the bad channels here
-    raw.copy().pick(bad_chs).compute_psd().plot()  # double check bad channels
-    if len(bad_chs) == 1:
+    print(f'these are original bads: {original_bads}')
+    user_list = input('Are there any bad channels after rejecting bad epochs? name of channel, e.g. FT10 T9 (separate by space) or return.')
+    bad_channels = user_list.split()
+    raw.copy().pick(bad_channels).compute_psd().plot()  # double check bad channels
+    if len(bad_channels) == 1:
         print('one bad channel removing')
-        raw.info["bads"].append(bad_chs[0])  # add a single channel
+        raw.info["bads"].append(bad_channels[0])  # add a single channel
     else:
-        print(f'{len(bad_chs)} bad channels removing')
-        raw.info["bads"].extend(bad_chs)  # add a list of channels - should there be more than one channel to drop
+        print(f'{len(bad_channels)} bad channels removing')
+        raw.info["bads"].extend(bad_channels)  # add a list of channels - should there be more than one channel to drop
 
 """
 list bad channels for all participants:
@@ -105,6 +106,7 @@ BIDS/sub-02_ses-01_run-01: ["TP10"],
 BIDS/sub-05_ses-01_run-01: ["almost all channels look terrible in psd"],
 BIDS/sub-107_ses-01_run-01: ["FT10"], #"all good!"
 BIDS/sub-108_ses-01_run-01: ["FT9", "T8", "T7"],
+BIDS/sub-110_ses-01_run-01: ["T8", "TP9S"],
 } """
 
 # Resample and filtering
@@ -121,7 +123,7 @@ ica.fit(raw_resmpld, verbose=True)
 ica.plot_sources(raw_resmpld, title='ICA')
 ica.plot_components()
 
-ICA_rej_dic = {f'sub-{subject}_ses-{session}':[14]} # manually selected bad ICs or from sub config file 
+ICA_rej_dic = {f'sub-{subject}_ses-{session}':[0, 4]} # manually selected bad ICs or from sub config file 
 artifact_ICs = ICA_rej_dic[f'sub-{subject}_ses-{session}']
 """
 list bad ICA components for all participants:
@@ -131,8 +133,9 @@ list bad ICA components for all participants:
 'BIDS/sub-01_ses-01_run-01': [0, 1, 2], # 0:blink, 1:saccades, 2:blink/saccades
 'BIDS/sub-02_ses-01_run-01': [0, 1, 2, 3, 4], # 0:blink, 1:saccades, 2:blink/saccades, 3&4: empty
 'BIDS/sub-05_ses-01_run-01': [0, 1, 8, 58, 59], # don't know-almost all look terrible
-BIDS/sub-107_ses-01_run-01': [28], # maybe eye movement?  
-BIDS/sub-108_ses-01_run-01': [1, 13], # don't know-almost all look terrible
+'BIDS/sub-107_ses-01_run-01': [28], # maybe eye movement?  
+'BIDS/sub-108_ses-01_run-01': [1, 13], # don't know-almost all look terrible
+'BIDS/sub-108_ses-01_run-01': [0, 4], # 0:blink, 4:saccades
 } """
 
 # Double check the manually selected artifactual ICs
@@ -186,7 +189,5 @@ if summary_rprt:
                    tags=('ica'))
     report.save(report_fname, overwrite=True)
     report.save(html_report_fname, overwrite=True, open_browser=True)  # to check how the report looks
-
-
 
 

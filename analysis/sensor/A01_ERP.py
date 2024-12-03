@@ -46,7 +46,7 @@ def reading_epochs_evoking(stim):
     return epochs, evoked
 
 # BIDS settings: fill these out 
-subject = '108'
+subject = '110'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -85,8 +85,8 @@ report_root = op.join(project_root, 'derivatives/reports')
 report_folder = op.join(report_root , 'sub-' + subject)
 
 report_fname = op.join(report_folder, 
-                    f'sub-{subject}_preproc1.hdf5')    # it is in .hdf5 for later adding images
-html_report_fname = op.join(report_folder, f'sub-{subject}_preproc1.html')
+                    f'sub-{subject}_preproc.hdf5')    # it is in .hdf5 for later adding images
+html_report_fname = op.join(report_folder, f'sub-{subject}_preproc.html')
 
 report = mne.open_report(report_fname)
 
@@ -112,36 +112,36 @@ for epoching in epoching_list:
             evoked_list.append(evoked)  # append evokeds for later comparison
 
             # Plot ERF for summary report
-            # topos_times = np.arange(50, 450, 30)*0.001
-            # fig_evo = evoked.copy().plot_joint(times=topos_times)
+            topos_times = np.arange(50, 450, 30)*0.001
+            fig_evo = evoked.copy().plot_joint(times=topos_times)
         
-            # report.add_figure(fig=fig_evo, title=f'stim:{stim}, evoked response',
-            #                     caption=f'evoked response for {epoching}- baseline=(-100,0), filter=(0,30) \
-            #                             cue=200ms, ISI=1000, stim=1000-2000ms', 
-            #                     tags=('evo'),
-            #                     section='stim'
-            #                     )
+            report.add_figure(fig=fig_evo, title=f'stim:{stim}, evoked response',
+                                caption=f'evoked response for {epoching}- baseline=(-100,0), filter=(0,30) \
+                                        cue=200ms, ISI=1000, stim=1000-2000ms', 
+                                tags=('evo'),
+                                section='stim'
+                                )
             del epochs, evoked
 
     # Plot both stim and no stim evoked in one plot
-    # fig_comp = mne.viz.plot_compare_evokeds(evoked_list, 
-    #                                         picks=occipital_channels,
-    #                                         colors=['blue','orange'], 
-    #                                         combine="mean", 
-    #                                         show_sensors=True,
-    #                                         invert_y=False,
-    #                                         truncate_xaxis=False,
-    #                                         truncate_yaxis=False)
+    fig_comp = mne.viz.plot_compare_evokeds(evoked_list, 
+                                            picks=occipital_channels,
+                                            colors=['blue','orange'], 
+                                            combine="mean", 
+                                            show_sensors=True,
+                                            invert_y=False,
+                                            truncate_xaxis=False,
+                                            truncate_yaxis=False)
     fig_comp_plot_topo = mne.viz.plot_evoked_topo(evoked_list,
                                           color=['blue','orange'], 
                                           vline=(0.0))
 
-    # report.add_figure(fig=fig_comp, title=f'compare evoked responses',
-    #                             caption=f'evoked response for {epoching} \
-    #                                 cue=200ms, ISI=1000, stim=1000-2000ms', 
-    #                             tags=('evo'),
-    #                             section='stim'
-    #                             )
+    report.add_figure(fig=fig_comp, title=f'compare evoked responses',
+                                caption=f'evoked response for {epoching} \
+                                    cue=200ms, ISI=1000, stim=1000-2000ms', 
+                                tags=('evo'),
+                                section='stim'
+                                )
     report.add_figure(fig=fig_comp_plot_topo, title=f'compare evoked responses',
                                 caption=f'evoked response for {epoching} \
                                     cue=200ms, ISI=1000, stim=1000-2000ms', 

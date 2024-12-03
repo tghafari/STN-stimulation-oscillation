@@ -6,7 +6,7 @@
 % On the same plot we display performance (%correct).
 
 % Load the behavioural data
-subject = '107';
+subject = '110';
 session = '01';
 task = 'spatt';
 run = '01';
@@ -15,7 +15,7 @@ platform = 'mac';  % are you using mac or bluebear
 if contains(platform, "mac")
     BIDS_folder = '/Volumes/jenseno-avtemporal-attention/Projects/subcortical-structures/STN-in-PD/data/BIDS';
 else
-    BIDS_folder = '/rds/projects/j/jenseno-avtemporal-attention/Projects/subcortical-structures/STN-in-PD/data/BIDS';
+    BIDS_folder = '/rds/projects/j/jenseno-avtemporal-attention/Projects/subcortical-structures/STN-in-PD/data-organised/BIDS';
 end
 
 beh = load([BIDS_folder filesep 'sub-' subject filesep 'ses-' session filesep ...
@@ -37,13 +37,13 @@ figure;
 subplot(2,1,1)
 histogram(RT_KbQueue, 25);
 title('RT from keyboard presses')
-text(min(xlim), max(ylim), sprintf('True Positive Rate = %0.2f%s ', TPR*100, '%'), 'Horiz','left', 'Vert','top')
-text(min(xlim), max(ylim)-20, sprintf('False Positive Rate = %0.2f%s ', FPR*100, '%'), 'Horiz','left', 'Vert','top')
 
 subplot(2,1,2)
 histogram(RT_trig, 25);
 title('RT from triggers')
-text(min(xlim), max(ylim), sprintf('True Negative Rate = %0.2f%s ', TNR*100, '%'), 'Horiz','left', 'Vert','top')
-text(min(xlim), max(ylim)-20, sprintf('False Negative Rate = %0.2f%s ', FNR*100, '%'), 'Horiz','left', 'Vert','top')
+text(min(xlim)+0.05, max(ylim)-5, sprintf('True Negative Rate = %0.2f%s ', TNR*100, '%'), 'Horiz','left', 'Vert','top')
+text(min(xlim)+0.05, max(ylim)-10, sprintf('False Negative Rate = %0.2f%s ', FNR*100, '%'), 'Horiz','left', 'Vert','top')
+text(min(xlim)+0.05, max(ylim)-15, sprintf('True Positive Rate = %0.2f%s ', TPR*100, '%'), 'Horiz','left', 'Vert','top')
+text(min(xlim)+0.05, max(ylim)-20, sprintf('False Positive Rate = %0.2f%s ', FPR*100, '%'), 'Horiz','left', 'Vert','top')
 
 

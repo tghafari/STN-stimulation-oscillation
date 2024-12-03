@@ -113,7 +113,7 @@ def cleaning_and_saving_epochs(stim, epochs):
     return fig_bads, fig_psd
 
 # BIDS settings: fill these out 
-subject = '108'
+subject = '110'
 session = '01'
 task = 'SpAtt'
 eeg_suffix = 'eeg'
@@ -152,8 +152,8 @@ report_root = op.join(project_root, 'derivatives/reports')
 report_folder = op.join(report_root , 'sub-' + subject)
 
 report_fname = op.join(report_folder, 
-                    f'sub-{subject}_preproc1.hdf5')    # it is in .hdf5 for later adding images
-html_report_fname = op.join(report_folder, f'sub-{subject}_preproc1.html')
+                    f'sub-{subject}_preproc.hdf5')    # it is in .hdf5 for later adding images
+html_report_fname = op.join(report_folder, f'sub-{subject}_preproc.html')
 
 report = mne.open_report(report_fname)
 
@@ -183,12 +183,12 @@ for stim in stim_segments_ls:
             fig_bads, fig_psd = cleaning_and_saving_epochs(stim, epochs_of_interest)
 
             report.add_figure(fig=fig_bads, title=f'stim: {stim}, dropped epochs',
-                        caption=f'stim: {stim}: bad epochs and channels dropped-stim=0', 
+                        caption=f'stim: {stim}: bad epochs and channels dropped-{epoching}=0', 
                         tags=('epo'),
                         section='stim'
                         )
             report.add_figure(fig=fig_psd, title=f'stim: {stim}, psd after dropped',
-                        caption=f'stim: {stim}, psd with bad epochs and channels dropped-stim=0', 
+                        caption=f'stim: {stim}, psd with bad epochs and channels dropped-{epoching}=0', 
                         tags=('epo'),
                         section='stim'
                         ) 

@@ -41,15 +41,17 @@ from copy import deepcopy
 # Stimulation sequence
 """copy the stim sequence for each participant from here: 
 https://github.com/tghafari/STN-stimulation-oscillation/wiki/Stimulation-table"""
-stim_sequence = {'sub-01':["no_stim-left rec", "no_stim-right rec", "Right stim- no rec", "Left stim- no rec"],
-                 'sub-02':["no_stim-left rec", "no_stim-right rec", "Left stim- no rec", "Right stim- no rec"],
-                 'sub-05':["Left stim- no rec", "Right stim- no rec", "no_stim-left rec", "no_stim-right rec"],
-                 'sub-107':["no_stim-right rec", "no_stim-left rec", "Right stim- no rec", "Left stim- no rec"],
-                 'sub-108':["no_stim-right rec", "no_stim-left rec", "left stim- no rec", "right stim- no rec"],
+stim_sequence = {'sub-01':["no_stim-left rec", "no_stim-right rec", "Right stim- no rec", "Left stim- no rec"],  # stimulation on STN
+                 'sub-02':["no_stim-left rec", "no_stim-right rec", "Left stim- no rec", "Right stim- no rec"],  # stimulation on STN
+                 'sub-05':["Left stim- no rec", "Right stim- no rec", "no_stim-left rec", "no_stim-right rec"],  # stimulation on STN
+                 'sub-107':["no_stim-right rec", "no_stim-left rec", "Right stim- no rec", "Left stim- no rec"],  # stimulation on STN
+                 'sub-108':["no_stim-right rec", "no_stim-left rec", "left stim- no rec", "right stim- no rec"],  # stimulation on STN
+                 'sub-110': ["Right stim- no rec", "Left stim- no rec", "no_stim-no rec", "no_stim-no rec"],  # no LFP recording, stimulation on VLM
                  } 
-
 # BIDS settings
 subject = '110'
+brainVision_basename = f'ao_{subject[-2:]}'  # might need modification per 
+
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -57,7 +59,6 @@ modality = 'eeg'
 extension = '.fif'
 
 platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
-pilot = False  # is it pilot data or real data?
 sanity_test = False
 eve_rprt = True
 summary_rprt = True
@@ -65,17 +66,13 @@ summary_rprt = True
 if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
 elif platform == 'mac':
-    rds_dir = '/Volumes/jenseno-avtemporal-attention-1'
+    rds_dir = '/Volumes/jenseno-avtemporal-attention'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
-if pilot:
-    data_root = op.join(project_root, 'data/pilot-data')
-else:
-    data_root = op.join(project_root, 'data/real-data')
+data_root = op.join(project_root, 'data/data-organised')
 
 base_fpath = op.join(data_root, f'sub-{subject}', f'ses-{session}', f'{modality}')  
 base_fname = f'sub-{subject}_ses-{session}_task-{task}_run-{run}_{modality}'
-brainVision_basename = f'ao_{subject[-2:]}'
 eeg_fname = op.join(base_fpath, brainVision_basename + '.eeg')  
 vhdr_fname = op.join(base_fpath, brainVision_basename + '.vhdr')
 events_fname = op.join(base_fpath, base_fname + '-eve.fif')
@@ -89,10 +86,12 @@ bids_root = op.join(project_root, 'data', 'BIDS')
 
 # Read raw file in BrainVision (.vhdr, .vmrk, .eeg) format
 if subject == '110':
-    raw_fnames = eegbci.load_data(subject, runs)
-    raw = concatenate_raws([read_raw_edf(f, preload=True) for f in raw_fnames])
-    
-raw = mne.io.read_raw_brainvision(vhdr_fname, eog=('HEOGL', 'HEOGR', 'VEOGb'), preload=True)
+    raw_fnames = [op.join(base_fpath, 'EEG', brainVision_basename + '_blocks1-2.vhdr'), 
+                  op.join(base_fpath, 'EEG', brainVision_basename + '_blocks3-8.vhdr')]
+    raw = mne.concatenate_raws([mne.io.read_raw_brainvision(f, preload=True) for f in raw_fnames])
+else:
+    raw = mne.io.read_raw_brainvision(vhdr_fname, eog=('HEOGL', 'HEOGR', 'VEOGb'), preload=True)
+
 raw.plot()  # first thing first
 
 # Read events from raw object

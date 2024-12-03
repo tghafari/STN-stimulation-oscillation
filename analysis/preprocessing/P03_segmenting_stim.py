@@ -39,7 +39,7 @@ import matplotlib.pyplot as plt
 
 
 # BIDS settings: fill these out 
-subject = '107'
+subject = '110'
 session = '01'
 task = 'SpAtt'
 run = '01'  # change this for subjects with two stim or two no-stim segments
@@ -89,7 +89,9 @@ raw_ica.plot()
 stimulation_cropped_time = {"sub-107_no-stim": [15, 974],
                             "sub-107_stim": [1000, 1845],
                             "sub-108_no-stim": [8, 890],
-                            "sub-108_stim": [930, 1882]}
+                            "sub-108_stim": [930, 1882],
+                            "sub-110_no-stim": [905, 1711],
+                            "sub-110_stim": [0, 840]}
 
 # Crop and save segments separately
 no_stim_segment = raw_ica.copy().crop(tmin=stimulation_cropped_time[f'sub-{subject}_no-stim'][0], 
