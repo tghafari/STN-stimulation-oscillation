@@ -382,7 +382,7 @@ def MI_overtime_sixth_plot(tfr_alpha_MI_occ_chans, report):
                         tfr_alpha_MI_occ_chans.data.mean(axis=(0, 1)) - tfr_alpha_MI_occ_chans.data.std(axis=(0, 1)),
                         tfr_alpha_MI_occ_chans.data.mean(axis=(0, 1)) + tfr_alpha_MI_occ_chans.data.std(axis=(0, 1)),
                         color='red', alpha=0.3, label='Standard Deviation')
-    axs.set_title('MI on occipital and parietal channels')
+    axs.set_title(f'stim={stim}- MI on occipital and parietal channels')
     axs.set_xlabel('Time (s)')
     axs.set_ylabel('Average MI (PAF)')
     axs.set_ylim(min(tfr_alpha_MI_occ_chans.data.mean(axis=(0, 1))) - 0.3, 
@@ -492,7 +492,7 @@ for epoching in epoching_list:
                                                                     epochs, 
                                                                     occipital_channels,
                                                                     report)
-            #report = MI_overtime_sixth_plot(tfr_alpha_MI_occ_chans, report)
+            report = MI_overtime_sixth_plot(tfr_alpha_MI_occ_chans, report)
 
 report.save(report_fname, overwrite=True)
 report.save(html_report_fname, overwrite=True, open_browser=True)  # to check how the report looks
