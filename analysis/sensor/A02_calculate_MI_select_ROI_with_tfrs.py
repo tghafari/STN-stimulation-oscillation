@@ -409,7 +409,7 @@ def MI_overtime_sixth_plot(tfr_alpha_MI_occ_chans, report):
 
 # =================================================================================================================
 # BIDS settings: fill these out 
-subject = '107'
+subject = '108'
 session = '01'
 task = 'SpAtt'
 run = '01'
