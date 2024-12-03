@@ -59,7 +59,7 @@ def tfr_calculation_first_plot(stim, report):
                                + '_left_' + no_stim_suffix + '_' + deriv_suffix + extension)  
 
     # Read epoched data
-    epochs = mne.read_epochs(input_fname, verbose=True, preload=True)  # epochs are from -.7 to 1.7sec
+    epochs = mne.read_epochs(input_fname, verbose=True, preload=True)  # epochs are from -.5 to 1.5sec
 
     # ========================================= TFR CALCULATIONS AND FIRST PLOT (PLOT_TOPO) ====================================
     # Calculate tfr for post cue alpha
@@ -99,62 +99,62 @@ def tfr_calculation_first_plot(stim, report):
     # Plot TFR on all sensors and check
     fig_plot_topo_both = tfr_slow_cue_both.plot_topo(tmin=-.5, 
                                                     tmax=1.5, 
-                                                    baseline=[-.5,-.2], 
+                                                    baseline=[-.5,-.1], 
                                                     mode='percent',
                                                     fig_facecolor='w', 
                                                     font_color='k',
                                                     vmin=-1, 
                                                     vmax=1, 
-                                                    title='TFR of power < 30Hz - cue both')
+                                                    title=f'stim={stim}-TFR of power < 30Hz - cue both')
      
     fig_plot_topo_right = tfr_slow_cue_right.plot_topo(tmin=-.5, 
                                                     tmax=1.5, 
-                                                    baseline=[-.5,-.2], 
+                                                    baseline=[-.5,-.1], 
                                                     mode='percent',
                                                     fig_facecolor='w', 
                                                     font_color='k',
                                                     vmin=-1, 
                                                     vmax=1, 
-                                                    title='TFR of power < 30Hz - cue right')
+                                                    title=f'stim={stim}-TFR of power < 30Hz - cue right')
     fig_plot_topo_left = tfr_slow_cue_left.plot_topo(tmin=-.5, 
                                                     tmax=1.5,
-                                                    baseline=[-.5,-.2], 
+                                                    baseline=[-.5,-.1], 
                                                     mode='percent',
                                                     fig_facecolor='w', 
                                                     font_color='k',
                                                     vmin=-1, 
                                                     vmax=1, 
-                                                    title='TFR of power < 30Hz - cue left')
+                                                    title=f'stim={stim}-TFR of power < 30Hz - cue left')
     
     report.add_figure(fig=fig_plot_topo_both, title=f'stim:{stim}, TFR of power < 30Hz - cue both',
                         caption='Time Frequency Representation for \
-                        cue both- -0.5 to 1.5- baseline corrected (-.5,-.2)', 
+                        cue both- -0.5 to 1.5- baseline corrected (-.5,-.1)', 
                         tags=('tfr'),
                         section='TFR'  
                         )
 
     report.add_figure(fig=fig_plot_topo_right, title=f'stim:{stim}, TFR of power < 30Hz - cue right',
                         caption='Time Frequency Representation for \
-                        cue right- -0.5 to 1.5- baseline corrected (-.5,-.2)', 
+                        cue right- -0.5 to 1.5- baseline corrected (-.5,-.1)', 
                         tags=('tfr'),
                         section='TFR'  
                         )
     
     report.add_figure(fig=fig_plot_topo_left, title=f'stim:{stim}, TFR of power < 30Hz - cue left',
                         caption='Time Frequency Representation for \
-                            cue left- -0.5 to 1.5- baseline corrected (-.5,-.2)', 
+                            cue left- -0.5 to 1.5- baseline corrected (-.5,-.1)', 
                         tags=('tfr'),
                         section='TFR'  
                         )
 
-    return epochs, tfr_slow_cue_right, tfr_slow_cue_left, report
+    return epochs, tfr_slow_cue_both, tfr_slow_cue_right, tfr_slow_cue_left, report
 
 def representative_sensors_second_plot(tfr_slow_cue_right, tfr_slow_cue_left, report):
     # ========================================= SECOND PLOT (REPRESENTATIVE SENSROS) ====================================
 
     # Plot TFR for representative sensors - same in all participants
     fig_tfr, axis = plt.subplots(2, 2, figsize = (7, 7))
-    sensors = ['C5','O2']
+    sensors = ['O1','O2']
 
     for idx, sensor in enumerate(sensors):
         tfr_slow_cue_left.plot(picks=sensor, 
@@ -166,7 +166,7 @@ def representative_sensors_second_plot(tfr_slow_cue_right, tfr_slow_cue_left, re
                                 vmax=.75,
                                 axes=axis[idx,0], 
                                 show=False)
-        axis[idx, 0].set_title(f'cue left-{sensor}')        
+        axis[idx, 0].set_title(f'stim={stim}-cue left-{sensor}')        
         tfr_slow_cue_right.plot(picks=sensor,
                                 baseline=[-.5,-.2],
                                 mode='percent', 
@@ -176,7 +176,7 @@ def representative_sensors_second_plot(tfr_slow_cue_right, tfr_slow_cue_left, re
                                 vmax=.75, 
                                 axes=axis[idx,1], 
                                 show=False)
-        axis[idx, 1].set_title(f'cue right-{sensor}') 
+        axis[idx, 1].set_title(f'stim={stim}-cue right-{sensor}') 
             
     axis[0, 0].set_ylabel('left sensors')  
     axis[1, 0].set_ylabel('right sensors')  
@@ -252,7 +252,7 @@ def peak_alpha_calculation_third_plot(occipital_channels, tfr_slow_cue_right, tf
             va='bottom')
     plt.xlabel('Frequency (Hz)')
     plt.ylabel('Power (T/m)^2/Hz')
-    plt.title(f'PSDs- PAF = {peak_alpha_freq} Hz')
+    plt.title(f'{epoching} onset- PAF = {peak_alpha_freq} Hz- stim={stim}')
 
     plt.grid(True)
     fig_peak_alpha = plt.gcf()
@@ -267,7 +267,7 @@ def peak_alpha_calculation_third_plot(occipital_channels, tfr_slow_cue_right, tf
 
     return peak_alpha_freq_range, report
 
-def topographic_maps_fourth_plot(peak_alpha_freq_range, tfr_slow_cue_right, tfr_slow_cue_left, report):
+def topographic_maps_fourth_plot(peak_alpha_freq_range, tfr_slow_cue_both, tfr_slow_cue_right, tfr_slow_cue_left, report):
     # ========================================= TOPOGRAPHIC MAPS AND FOURTH PLOT ============================================
     # Plot post cue peak alpha range topographically
     topomap_params = dict(fmin=peak_alpha_freq_range[0], 
@@ -275,22 +275,25 @@ def topographic_maps_fourth_plot(peak_alpha_freq_range, tfr_slow_cue_right, tfr_
                         tmin=.3,
                         tmax=.8,
                         vlim=(-.5,.5),
-                        baseline=(-.5, -.2), 
+                        baseline=(-.5, -.1), 
                         mode='percent')
 
-    fig_topo, axis = plt.subplots(1, 2, figsize=(7, 4))
-    tfr_slow_cue_left.plot_topomap(**topomap_params,
+    fig_topo, axis = plt.subplots(1, 3, figsize=(8, 4))
+    tfr_slow_cue_both.plot_topomap(**topomap_params,
                             axes=axis[0],
+                            show=False)    
+    tfr_slow_cue_left.plot_topomap(**topomap_params,
+                            axes=axis[1],
                             show=False)
     tfr_slow_cue_right.plot_topomap(**topomap_params,
-                                axes=axis[1],
+                                axes=axis[2],
                                 show=False)
-    axis[0].title.set_text('cue left')
-    axis[1].title.set_text('cue right')
-    fig_topo.suptitle("Post stim alpha (PAF)")
+    axis[0].title.set_text('cue both')
+    axis[1].title.set_text('cue left')
+    axis[2].title.set_text('cue right')
+    fig_topo.suptitle(f"Post stim alpha (PAF)-stim={stim}")
     fig_topo.set_tight_layout(True)
     plt.show()
-
 
     report.add_figure(fig=fig_topo, title=f'stim:{stim}, post stim alpha',
                             caption='PAF range, 0.3-0.8sec, \
@@ -355,7 +358,7 @@ def MI_calculation_fifth_plot(tfr_params, peak_alpha_freq_range, epochs, occipit
         x, y = tfr_alpha_modulation_power.info['chs'][ch_idx]['loc'][:2]
         ax.plot(x, y, 'ko', markerfacecolor='none', markersize=10)
                                     
-    fig_mi.suptitle('attention right - attention left (PAF range on occipital channels)')
+    fig_mi.suptitle(f'stim:{stim}- attention right - attention left (PAF range on occipital channels)')
     plt.show()  
 
     report.add_figure(fig=fig_mi, title=f'stim:{stim}, MI and ROI',
@@ -402,7 +405,6 @@ def MI_overtime_sixth_plot(tfr_alpha_MI_occ_chans, report):
                 section='MI'  
                 )
 
-
     return report
 
 # =================================================================================================================
@@ -419,6 +421,7 @@ extension = '.fif'
 
 runs = ['01']
 stim_segments_ls = [False, True]
+epoching_list = ['cue']#, 'stim']  # epoching on cue onset or stimulus onset
 
 pilot = False  # is it pilot data or real data?
 summary_rprt = True  # do you want to add evokeds figures to the summary report?
@@ -429,24 +432,14 @@ if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
     camcan_dir = '/rds/projects/q/quinna-camcan/dataman/data_information'
 elif platform == 'mac':
-    rds_dir = '/Volumes/jenseno-avtemporal-attention-1'
+    rds_dir = '/Volumes/jenseno-avtemporal-attention'
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
-if pilot:
-    bids_root = op.join(project_root, 'data', 'pilot-BIDS')
-else:
-    bids_root = op.join(project_root, 'data', 'BIDS')
+bids_root = op.join(project_root, 'data', 'BIDS')
 
 # Specify specific file names
 ROI_dir = op.join(project_root, 'derivatives/lateralisation-indices')
-bids_path = BIDSPath(subject=subject, session=session,
-                     task=task, run=run, root=bids_root, 
-                     datatype ='eeg', suffix=eeg_suffix)
-deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
-input_fname = op.join(deriv_folder, bids_path.basename + '_' + input_suffix + extension)
-deriv_fname = op.join(deriv_folder, bids_path.basename + '_' + deriv_suffix + extension) 
-
 peak_alpha_fname = op.join(ROI_dir, f'sub-{subject}_peak_alpha.npz')  # 2 numpy arrays saved into an uncompressed file
 
 # Select ROI sensors
@@ -458,8 +451,8 @@ tfr_params = dict(use_fft=True, return_itc=False, average=True, decim=2, n_jobs=
 report_root = op.join(project_root, 'derivatives/reports')  
 report_folder = op.join(report_root , 'sub-' + subject)
 report_fname = op.join(report_folder, 
-                    f'sub-{subject}_preproc_ica.hdf5')    # it is in .hdf5 for later adding images
-html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_ica.html')
+                    f'sub-{subject}_preproc1.hdf5')    # it is in .hdf5 for later adding images
+html_report_fname = op.join(report_folder, f'sub-{subject}_preproc1.html')
 
 report = mne.open_report(report_fname)
 
@@ -477,7 +470,8 @@ for epoching in epoching_list:
                         datatype ='eeg', suffix=eeg_suffix)
             deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
 
-            epochs, tfr_slow_cue_right, tfr_slow_cue_left, report = tfr_calculation_first_plot(stim, report)
+            (epochs, tfr_slow_cue_both, tfr_slow_cue_right, 
+             tfr_slow_cue_left, report) = tfr_calculation_first_plot(stim, report)
             report = representative_sensors_second_plot(tfr_slow_cue_right, 
                                                         tfr_slow_cue_left, 
                                                         report)
@@ -487,9 +481,11 @@ for epoching in epoching_list:
                                                                             epochs,
                                                                             report)
             report = topographic_maps_fourth_plot(peak_alpha_freq_range, 
-                                                    tfr_slow_cue_right, 
-                                                    tfr_slow_cue_left, 
-                                                    report)
+                                                  tfr_slow_cue_both, 
+                                                  tfr_slow_cue_right, 
+                                                  tfr_slow_cue_left, 
+                                                  report
+                                                  )
             
             tfr_alpha_MI_occ_chans, report = MI_calculation_fifth_plot(tfr_params, 
                                                                     peak_alpha_freq_range, 
