@@ -1,6 +1,7 @@
 function cfgTrigger = initialise_trigger_port(cfgExp, cfgTrigger)
 % cfgTrigger = initialise_trigger_port(cfgExp, cfgTrigger)
 % initiates sending triggers to MEG pc and puts everything in cfgTrigger
+
 config_io;
 global cogent;
 if( cogent.io.status ~= 0 )

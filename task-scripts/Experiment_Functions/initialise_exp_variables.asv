@@ -12,8 +12,6 @@ cfgExp.numTrial = 40;  % number of trials in each block (40)
 cfgExp.numStim = cfgExp.numTrial * cfgExp.numBlock;  % number of stimuli in total
 cfgExp.catchPercentage = 0.1;        % percentage of catch trials
 cfgExp.numCatchTrialsPerBlock = round(cfgExp.catchPercentage * cfgExp.numTrial);
-cfgExp.numRightCatchTrialsPerBlock = cfgExp.numCatchTrialsPerBlock / 2;
-cfgExp.numLeftCatchTrialsPerBlock = cfgExp.numCatchTrialsPerBlock / 2;
 cfgExp.numRightNonCatchTrialsPerBlock = (cfgExp.numTrial - cfgExp.numCatchTrialsPerBlock) / 2;  % number of non catch trials per side per block
 cfgExp.numLeftNonCatchTrialsPerBlock = (cfgExp.numTrial - cfgExp.numCatchTrialsPerBlock) / 2;
 cfgExp.numRightCuesPerBlock = cfgExp.numTrial / 2;  % Equal number of right and left cues per block
@@ -38,18 +36,38 @@ if strcmp(cfgExp.answer.test,'train'), cfgExp.train = 1; else, cfgExp.train = 0;
 
 
 % Generate balanced and randomized trial structure
-trialMatrix = zeros(cfgExp.numTrial, cfgExp.numBlock);  % 1 and 10= right cue, 2 and 20 = left cue
+trialMatrix = zeros(cfgExp.numBlock, cfgExp.numTrial);  % 1 = right cue, 2 = left cue
+catchMatrix = zeros(cfgExp.numBlock, cfgExp.numTrial);  % 0 = non-catch, 1 = catch
 
 for block = 1:cfgExp.numBlock
     % Generate cues
-    cues = [1 * ones(1, cfgExp.numRightNonCatchTrialsPerBlock), 10 * ones(1, cfgExp.numRightCatchTrialsPerBlock),...
-            2 * ones(1, cfgExp.numLeftNonCatchTrialsPerBlock), 20 * ones(1, cfgExp.numLeftCatchTrialsPerBlock)];
+    cues = [ones(1, cfgExp.numRightCuesPerBlock), 2 * ones(1, cfgExp.numLeftCuesPerBlock)];
     cues = cues(randperm(cfgExp.numTrial));  % Randomize cue order
     
-    trialMatrix(:, block) = cues;
+    % Assign catch trials
+    catchTrials = zeros(1, cfgExp.numTrial);  % Initialize with non-catch trials
+    catchIdx = randperm(cfgExp.numTrial, cfgExp.numCatchTrialsPerBlock);  % Random catch trial indices
+    catchTrials(catchIdx) = 1;
+
+    % Ensure catch trials are balanced
+    rightCatchCount = sum(cues(catchIdx) == 1);
+    leftCatchCount = sum(cues(catchIdx) == 2);
+
+    while rightCatchCount ~= cfgExp.numCatchTrialsPerBlock / 2 || leftCatchCount ~= cfgExp.numCatchTrialsPerBlock / 2
+        catchIdx = randperm(cfgExp.numTrial, cfgExp.numCatchTrialsPerBlock);
+        catchTrials = zeros(1, cfgExp.numTrial);
+        catchTrials(catchIdx) = 1;
+
+        rightCatchCount = sum(cues(catchIdx) == 1);
+        leftCatchCount = sum(cues(catchIdx) == 2);
+    end
+
+    trialMatrix(block, :) = cues;
+    catchMatrix(block, :) = catchTrials;
 end
 
 cfgExp.trialMatrix = trialMatrix(:);  % Matrix for right and left cues
+cfgExp.catchMatrix = catchMatrix(:);  % Flatten into a single vector
 
 
 end
