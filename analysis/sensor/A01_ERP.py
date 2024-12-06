@@ -18,6 +18,7 @@ import os.path as op
 import os
 import numpy as np
 
+import matplotlib.pyplot as plt
 import mne
 from mne_bids import BIDSPath
 
@@ -44,6 +45,7 @@ def reading_epochs_evoking(stim):
 
     return epochs, evoked
 
+
 # BIDS settings: fill these out 
 subject = '110'
 session = '01'
@@ -59,7 +61,6 @@ runs = ['01']
 stim_segments_ls = [False, True]
 epoching_list = ['cue', 'stim']  # epoching on cue onset or stimulus onset
 
-pilot = False  # is it pilot data or real data?
 platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
 test_plot = False
 
@@ -74,10 +75,7 @@ elif platform == 'mac':
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
-if pilot:
-    bids_root = op.join(project_root, 'data', 'pilot-BIDS')
-else:
-    bids_root = op.join(project_root, 'data', 'BIDS')
+bids_root = op.join(project_root, 'data', 'BIDS')
 
 # Epoch stim segments and add to report
 report_root = op.join(project_root, 'derivatives/reports')  
@@ -110,16 +108,36 @@ for epoching in epoching_list:
             evoked.comment = f'stim:{stim_segments_ls[stim]}, {epoching} onset'
             evoked_list.append(evoked)  # append evokeds for later comparison
 
-            # Plot ERF for summary report
-            topos_times = np.arange(50, 450, 30)*0.001
-            fig_evo = evoked.copy().plot_joint(times=topos_times)
+            # Plot ERPs for summary report
+            # topos_times = np.arange(50, 450, 30)*0.001
+            # fig_evo = evoked.copy().plot_joint(times=topos_times)
         
-            report.add_figure(fig=fig_evo, title=f'stim:{stim}, evoked response',
-                                caption=f'evoked response for {epoching}- baseline=(-100,0), filter=(0,30) \
+            # report.add_figure(fig=fig_evo, title=f'stim:{stim}, evoked response',
+            #                     caption=f'evoked response for {epoching}- baseline=(-100,0), filter=(0,30) \
+            #                             cue=200ms, ISI=1000, stim=1000-2000ms', 
+            #                     tags=('evo'),
+            #                     section='stim'
+            #                     )
+            # Plot epochs separately 
+            fig_epochs, axis = plt.subplots(3, 2, figsize=(12, 6))
+            for ax, ch in enumerate(occipital_channels):
+                epochs.plot_image(picks=ch,
+                                    axes=axis[ax,:],
+                                    colorbar=False,
+                                    show=False)
+                # axis[ax].title.set_text(f'{ch}')
+
+            fig_epochs.suptitle(f"stim={stim}- epochs for {epoching}")
+            fig_epochs.set_tight_layout(True)
+            plt.show()
+
+            report.add_figure(fig=fig_epochs, title=f'stim:{stim}, epochs separately',
+                                caption=f'epochs for {epoching}- baseline=(-100,0), filter=(0,30) \
                                         cue=200ms, ISI=1000, stim=1000-2000ms', 
-                                tags=('evo'),
+                                tags=('epo'),
                                 section='stim'
                                 )
+
             del epochs, evoked
 
     # Plot both stim and no stim evoked in one plot

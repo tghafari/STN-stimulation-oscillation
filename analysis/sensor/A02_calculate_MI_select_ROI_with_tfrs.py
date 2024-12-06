@@ -443,7 +443,7 @@ ROI_dir = op.join(project_root, 'derivatives/lateralisation-indices')
 peak_alpha_fname = op.join(ROI_dir, f'sub-{subject}_peak_alpha.npz')  # 2 numpy arrays saved into an uncompressed file
 
 # Select ROI sensors
-occipital_channels = ['O2', 'Oz', 'O1']
+occipital_channels = ['PO4', 'POz', 'PO3']
 
 tfr_params = dict(use_fft=True, return_itc=False, average=True, decim=2, n_jobs=4, verbose=True)
 
