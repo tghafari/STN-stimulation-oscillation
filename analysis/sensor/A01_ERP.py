@@ -11,7 +11,6 @@ adapted from flux pipeline
 ==============================================
 ToDos:    
 Questions:
-    1) which conditions to equalize?
 
 """
 
@@ -41,7 +40,7 @@ def reading_epochs_evoking(stim):
     # Make evoked data for conditions of interest and save
     evoked = epochs.copy().average(method='mean').filter(0.0,30).crop(-.1,1)
     evoked = evoked.apply_baseline(baseline=(-.1,0), verbose=True) 
-    mne.write_evokeds(deriv_fname, evoked, verbose=True, overwrite=True)
+    # mne.write_evokeds(deriv_fname, evoked, verbose=True, overwrite=True)
 
     return epochs, evoked
 
@@ -65,7 +64,7 @@ platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
 test_plot = False
 
 # Select ROI sensors for erp
-occipital_channels = ['O2', 'Oz', 'O1']
+occipital_channels = ['PO4', 'POz', 'PO3']
 
 if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'

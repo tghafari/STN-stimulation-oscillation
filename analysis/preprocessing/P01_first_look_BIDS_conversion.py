@@ -50,7 +50,7 @@ stim_sequence = {'sub-01':["no_stim-left rec", "no_stim-right rec", "Right stim-
                  } 
 # BIDS settings
 subject = '110'
-brainVision_basename = f'ao_{subject[-2:]}'  # might need modification per 
+brainVision_basename = f'ao_{subject[-2:]}'  # might need modification per subject
 
 session = '01'
 task = 'SpAtt'
