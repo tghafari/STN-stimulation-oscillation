@@ -71,6 +71,7 @@ def tfr_calculation_first_plot(stim, report):
                         # 'it relates to the temporal (deltaT) and spectral (deltaF)' 
                         # 'smoothing'
                         # 'the more tapers, the more smooth'->useful for high freq data
+    baseline = [-2,-5]  # baseline for TFRs are longer than for ERPs
     
     tfr_slow_cue_both = mne.time_frequency.tfr_multitaper(epochs['cue_onset_right','cue_onset_left'],  
                                                     freqs=freqs, 
@@ -99,7 +100,7 @@ def tfr_calculation_first_plot(stim, report):
     # Plot TFR on all sensors and check
     fig_plot_topo_both = tfr_slow_cue_both.plot_topo(tmin=-.5, 
                                                     tmax=1.5, 
-                                                    baseline=[-.5,-.1], 
+                                                    baseline=baseline, 
                                                     mode='percent',
                                                     fig_facecolor='w', 
                                                     font_color='k',
@@ -109,7 +110,7 @@ def tfr_calculation_first_plot(stim, report):
      
     fig_plot_topo_right = tfr_slow_cue_right.plot_topo(tmin=-.5, 
                                                     tmax=1.5, 
-                                                    baseline=[-.5,-.1], 
+                                                    baseline=baseline, 
                                                     mode='percent',
                                                     fig_facecolor='w', 
                                                     font_color='k',
@@ -118,7 +119,7 @@ def tfr_calculation_first_plot(stim, report):
                                                     title=f'stim={stim}-TFR of power < 30Hz - cue right')
     fig_plot_topo_left = tfr_slow_cue_left.plot_topo(tmin=-.5, 
                                                     tmax=1.5,
-                                                    baseline=[-.5,-.1], 
+                                                    baseline=baseline, 
                                                     mode='percent',
                                                     fig_facecolor='w', 
                                                     font_color='k',
@@ -127,22 +128,22 @@ def tfr_calculation_first_plot(stim, report):
                                                     title=f'stim={stim}-TFR of power < 30Hz - cue left')
     
     report.add_figure(fig=fig_plot_topo_both, title=f'stim:{stim}, TFR of power < 30Hz - cue both',
-                        caption='Time Frequency Representation for \
-                        cue both- -0.5 to 1.5- baseline corrected (-.5,-.1)', 
+                        caption=f'Time Frequency Representation for \
+                        cue both- -0.5 to 1.5- baseline corrected {baseline}', 
                         tags=('tfr'),
                         section='TFR'  
                         )
 
     report.add_figure(fig=fig_plot_topo_right, title=f'stim:{stim}, TFR of power < 30Hz - cue right',
-                        caption='Time Frequency Representation for \
-                        cue right- -0.5 to 1.5- baseline corrected (-.5,-.1)', 
+                        caption=f'Time Frequency Representation for \
+                        cue right- -0.5 to 1.5- baseline corrected {baseline}', 
                         tags=('tfr'),
                         section='TFR'  
                         )
     
     report.add_figure(fig=fig_plot_topo_left, title=f'stim:{stim}, TFR of power < 30Hz - cue left',
-                        caption='Time Frequency Representation for \
-                            cue left- -0.5 to 1.5- baseline corrected (-.5,-.1)', 
+                        caption=f'Time Frequency Representation for \
+                            cue left- -0.5 to 1.5- baseline corrected {baseline}', 
                         tags=('tfr'),
                         section='TFR'  
                         )
@@ -153,12 +154,13 @@ def representative_sensors_second_plot(tfr_slow_cue_right, tfr_slow_cue_left, re
     # ========================================= SECOND PLOT (REPRESENTATIVE SENSROS) ====================================
 
     # Plot TFR for representative sensors - same in all participants
-    fig_tfr, axis = plt.subplots(2, 2, figsize = (7, 7))
-    sensors = ['O1','O2']
+    fig_tfr, axis = plt.subplots(3, 2, figsize = (14, 7))
+    occipital_channels = ['O1', 'PO3', 'O2', 'PO4', 'Oz', 'POz']
+    baseline=[-.2, -5]
 
-    for idx, sensor in enumerate(sensors):
-        tfr_slow_cue_left.plot(picks=sensor, 
-                                baseline=[-.5,-.2],
+    for idx, ch in enumerate(occipital_channels):
+        tfr_slow_cue_left.plot(picks=ch, 
+                                baseline=baseline,
                                 mode='percent', 
                                 tmin=-.5, 
                                 tmax=1.5,
@@ -166,9 +168,9 @@ def representative_sensors_second_plot(tfr_slow_cue_right, tfr_slow_cue_left, re
                                 vmax=.75,
                                 axes=axis[idx,0], 
                                 show=False)
-        axis[idx, 0].set_title(f'stim={stim}-cue left-{sensor}')        
-        tfr_slow_cue_right.plot(picks=sensor,
-                                baseline=[-.5,-.2],
+        axis[idx, 0].set_title(f'stim={stim}-cue left-{ch}')        
+        tfr_slow_cue_right.plot(picks=ch,
+                                baseline=baseline,
                                 mode='percent', 
                                 tmin=-.5, 
                                 tmax=1.5,
@@ -176,12 +178,14 @@ def representative_sensors_second_plot(tfr_slow_cue_right, tfr_slow_cue_left, re
                                 vmax=.75, 
                                 axes=axis[idx,1], 
                                 show=False)
-        axis[idx, 1].set_title(f'stim={stim}-cue right-{sensor}') 
+        axis[idx, 1].set_title(f'stim={stim}-cue right-{ch}') 
             
     axis[0, 0].set_ylabel('left sensors')  
     axis[1, 0].set_ylabel('right sensors')  
+    axis[2, 0].set_ylabel('central sensors')  
     axis[0, 1].set_ylabel('left sensors')  
     axis[1, 1].set_ylabel('right sensors')
+    axis[2, 1].set_ylabel('central sensors')  
     axis[0, 0].set_xlabel('')  # Remove x-axis label for top plots
     axis[0, 1].set_xlabel('')
 
@@ -275,7 +279,7 @@ def topographic_maps_fourth_plot(peak_alpha_freq_range, tfr_slow_cue_both, tfr_s
                         tmin=.3,
                         tmax=.8,
                         vlim=(-.5,.5),
-                        baseline=(-.5, -.1), 
+                        baseline=(-2, -5), # only baseline that's tuple (not list)
                         mode='percent')
 
     fig_topo, axis = plt.subplots(1, 3, figsize=(8, 4))
