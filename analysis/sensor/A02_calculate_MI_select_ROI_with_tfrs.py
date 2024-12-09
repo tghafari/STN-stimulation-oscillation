@@ -376,7 +376,6 @@ def MI_calculation_fifth_plot(tfr_params, peak_alpha_freq_range, epochs, occipit
 
 def MI_overtime_sixth_plot(tfr_alpha_MI_occ_chans, report):
     # ========================================= MI OVER TIME AND SIXTH PLOT =======================================
-    # Don't plot now, it looks terrible 
     # Plot MI avg across ROI over time
     fig, axs = plt.subplots(figsize=(12, 6))
 
@@ -496,7 +495,7 @@ for epoching in epoching_list:
                                                                     epochs, 
                                                                     occipital_channels,
                                                                     report)
-            report = MI_overtime_sixth_plot(tfr_alpha_MI_occ_chans, report)
+            # report = MI_overtime_sixth_plot(tfr_alpha_MI_occ_chans, report)  # Don't plot now, it looks terrible 
 
 report.save(report_fname, overwrite=True)
 report.save(html_report_fname, overwrite=True, open_browser=True)  # to check how the report looks
