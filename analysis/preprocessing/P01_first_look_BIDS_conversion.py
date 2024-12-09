@@ -20,8 +20,6 @@
 written by Tara Ghafari
 t.ghafari@bham.ac.uk
 ==============================================  
-
-ToDos:
 """
 
 # Import relevant Python modules
@@ -92,7 +90,12 @@ if subject == '110':
 else:
     raw = mne.io.read_raw_brainvision(vhdr_fname, eog=('HEOGL', 'HEOGR', 'VEOGb'), preload=True)
 
-raw.plot()  # first thing first
+# first thing first- Remove bad channels from PSD and raw scrolling
+raw.plot()  
+n_fft = int(raw.info['sfreq']*2)  # to ensure window size = 2sec
+psd_fig = raw.copy().filter(0.3,100).compute_psd(n_fft=n_fft,  # default method is welch here (multitaper for epoch)
+                                                n_overlap=int(n_fft/2),
+                                                fmax=105).plot()  
 
 # Read events from raw object
 events, _ = mne.events_from_annotations(raw, event_id='auto')
@@ -136,6 +139,7 @@ mne.viz.plot_sensors(raw.info,
                      to_sphere=False,  # the sensor array appears similar as to looking downwards straight above the subject’s head.
                      linewidth=0,
                      )
+
 channels_are_even = True
 # If channels distrubited evenly, do average reference (eeglab resources)
 if channels_are_even:
@@ -143,15 +147,12 @@ if channels_are_even:
     raw_referenced.set_eeg_reference(ref_channels="average")
     raw_referenced.plot(title='Average reference raw')
 
-# if not evenly distributed, do Fz reference
+# if not evenly distributed, do Fz reference which = not referencing
 else:
     raw_referenced = raw.copy()
     raw_referenced.add_reference_channels(ref_channels=['Fz']) # the reference channel is not by default in the channel list
     raw_referenced.set_eeg_reference(ref_channels=['Fz'], projection=False, verbose=False)
     raw_referenced.plot(title='Fz reference raw')
-
-# How does it look without new ref
-raw.plot(title='No reference raw')
 
 # Preparing the brainvision data format to standard
 """it is important to bring the montage to the standard space. Otherwise the 
@@ -159,7 +160,6 @@ ICA and PSDs look weird."""
 montage = mne.channels.make_standard_montage("easycap-M1")
 raw_referenced.set_montage(montage, verbose=False)
 montage.plot()  # 2D
-# fig = montage.plot(kind="3d")  # 3D
 
 # Save a non-bids raw just in case 
 raw_referenced.save(annotated_raw_fname, overwrite=True)  # note that the event_id is incorrect here, use the event_id dict if needed
@@ -201,8 +201,7 @@ write_raw_bids(raw_referenced,
                format='BrainVision')
 
 # Plot to test, filter raw data (130Hz is stimulation frequency)
-raw_referenced.copy().filter(0.3,100).plot(title="raw")  # does not contain triggers
-n_fft = int(raw_referenced.info['sfreq']*2)  # to ensure window size = 2sec
+raw_referenced.copy().filter(0.3,100).plot(title="raw-referenced")  # does not contain triggers
 psd_fig = raw_referenced.copy().filter(0.3,100).compute_psd(n_fft=n_fft,  # default method is welch here (multitaper for epoch)
                                                 n_overlap=int(n_fft/2),
                                                 fmax=105).plot()  

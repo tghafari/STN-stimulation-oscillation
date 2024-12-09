@@ -37,11 +37,10 @@ def reading_epochs_evoking(stim):
 
     # Read epoched data and equalize right and left
     epochs = mne.read_epochs(input_fname, verbose=True, preload=True)  # -.5 to 1.5sec
-
     # Make evoked data for conditions of interest and save
     evoked = epochs.copy().average(method='mean').filter(0.0,30).crop(-.1,1)
     evoked = evoked.apply_baseline(baseline=(-.1,0), verbose=True) 
-    # mne.write_evokeds(deriv_fname, evoked, verbose=True, overwrite=True)
+    mne.write_evokeds(deriv_fname, evoked, verbose=True, overwrite=True)
 
     return epochs, evoked
 
@@ -65,7 +64,7 @@ platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
 test_plot = False
 
 # Select ROI sensors for erp
-occipital_channels = ['PO4', 'POz', 'PO3']
+occipital_channels = ['O1', 'O2', 'Oz', 'PO4', 'POz', 'PO3']
 
 if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
@@ -109,28 +108,28 @@ for epoching in epoching_list:
             evoked_list.append(evoked)  # append evokeds for later comparison
 
             # Plot ERPs for summary report
-            # topos_times = np.arange(50, 450, 30)*0.001
-            # fig_evo = evoked.copy().plot_joint(times=topos_times)
+            topos_times = np.arange(50, 450, 30)*0.001
+            fig_evo = evoked.copy().plot_joint(times=topos_times)
         
-            # report.add_figure(fig=fig_evo, title=f'stim:{stim}, evoked response',
-            #                     caption=f'evoked response for {epoching}- baseline=(-100,0), filter=(0,30) \
-            #                             cue=200ms, ISI=1000, stim=1000-2000ms', 
-            #                     tags=('evo'),
-            #                     section='stim'
-            #                     )
+            report.add_figure(fig=fig_evo, title=f'stim:{stim}, evoked response',
+                                caption=f'evoked response for {epoching}- baseline=(-100,0), filter=(0,30) \
+                                        cue=200ms, ISI=1000, stim=1000-2000ms', 
+                                tags=('evo'),
+                                section='stim'
+                                )
             # Plot epochs separately 
-            fig_epochs, axis = plt.subplots(3, 2, figsize=(12, 6))
+            fig_epochs, axis = plt.subplots(6, 2, figsize=(24, 6))
             for ax, ch in enumerate(occipital_channels):
                 epochs.plot_image(picks=ch,
                                     axes=axis[ax,:],
                                     colorbar=False,
                                     show=False)
-                # axis[ax].title.set_text(f'{ch}')
+                axis[ax].title.set_text(f'{ch}')
 
             fig_epochs.suptitle(f"stim={stim}- epochs for {epoching}")
             fig_epochs.set_tight_layout(True)
             plt.show()
-
+            
             report.add_figure(fig=fig_epochs, title=f'stim:{stim}, epochs separately',
                                 caption=f'epochs for {epoching}- baseline=(-100,0), filter=(0,30) \
                                         cue=200ms, ISI=1000, stim=1000-2000ms', 
@@ -141,19 +140,25 @@ for epoching in epoching_list:
             del epochs, evoked
 
     # Plot both stim and no stim evoked in one plot
-    fig_comp = mne.viz.plot_compare_evokeds(evoked_list, 
-                                            picks=occipital_channels,
-                                            colors=['blue','orange'], 
-                                            combine="mean", 
-                                            show_sensors=True,
-                                            invert_y=False,
-                                            truncate_xaxis=False,
-                                            truncate_yaxis=False)
+    fig_comp_chs, axis = plt.subplots(6, 1, figsize=(24, 6))
+    for ax, ch in enumerate(occipital_channels):
+         mne.viz.plot_compare_evokeds(evoked_list, 
+                                    picks=ch,
+                                    colors=['blue','orange'], 
+                                    combine="mean",
+                                    axes=axis[ax,:], 
+                                    show_sensors=True,
+                                    invert_y=False,
+                                    truncate_xaxis=False,
+                                    truncate_yaxis=False)
+         axis[ax].title.set_text(f'{ch}')
+
+        
     fig_comp_plot_topo = mne.viz.plot_evoked_topo(evoked_list,
                                           color=['blue','orange'], 
                                           vline=(0.0))
 
-    report.add_figure(fig=fig_comp, title=f'compare evoked responses',
+    report.add_figure(fig=fig_comp_chs, title=f'compare evoked responses',
                                 caption=f'evoked response for {epoching} \
                                     cue=200ms, ISI=1000, stim=1000-2000ms', 
                                 tags=('evo'),
