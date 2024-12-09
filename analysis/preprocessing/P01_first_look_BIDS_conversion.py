@@ -3,14 +3,16 @@
 01_first_look_and_BIDS_conversion
     1. this code opens .eeg file
     and plot raw eeg data.
-    2. reads the events from annotations of 
+    2. the user then rejects bad channels from
+    raw.plot() and the psd plots
+    3. reads the events from annotations of 
     brainvision data.
-    3. corrects the annotation and event_ids 
-    4. adds annotations to the raw 
-    5. standardise montage and set reference
-    6. saves as .fif
-    7. then converts the raw data to bids
-    8. It also plots triggers and RT to quality
+    4. corrects the annotation and event_ids 
+    5. adds annotations to the raw 
+    6. standardise montage and set reference
+    7. saves as .fif
+    8. then converts the raw data to bids
+    9. It also plots triggers and RT to quality
     check the data.
 
     note that this code will save two eeg files,
@@ -22,7 +24,6 @@ t.ghafari@bham.ac.uk
 ==============================================  
 """
 
-# Import relevant Python modules
 import os.path as op
 import os
 import pandas as pd
@@ -64,7 +65,7 @@ summary_rprt = True
 if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
 elif platform == 'mac':
-    rds_dir = '/Volumes/jenseno-avtemporal-attention'
+    rds_dir = '/Volumes/jenseno-avtemporal-attention-2'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
 data_root = op.join(project_root, 'data/data-organised')
@@ -84,18 +85,54 @@ bids_root = op.join(project_root, 'data', 'BIDS')
 
 # Read raw file in BrainVision (.vhdr, .vmrk, .eeg) format
 if subject == '110':
-    raw_fnames = [op.join(base_fpath, 'EEG', brainVision_basename + '_blocks1-2.vhdr'), 
-                  op.join(base_fpath, 'EEG', brainVision_basename + '_blocks3-8.vhdr')]
+    raw_fnames = [op.join(base_fpath, brainVision_basename + '_blocks1-2.vhdr'), 
+                  op.join(base_fpath, brainVision_basename + '_blocks3-8.vhdr')]
     raw = mne.concatenate_raws([mne.io.read_raw_brainvision(f, preload=True) for f in raw_fnames])
 else:
     raw = mne.io.read_raw_brainvision(vhdr_fname, eog=('HEOGL', 'HEOGR', 'VEOGb'), preload=True)
 
-# first thing first- Remove bad channels from PSD and raw scrolling
-raw.plot()  
+# first thing first- Remove bad channels from raw scrolling and find if you must crop useless data
+raw.plot()  # get an idea about the data, confirm stimulation order
+
+# Here crop any extra segments at the beginning or end of the recording
+raw.crop(tmin=290).plot()  # sub110
+
+# Scrole one more time to remove any other bad channels after filtering
+raw.copy().filter(l_freq=0.1, h_freq=100).plot()  
+
+
 n_fft = int(raw.info['sfreq']*2)  # to ensure window size = 2sec
 psd_fig = raw.copy().filter(0.3,100).compute_psd(n_fft=n_fft,  # default method is welch here (multitaper for epoch)
                                                 n_overlap=int(n_fft/2),
                                                 fmax=105).plot()  
+
+bad_channels = True  # are there any more bad channels from psd?
+# Mark bad channels before ICA
+if bad_channels:
+    original_bads = deepcopy(raw.info["bads"])
+    print(f'these are original bads: {original_bads}')
+    user_list = input('Are there any bad channels after rejecting bad epochs? name of channel, e.g. FT10 T9 (separate by space) or return.')
+    bad_channels = user_list.split()
+    raw.copy().pick(bad_channels).compute_psd().plot()  # double check bad channels
+    if len(bad_channels) == 1:
+        print('one bad channel removing')
+        raw.info["bads"].append(bad_channels[0])  # add a single channel
+    else:
+        print(f'{len(bad_channels)} bad channels removing')
+        raw.info["bads"].extend(bad_channels)  # add a list of channels - should there be more than one channel to drop
+
+"""
+list bad channels for all participants:
+{
+pilot_BIDS/sub-01_ses-01_run-01: ["FCz"],
+pilot_BIDS/sub-02_ses-01_run-01: [],
+BIDS/sub-01_ses-01_run-01: ["T7", "FT10"],
+BIDS/sub-02_ses-01_run-01: ["TP10"],
+BIDS/sub-05_ses-01_run-01: ["almost all channels look terrible in psd"],
+BIDS/sub-107_ses-01_run-01: ["FT10"], #"all good!"
+BIDS/sub-108_ses-01_run-01: ["FT9", "T8", "T7"],
+BIDS/sub-110_ses-01_run-01: ["T8", "FT10", "FCz", "TP9"],
+} """
 
 # Read events from raw object
 events, _ = mne.events_from_annotations(raw, event_id='auto')
@@ -157,9 +194,10 @@ else:
 # Preparing the brainvision data format to standard
 """it is important to bring the montage to the standard space. Otherwise the 
 ICA and PSDs look weird."""
-montage = mne.channels.make_standard_montage("easycap-M1")
-raw_referenced.set_montage(montage, verbose=False)
-montage.plot()  # 2D
+# Only do this after Sirui sent the montage
+# montage = mne.channels.make_standard_montage("easycap-M1") 
+# raw_referenced.set_montage(montage, verbose=False)
+# montage.plot()  # 2D
 
 # Save a non-bids raw just in case 
 raw_referenced.save(annotated_raw_fname, overwrite=True)  # note that the event_id is incorrect here, use the event_id dict if needed
@@ -201,7 +239,6 @@ write_raw_bids(raw_referenced,
                format='BrainVision')
 
 # Plot to test, filter raw data (130Hz is stimulation frequency)
-raw_referenced.copy().filter(0.3,100).plot(title="raw-referenced")  # does not contain triggers
 psd_fig = raw_referenced.copy().filter(0.3,100).compute_psd(n_fft=n_fft,  # default method is welch here (multitaper for epoch)
                                                 n_overlap=int(n_fft/2),
                                                 fmax=105).plot()  
@@ -268,8 +305,8 @@ if summary_rprt:
     report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 
-                        f'sub-{subject}_preproc.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub-{subject}_preproc.html')
+                        f'sub-{subject}_091224.hdf5')    # it is in .hdf5 for later adding images
+    html_report_fname = op.join(report_folder, f'sub-{subject}_091224.html')
     
     report = mne.Report(title=f'Subject {subject}')
     report.add_image(beh_fig_fname,
@@ -285,7 +322,7 @@ if summary_rprt:
                         title='Number of events',
                         caption='number of events in total',
                         tags=('eve'))
-    report.add_raw(raw=raw_referenced.filter(0.3, 100), title='raw referenced with bad channels', 
+    report.add_raw(raw=raw_referenced.filter(0.3, 100), title='raw referenced with bad channels marked', 
                    psd=True, 
                    butterfly=False, 
                    tags=('raw'))

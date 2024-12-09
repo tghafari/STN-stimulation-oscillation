@@ -48,11 +48,8 @@ platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
 if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
     camcan_dir = '/rds/projects/q/quinna-camcan/dataman/data_information'
-elif platform == 'windows':
-    rds_dir = 'Z:'
-    camcan_dir = 'X:/dataman/data_information'
 elif platform == 'mac':
-    rds_dir = '/Volumes/jenseno-avtemporal-attention'
+    rds_dir = '/Volumes/jenseno-avtemporal-attention-2'
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
@@ -70,44 +67,7 @@ deriv_fname = op.join(deriv_folder, bids_path.basename + '_' + deriv_suffix + ex
 # read annotated data
 raw = read_raw_bids(bids_path=bids_path, verbose=False, 
                         extra_params={'preload':True})
-
-# Plot to find bad channels and reject from data
-raw.plot(title="raw") 
-# Here crop any extra segments at the beginning or end of the recording
-raw.crop(tmin=290).plot()  # sub110
-
-n_fft = int(raw.info['sfreq']*2)  # to ensure window size = 2
-raw.copy().compute_psd(n_fft=n_fft,  # default method is welch here (multitaper for epoch)
-                    n_overlap=int(n_fft/2), 
-                    fmin=0.1, fmax=105).plot()  
-
-bad_channels = True  # are there any bad channels from psd?
-# Mark bad channels before ICA
-if bad_channels:
-    original_bads = deepcopy(raw.info["bads"])
-    print(f'these are original bads: {original_bads}')
-    user_list = input('Are there any bad channels after rejecting bad epochs? name of channel, e.g. FT10 T9 (separate by space) or return.')
-    bad_channels = user_list.split()
-    raw.copy().pick(bad_channels).compute_psd().plot()  # double check bad channels
-    if len(bad_channels) == 1:
-        print('one bad channel removing')
-        raw.info["bads"].append(bad_channels[0])  # add a single channel
-    else:
-        print(f'{len(bad_channels)} bad channels removing')
-        raw.info["bads"].extend(bad_channels)  # add a list of channels - should there be more than one channel to drop
-
-"""
-list bad channels for all participants:
-{
-pilot_BIDS/sub-01_ses-01_run-01: ["FCz"],
-pilot_BIDS/sub-02_ses-01_run-01: [],
-BIDS/sub-01_ses-01_run-01: ["T7", "FT10"],
-BIDS/sub-02_ses-01_run-01: ["TP10"],
-BIDS/sub-05_ses-01_run-01: ["almost all channels look terrible in psd"],
-BIDS/sub-107_ses-01_run-01: ["FT10"], #"all good!"
-BIDS/sub-108_ses-01_run-01: ["FT9", "T8", "T7"],
-BIDS/sub-110_ses-01_run-01: ["T8", "TP9S"],
-} """
+raw.plot()  # just scan through the data to ensure quality measures have been made in the previous step
 
 # Resample and filtering
 """
@@ -123,7 +83,7 @@ ica.fit(raw_resmpld, verbose=True)
 ica.plot_sources(raw_resmpld, title='ICA')
 ica.plot_components()
 
-ICA_rej_dic = {f'sub-{subject}_ses-{session}':[0, 4]} # manually selected bad ICs or from sub config file 
+ICA_rej_dic = {f'sub-{subject}_ses-{session}':[0, 1]} # manually selected bad ICs or from sub config file 
 artifact_ICs = ICA_rej_dic[f'sub-{subject}_ses-{session}']
 """
 list bad ICA components for all participants:
@@ -135,7 +95,7 @@ list bad ICA components for all participants:
 'BIDS/sub-05_ses-01_run-01': [0, 1, 8, 58, 59], # don't know-almost all look terrible
 'BIDS/sub-107_ses-01_run-01': [28], # maybe eye movement?  
 'BIDS/sub-108_ses-01_run-01': [1, 13], # don't know-almost all look terrible
-'BIDS/sub-108_ses-01_run-01': [0, 4], # 0:blink, 4:saccades
+'BIDS/sub-108_ses-01_run-01': [0, 1], # 0:blink, 4:saccades
 } """
 
 # Double check the manually selected artifactual ICs
@@ -174,8 +134,8 @@ if summary_rprt:
     report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 
-                        f'sub-{subject}_preproc.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub-{subject}_preproc.html')
+                        f'sub-{subject}_091224.hdf5')    # it is in .hdf5 for later adding images
+    html_report_fname = op.join(report_folder, f'sub-{subject}_091224.html')
     
     report = mne.open_report(report_fname)
     report.add_figure(fig_ica, 

@@ -110,8 +110,8 @@ if summary_rprt:
     report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 
-                        f'sub-{subject}_preproc.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub-{subject}_preproc.html')
+                        f'sub-{subject}_091224.hdf5')    # it is in .hdf5 for later adding images
+    html_report_fname = op.join(report_folder, f'sub-{subject}_091224.html')
     
     report = mne.open_report(report_fname)
     report.add_figure(fig=fig_no_stim_psd, title='no stimulation psd',

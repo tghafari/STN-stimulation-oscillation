@@ -152,8 +152,8 @@ report_root = op.join(project_root, 'derivatives/reports')
 report_folder = op.join(report_root , 'sub-' + subject)
 
 report_fname = op.join(report_folder, 
-                    f'sub-{subject}_preproc.hdf5')    # it is in .hdf5 for later adding images
-html_report_fname = op.join(report_folder, f'sub-{subject}_preproc.html')
+                    f'sub-{subject}_091224.hdf5')    # it is in .hdf5 for later adding images
+html_report_fname = op.join(report_folder, f'sub-{subject}_091224.html')
 
 report = mne.open_report(report_fname)
 
@@ -176,6 +176,14 @@ for stim in stim_segments_ls:
             if manual_annotation == 'y':
                 epochs_of_interest.plot()
                 input("Press return when you're done annotating bad segments...")
+
+                manual_rejection_html = """
+                <p>These epochs were rejected manually:</p>
+                <ol>
+                <li></li>
+                </ol>
+                """
+
             if epoching == 'cue':  # only cue has two (right and left) epochs
                 mne.epochs.equalize_epoch_counts([epochs_of_interest['cue_onset_right'], epochs_of_interest['cue_onset_left']])
 
@@ -187,6 +195,11 @@ for stim in stim_segments_ls:
                         tags=('epo'),
                         section='stim'
                         )
+            report.add_html(title=f"stim: {stim}, epoching on {epoching}- manually rejected epochs", 
+                            html=manual_rejection_html,
+                            tags=('epo'),
+                            section='stim')
+
             report.add_figure(fig=fig_psd, title=f'stim: {stim}, psd after dropped',
                         caption=f'stim: {stim}, psd with bad epochs and channels dropped-{epoching}=0', 
                         tags=('epo'),
