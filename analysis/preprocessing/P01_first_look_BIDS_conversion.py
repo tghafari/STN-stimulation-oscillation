@@ -65,7 +65,7 @@ summary_rprt = True
 if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
 elif platform == 'mac':
-    rds_dir = '/Volumes/jenseno-avtemporal-attention-2'
+    rds_dir = '/Volumes/jenseno-avtemporal-attention'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
 data_root = op.join(project_root, 'data/data-organised')
@@ -93,46 +93,6 @@ else:
 
 # first thing first- Remove bad channels from raw scrolling and find if you must crop useless data
 raw.plot()  # get an idea about the data, confirm stimulation order
-
-# Here crop any extra segments at the beginning or end of the recording
-raw.crop(tmin=290).plot()  # sub110
-
-# Scrole one more time to remove any other bad channels after filtering
-raw.copy().filter(l_freq=0.1, h_freq=100).plot()  
-
-
-n_fft = int(raw.info['sfreq']*2)  # to ensure window size = 2sec
-psd_fig = raw.copy().filter(0.3,100).compute_psd(n_fft=n_fft,  # default method is welch here (multitaper for epoch)
-                                                n_overlap=int(n_fft/2),
-                                                fmax=105).plot()  
-
-bad_channels = True  # are there any more bad channels from psd?
-# Mark bad channels before ICA
-if bad_channels:
-    original_bads = deepcopy(raw.info["bads"])
-    print(f'these are original bads: {original_bads}')
-    user_list = input('Are there any bad channels after rejecting bad epochs? name of channel, e.g. FT10 T9 (separate by space) or return.')
-    bad_channels = user_list.split()
-    raw.copy().pick(bad_channels).compute_psd().plot()  # double check bad channels
-    if len(bad_channels) == 1:
-        print('one bad channel removing')
-        raw.info["bads"].append(bad_channels[0])  # add a single channel
-    else:
-        print(f'{len(bad_channels)} bad channels removing')
-        raw.info["bads"].extend(bad_channels)  # add a list of channels - should there be more than one channel to drop
-
-"""
-list bad channels for all participants:
-{
-pilot_BIDS/sub-01_ses-01_run-01: ["FCz"],
-pilot_BIDS/sub-02_ses-01_run-01: [],
-BIDS/sub-01_ses-01_run-01: ["T7", "FT10"],
-BIDS/sub-02_ses-01_run-01: ["TP10"],
-BIDS/sub-05_ses-01_run-01: ["almost all channels look terrible in psd"],
-BIDS/sub-107_ses-01_run-01: ["FT10"], #"all good!"
-BIDS/sub-108_ses-01_run-01: ["FT9", "T8", "T7"],
-BIDS/sub-110_ses-01_run-01: ["T8", "FT10", "FCz", "TP9"],
-} """
 
 # Read events from raw object
 events, _ = mne.events_from_annotations(raw, event_id='auto')
@@ -162,45 +122,9 @@ raw.set_annotations(annotations_from_events)
 
 # Write events in a separate file
 mne.write_events(events_fname, events, overwrite=True)  
-
-#sub-05 first 1300seconds are before the task starts.
-# if subj_code == 'sub05':    
-#     raw.crop(tmin=1380)
-
-# Set average reference 
-# First, plot the channel layout
-mne.viz.plot_sensors(raw.info, 
-                     ch_type='all', 
-                     show_names=True, 
-                     ch_groups='position',
-                     to_sphere=False,  # the sensor array appears similar as to looking downwards straight above the subject’s head.
-                     linewidth=0,
-                     )
-
-channels_are_even = True
-# If channels distrubited evenly, do average reference (eeglab resources)
-if channels_are_even:
-    raw_referenced = raw.copy()
-    raw_referenced.set_eeg_reference(ref_channels="average")
-    raw_referenced.plot(title='Average reference raw')
-
-# if not evenly distributed, do Fz reference which = not referencing
-else:
-    raw_referenced = raw.copy()
-    raw_referenced.add_reference_channels(ref_channels=['Fz']) # the reference channel is not by default in the channel list
-    raw_referenced.set_eeg_reference(ref_channels=['Fz'], projection=False, verbose=False)
-    raw_referenced.plot(title='Fz reference raw')
-
-# Preparing the brainvision data format to standard
-"""it is important to bring the montage to the standard space. Otherwise the 
-ICA and PSDs look weird."""
-# Only do this after Sirui sent the montage
-# montage = mne.channels.make_standard_montage("easycap-M1") 
-# raw_referenced.set_montage(montage, verbose=False)
-# montage.plot()  # 2D
-
 # Save a non-bids raw just in case 
-raw_referenced.save(annotated_raw_fname, overwrite=True)  # note that the event_id is incorrect here, use the event_id dict if needed
+"""Note that the event_id is incorrect here, use the event_id dict if needed"""
+raw.save(annotated_raw_fname, overwrite=True) 
 
 # Have to explicitly assign values to events for brainvision data
 event_dict = {'cue_onset_right':1,
@@ -229,8 +153,8 @@ bids_path = BIDSPath(subject=subject,
                      root=bids_root)
 
 # Write to BIDS format
-raw_referenced.set_annotations(None)  # have to remove annotations to prevent duplicating when converting to BIDS
-write_raw_bids(raw_referenced, 
+raw.set_annotations(None)  # have to remove annotations to prevent duplicating when converting to BIDS
+write_raw_bids(raw, 
                bids_path, 
                events=events_fname, 
                event_id=events_id, 
@@ -238,13 +162,12 @@ write_raw_bids(raw_referenced,
                allow_preload=True,
                format='BrainVision')
 
-# Plot to test, filter raw data (130Hz is stimulation frequency)
-psd_fig = raw_referenced.copy().filter(0.3,100).compute_psd(n_fft=n_fft,  # default method is welch here (multitaper for epoch)
-                                                n_overlap=int(n_fft/2),
-                                                fmax=105).plot()  
 
 # Plot all events
-fig = mne.viz.plot_events(events, sfreq=raw_referenced.info["sfreq"], first_samp=raw_referenced.first_samp, event_id=events_id)
+fig = mne.viz.plot_events(events, 
+                          sfreq=raw.info["sfreq"], 
+                          first_samp=raw.first_samp, 
+                          event_id=events_id)
 
 # Plot triggers from bids .tsv file
 events_bids_path = bids_path.copy().update(suffix=events_suffix,
@@ -283,10 +206,6 @@ plt.show()
 if sanity_test:
     # Check duration of cue presentation  
     events_dict['stim_to_dot_duration'] = events_dict['dot_onset'] - events_dict['stim_onset']
-    # events_dict['RT'] = events_dict['response_press_onset'] - events_dict['dot_onset']  # participants 01 and 04 only responded to right stim -> do not execute this line
-    # cheat line to add extra elements for easier calculation of RTs:
-    # events_dict['dot_onset'] = np.insert(events_dict['dot_onset'], index_onset_should_be_added_before, onset)
-
     # Plot  durations
     events_dict["dur_cue_onset"] = events_dict['cue_onset'] - events_dict['trial_onset']
     fig, ax = plt.subplots()
@@ -317,12 +236,12 @@ if summary_rprt:
                     event_id=events_id, 
                     tags=('eve'),
                     title='events from "events"', 
-                    sfreq=raw_referenced.info['sfreq'])
+                    sfreq=raw.info['sfreq'])
     report.add_figure(eve_fig,
                         title='Number of events',
                         caption='number of events in total',
                         tags=('eve'))
-    report.add_raw(raw=raw_referenced.filter(0.3, 100), title='raw referenced with bad channels marked', 
+    report.add_raw(raw=raw.filter(0.3, 100), title='raw not referenced with bad channels', 
                    psd=True, 
                    butterfly=False, 
                    tags=('raw'))

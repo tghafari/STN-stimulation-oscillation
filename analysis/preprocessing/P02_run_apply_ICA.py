@@ -4,22 +4,19 @@
 07. Run and apply ICA
 
 This code will run ICA to find occular and cardiac
-artifacts: 1. decomposition, 2. manual identification,
-3. project out
+artifacts: 
+
+    1. resampling and running ICA
+    2. finding single channels that are associated
+    with bad components
+    3. reject those channels
+    4. apply common reference again
+    5. run ICA again
+    6. project bad components out
 
 written by Tara Ghafari
 adapted from flux pipeline
 ==============================================
-ToDos:
-    1) 
-    2) 
-    
-Issues:
-    1) read_raw_bids doesn't read annotated
-    data
-    
-Questions:
-    1) 
 
 """
 
@@ -49,7 +46,7 @@ if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
     camcan_dir = '/rds/projects/q/quinna-camcan/dataman/data_information'
 elif platform == 'mac':
-    rds_dir = '/Volumes/jenseno-avtemporal-attention-2'
+    rds_dir = '/Volumes/jenseno-avtemporal-attention'
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
@@ -67,9 +64,59 @@ deriv_fname = op.join(deriv_folder, bids_path.basename + '_' + deriv_suffix + ex
 # read annotated data
 raw = read_raw_bids(bids_path=bids_path, verbose=False, 
                         extra_params={'preload':True})
-raw.plot()  # just scan through the data to ensure quality measures have been made in the previous step
 
-# Resample and filtering
+# Scan through the data 
+raw.plot()  
+
+# Here crop any extra segments at the beginning or end of the recording
+raw.crop(tmin=290)  # sub110
+
+########################## BAD CHANNEL REJECTION ######################################
+
+## 1. Scroll one more time and psd to remove any other bad channels after filtering
+"""Mark bad channels on the plots"""
+raw_filtered = raw.copy().filter(l_freq=0.1, h_freq=100)  # filter only for plotting now
+raw_filtered.plot()  
+raw.info["bads"] = raw_filtered.info["bads"]  # add marked bad channels to raw
+
+"""Reject channels that are different than others"""
+n_fft = int(raw.info['sfreq']*2)  # to ensure window size = 2sec
+psd_fig = raw_filtered.compute_psd(n_fft=n_fft,  # default method is welch here (multitaper for epoch)
+                                                n_overlap=int(n_fft/2),
+                                                fmax=105).plot()  
+
+## 2. Mark bad channels before ICA
+original_bads = deepcopy(raw.info["bads"])
+print(f'these are original bads: {original_bads}')
+user_list = input('Any other bad channels from psd? name of channel, e.g. FT10 T9 (separate by space) or return.')
+bad_channels = user_list.split()
+
+if len(bad_channels) > 0:
+    raw.copy().pick(bad_channels).compute_psd().plot()  # double check bad channels
+    if len(bad_channels) == 1:
+        print('one bad channel removing')
+        raw.info["bads"].append(bad_channels[0])  # add a single channel
+    else:
+        print(f'{len(bad_channels)} bad channels removing')
+        raw.info["bads"].extend(bad_channels)  # add a list of channels - should there be more than one channel to drop
+
+# Plot the channel layout (use to find those from bad components too)
+mne.viz.plot_sensors(raw.info, 
+                     ch_type='all', 
+                     show_names=True, 
+                     ch_groups='position',
+                     to_sphere=False,  # the sensor array appears similar as to looking downwards straight above the subject’s head.
+                     linewidth=0,
+                     )
+
+## 3. Set average reference once before ICA
+channels_are_even = True
+# If channels distrubited evenly, do average reference (eeglab resources)
+if channels_are_even:
+    raw.set_eeg_reference(ref_channels="average")
+    raw.plot(title='Average reference raw')
+
+## 4. Resample and filter for ICA
 """
 we down sample the data in order to make ICA run faster, 
 highpass filter at 1Hz to remove slow drifts and lowpass 40Hz
@@ -78,6 +125,58 @@ because that's what we need
 raw_resmpld = deepcopy(raw).resample(200).filter(0.1, 40)
 
 # Apply ICA and identify artifact components
+ica = ICA(method='fastica', random_state=97, n_components=30, verbose=True)
+ica.fit(raw_resmpld, verbose=True)
+ica.plot_sources(raw_resmpld, title='ICA')
+ica.plot_components()
+
+## 5. Reject channels associated with bad components and rereference
+original_bads = deepcopy(raw.info["bads"])
+print(f'these are original bads: {original_bads}')
+user_list = input('Are there any channels associated with bad components? name of channel, e.g. FT10 T9 (separate by space) or return.')
+bad_channels = user_list.split()
+
+if len(bad_channels) > 0:
+    raw.copy().pick(bad_channels).compute_psd().plot()  # double check bad channels
+    if len(bad_channels) == 1:
+        print('one bad channel removing')
+        raw.info["bads"].append(bad_channels[0])  # add a single channel
+        raw.set_eeg_reference(ref_channels="average")
+        raw.copy().plot(title='Average reference raw')
+    else:
+        print(f'{len(bad_channels)} bad channels removing')
+        raw.info["bads"].extend(bad_channels)  # add a list of channels - should there be more than one channel to drop
+        raw.set_eeg_reference(ref_channels="average")
+        raw.copy().plot(title='Average reference raw')
+
+# Set standard montage
+"""it is important to bring the montage to the standard space. Otherwise the 
+ICA and PSDs look weird."""
+# Only do this after Sirui sent the montage
+# montage = mne.channels.make_standard_montage("easycap-M1") 
+# raw.set_montage(montage, verbose=False)
+# montage.plot()  # 2D
+
+"""
+list bad channels for all participants:
+{
+pilot_BIDS/sub-01_ses-01_run-01: ["FCz"],
+pilot_BIDS/sub-02_ses-01_run-01: [],
+BIDS/sub-01_ses-01_run-01: ["T7", "FT10"],
+BIDS/sub-02_ses-01_run-01: ["TP10"],
+BIDS/sub-05_ses-01_run-01: ["almost all channels look terrible in psd"],
+BIDS/sub-107_ses-01_run-01: ["FT10"], #"all good!"
+BIDS/sub-108_ses-01_run-01: ["FT9", "T8", "T7"],
+BIDS/sub-110_ses-01_run-01: ["T8", "FT10", "FCz", "TP9"],
+} """
+
+del raw_resmpld, ica  # free up memory
+
+##################################### MAIN ICA ######################################
+"""This is the ica that will be applied to the data. You can redo the previous steps
+as many times as you want."""
+# Run ica again after bad channel rejection
+raw_resmpld = deepcopy(raw).resample(200).filter(0.1, 40)
 ica = ICA(method='fastica', random_state=97, n_components=30, verbose=True)
 ica.fit(raw_resmpld, verbose=True)
 ica.plot_sources(raw_resmpld, title='ICA')
@@ -116,11 +215,9 @@ ica.apply(raw_ica)
 # Save the ICA cleaned data
 raw_ica.save(deriv_fname, overwrite=True)
 
-# plot a few frontal channels before and after ICA
-chs = ['C5', 'O2']
-ch_idx = [raw.ch_names.index(ch) for ch in chs]
-raw.plot(order=ch_idx, duration=5, title='before')
-raw_ica.plot(order=ch_idx, duration=5, title='after')
+# plot raw before and after ICA
+raw.plot(duration=5, title='before')
+raw_ica.plot(duration=5, title='after')
 
 # only add excluded components to the report
 fig_ica = ica.plot_components(picks=artifact_ICs, title='removed components')
