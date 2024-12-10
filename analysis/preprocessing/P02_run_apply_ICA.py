@@ -127,9 +127,10 @@ raw_resmpld = deepcopy(raw).resample(200).filter(0.1, 40)
 # Apply ICA and identify artifact components
 ica = ICA(method='fastica', random_state=97, n_components=30, verbose=True)
 ica.fit(raw_resmpld, verbose=True)
-ica.plot_sources(raw_resmpld, title='ICA')
 ica.plot_components()
 
+# Take another look at bad channels
+raw.plot()
 ## 5. Reject channels associated with bad components and rereference
 original_bads = deepcopy(raw.info["bads"])
 print(f'these are original bads: {original_bads}')
@@ -142,12 +143,10 @@ if len(bad_channels) > 0:
         print('one bad channel removing')
         raw.info["bads"].append(bad_channels[0])  # add a single channel
         raw.set_eeg_reference(ref_channels="average")
-        raw.copy().plot(title='Average reference raw')
     else:
         print(f'{len(bad_channels)} bad channels removing')
         raw.info["bads"].extend(bad_channels)  # add a list of channels - should there be more than one channel to drop
         raw.set_eeg_reference(ref_channels="average")
-        raw.copy().plot(title='Average reference raw')
 
 # Set standard montage
 """it is important to bring the montage to the standard space. Otherwise the 
@@ -182,7 +181,7 @@ ica.fit(raw_resmpld, verbose=True)
 ica.plot_sources(raw_resmpld, title='ICA')
 ica.plot_components()
 
-ICA_rej_dic = {f'sub-{subject}_ses-{session}':[0, 1]} # manually selected bad ICs or from sub config file 
+ICA_rej_dic = {f'sub-{subject}_ses-{session}':[0, 2]} # manually selected bad ICs or from sub config file 
 artifact_ICs = ICA_rej_dic[f'sub-{subject}_ses-{session}']
 """
 list bad ICA components for all participants:
