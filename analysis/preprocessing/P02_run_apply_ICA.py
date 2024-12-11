@@ -60,6 +60,7 @@ deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder
 if not op.exists(deriv_folder):
     os.makedirs(deriv_folder)
 deriv_fname = op.join(deriv_folder, bids_path.basename + '_' + deriv_suffix + extension)  # prone to change if annotation worked for eeg brainvision
+montage_fname = op.join(project_root, 'data', 'data-organised', 'montage-layout.csv')
 
 # read annotated data
 raw = read_raw_bids(bids_path=bids_path, verbose=False, 
@@ -76,7 +77,7 @@ raw.crop(tmin=290)  # sub110
 ## 1. Scroll one more time and psd to remove any other bad channels after filtering
 """Mark bad channels on the plots"""
 raw_filtered = raw.copy().filter(l_freq=0.1, h_freq=100)  # filter only for plotting now
-raw_filtered.plot()  
+raw_filtered.plot()  # mark bad channels after filtering stimulation frequency
 raw.info["bads"] = raw_filtered.info["bads"]  # add marked bad channels to raw
 
 """Reject channels that are different than others"""
@@ -110,12 +111,19 @@ mne.viz.plot_sensors(raw.info,
                      )
 
 ## 3. Set average reference once before ICA
-channels_are_even = True
-# If channels distrubited evenly, do average reference (eeglab resources)
-if channels_are_even:
-    raw.set_eeg_reference(ref_channels="average")
-    raw.plot(title='Average reference raw')
+"""If channels distrubited evenly, do average reference (eeglab resources)"""
+raw.set_eeg_reference(ref_channels="average")
 
+# Set standard montage
+"""it is important to bring the montage to the standard space. Otherwise the 
+ICA and PSDs look weird."""
+# Only do this after Sirui sent the montage
+montage = mne.channels.read_custom_montage(montage_fname)
+M1_montage = mne.channels.make_standard_montage("easycap-M1") 
+# raw.set_montage(montage, verbose=False)
+# montage.plot()  # 2D
+
+mne.channels.read_custom_montage
 ## 4. Resample and filter for ICA
 """
 we down sample the data in order to make ICA run faster, 
@@ -147,14 +155,6 @@ if len(bad_channels) > 0:
         print(f'{len(bad_channels)} bad channels removing')
         raw.info["bads"].extend(bad_channels)  # add a list of channels - should there be more than one channel to drop
         raw.set_eeg_reference(ref_channels="average")
-
-# Set standard montage
-"""it is important to bring the montage to the standard space. Otherwise the 
-ICA and PSDs look weird."""
-# Only do this after Sirui sent the montage
-# montage = mne.channels.make_standard_montage("easycap-M1") 
-# raw.set_montage(montage, verbose=False)
-# montage.plot()  # 2D
 
 """
 list bad channels for all participants:
