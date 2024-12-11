@@ -60,7 +60,7 @@ deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder
 if not op.exists(deriv_folder):
     os.makedirs(deriv_folder)
 deriv_fname = op.join(deriv_folder, bids_path.basename + '_' + deriv_suffix + extension)  # prone to change if annotation worked for eeg brainvision
-montage_fname = op.join(project_root, 'data', 'data-organised', 'montage-layout.csv')
+montage_fname = op.join(project_root, 'data', 'data-organised', 'new-64.bvef')
 
 # read annotated data
 raw = read_raw_bids(bids_path=bids_path, verbose=False, 
@@ -83,8 +83,8 @@ raw.info["bads"] = raw_filtered.info["bads"]  # add marked bad channels to raw
 """Reject channels that are different than others"""
 n_fft = int(raw.info['sfreq']*2)  # to ensure window size = 2sec
 psd_fig = raw_filtered.compute_psd(n_fft=n_fft,  # default method is welch here (multitaper for epoch)
-                                                n_overlap=int(n_fft/2),
-                                                fmax=105).plot()  
+                                    n_overlap=int(n_fft/2),
+                                    fmax=105).plot()  
 
 ## 2. Mark bad channels before ICA
 original_bads = deepcopy(raw.info["bads"])
@@ -119,11 +119,17 @@ raw.set_eeg_reference(ref_channels="average")
 ICA and PSDs look weird."""
 # Only do this after Sirui sent the montage
 montage = mne.channels.read_custom_montage(montage_fname)
-M1_montage = mne.channels.make_standard_montage("easycap-M1") 
-# raw.set_montage(montage, verbose=False)
 # montage.plot()  # 2D
+# raw.set_montage(montage, verbose=False)
+# Double check the layout
+# mne.viz.plot_sensors(raw.info, 
+#                      ch_type='all', 
+#                      show_names=True, 
+#                      ch_groups='position',
+#                      to_sphere=False,  # the sensor array appears similar as to looking downwards straight above the subject’s head.
+#                      linewidth=0,
+#                      )
 
-mne.channels.read_custom_montage
 ## 4. Resample and filter for ICA
 """
 we down sample the data in order to make ICA run faster, 
@@ -166,7 +172,7 @@ BIDS/sub-02_ses-01_run-01: ["TP10"],
 BIDS/sub-05_ses-01_run-01: ["almost all channels look terrible in psd"],
 BIDS/sub-107_ses-01_run-01: ["FT10"], #"all good!"
 BIDS/sub-108_ses-01_run-01: ["FT9", "T8", "T7"],
-BIDS/sub-110_ses-01_run-01: ["T8", "FT10", "FCz", "TP9"],
+BIDS/sub-110_ses-01_run-01: ['T8', 'FT10', 'FCz', 'TP9', 'Fp1', 'Fp2', 'AFz', 'T7'],
 } """
 
 del raw_resmpld, ica  # free up memory
@@ -181,7 +187,7 @@ ica.fit(raw_resmpld, verbose=True)
 ica.plot_sources(raw_resmpld, title='ICA')
 ica.plot_components()
 
-ICA_rej_dic = {f'sub-{subject}_ses-{session}':[0, 2]} # manually selected bad ICs or from sub config file 
+ICA_rej_dic = {f'sub-{subject}_ses-{session}':[1, 2]} # manually selected bad ICs or from sub config file 
 artifact_ICs = ICA_rej_dic[f'sub-{subject}_ses-{session}']
 """
 list bad ICA components for all participants:
@@ -193,7 +199,7 @@ list bad ICA components for all participants:
 'BIDS/sub-05_ses-01_run-01': [0, 1, 8, 58, 59], # don't know-almost all look terrible
 'BIDS/sub-107_ses-01_run-01': [28], # maybe eye movement?  
 'BIDS/sub-108_ses-01_run-01': [1, 13], # don't know-almost all look terrible
-'BIDS/sub-108_ses-01_run-01': [0, 1], # 0:blink, 4:saccades
+'BIDS/sub-110_ses-01_run-01': [1, 2], # 0:blink, 4:saccades
 } """
 
 # Double check the manually selected artifactual ICs
