@@ -241,7 +241,7 @@ if summary_rprt:
                         title='Number of events',
                         caption='number of events in total',
                         tags=('eve'))
-    report.add_raw(raw=raw.filter(0.3, 100), title='raw not referenced with bad channels', 
+    report.add_raw(raw=raw.filter(0.1, 100), title='raw not referenced with bad channels', 
                    psd=True, 
                    butterfly=False, 
                    tags=('raw'))

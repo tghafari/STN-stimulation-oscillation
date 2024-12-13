@@ -82,9 +82,9 @@ raw.info["bads"] = raw_filtered.info["bads"]  # add marked bad channels to raw
 
 """Reject channels that are different than others"""
 n_fft = int(raw.info['sfreq']*2)  # to ensure window size = 2sec
-psd_fig = raw_filtered.compute_psd(n_fft=n_fft,  # default method is welch here (multitaper for epoch)
-                                    n_overlap=int(n_fft/2),
-                                    fmax=105).plot()  
+raw_filtered.compute_psd(n_fft=n_fft,  # default method is welch here (multitaper for epoch)
+                         n_overlap=int(n_fft/2),
+                         fmax=105).plot()  
 
 ## 2. Mark bad channels before ICA
 original_bads = deepcopy(raw.info["bads"])
@@ -136,7 +136,7 @@ we down sample the data in order to make ICA run faster,
 highpass filter at 1Hz to remove slow drifts and lowpass 40Hz
 because that's what we need
 """
-raw_resmpld = deepcopy(raw).resample(200).filter(0.1, 40)
+raw_resmpld = raw.copy().pick('eeg').resample(200).filter(0.1, 40)
 
 # Apply ICA and identify artifact components
 ica = ICA(method='fastica', random_state=97, n_components=30, verbose=True)
@@ -181,7 +181,7 @@ del raw_resmpld, ica  # free up memory
 """This is the ica that will be applied to the data. You can redo the previous steps
 as many times as you want."""
 # Run ica again after bad channel rejection
-raw_resmpld = deepcopy(raw).resample(200).filter(0.1, 40)
+raw_resmpld = raw.copy().pick('eeg').resample(200).filter(0.1, 40)
 ica = ICA(method='fastica', random_state=97, n_components=30, verbose=True)
 ica.fit(raw_resmpld, verbose=True)
 ica.plot_sources(raw_resmpld, title='ICA')
@@ -245,7 +245,7 @@ if summary_rprt:
                       caption="removed ICA components: eye movement(?)",
                       tags=('ica'), 
                       image_format="PNG")
-    report.add_raw(raw=raw_ica.filter(0.3, 100), title='raw after ICA (avg reference)', 
+    report.add_raw(raw=raw_ica.filter(0.1, 100), title='raw after ICA (avg reference)', 
                    psd=True, 
                    butterfly=False, 
                    tags=('ica'))
