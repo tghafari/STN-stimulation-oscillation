@@ -34,6 +34,7 @@ subject = '110'
 session = '01'
 task = 'SpAtt'
 run = '01'
+input_suffix = 'ann'
 eeg_suffix = 'eeg'
 eeg_extension = '.vhdr'
 deriv_suffix = 'ica'
@@ -52,6 +53,9 @@ elif platform == 'mac':
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
 bids_root = op.join(project_root, 'data', 'BIDS')
 
+# for bear outage
+bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/BIDS'
+
 # Specify specific file names
 bids_path = BIDSPath(subject=subject, session=session,
                      task=task, run=run, root=bids_root, 
@@ -59,12 +63,13 @@ bids_path = BIDSPath(subject=subject, session=session,
 deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
 if not op.exists(deriv_folder):
     os.makedirs(deriv_folder)
+
+input_fname = op.join(deriv_folder, bids_path.basename + '_' + input_suffix + extension)
 deriv_fname = op.join(deriv_folder, bids_path.basename + '_' + deriv_suffix + extension)  # prone to change if annotation worked for eeg brainvision
 montage_fname = op.join(project_root, 'data', 'data-organised', 'new-64.bvef')
 
-# read annotated data
-raw = read_raw_bids(bids_path=bids_path, verbose=False, 
-                        extra_params={'preload':True})
+# Read annotated data
+raw = mne.io.read_raw_fif(input_fname, verbose=True, preload=True)
 
 # Scan through the data 
 raw.plot()  
@@ -118,7 +123,7 @@ raw.set_eeg_reference(ref_channels="average")
 """it is important to bring the montage to the standard space. Otherwise the 
 ICA and PSDs look weird."""
 # Only do this after Sirui sent the montage
-montage = mne.channels.read_custom_montage(montage_fname)
+# montage = mne.channels.read_custom_montage(montage_fname)
 # montage.plot()  # 2D
 # raw.set_montage(montage, verbose=False)
 # Double check the layout
@@ -144,7 +149,9 @@ ica.fit(raw_resmpld, verbose=True)
 ica.plot_components()
 
 # Take another look at bad channels
-raw.plot()
+raw.plot() # Mark bad channels from ICA here on raw.plot()
+# Channels marked as bad with ica: ['AF4', 'Pz', 'F6', 'FT7']
+
 ## 5. Reject channels associated with bad components and rereference
 original_bads = deepcopy(raw.info["bads"])
 print(f'these are original bads: {original_bads}')
@@ -172,7 +179,7 @@ BIDS/sub-02_ses-01_run-01: ["TP10"],
 BIDS/sub-05_ses-01_run-01: ["almost all channels look terrible in psd"],
 BIDS/sub-107_ses-01_run-01: ["FT10"], #"all good!"
 BIDS/sub-108_ses-01_run-01: ["FT9", "T8", "T7"],
-BIDS/sub-110_ses-01_run-01: ['T8', 'FT10', 'FCz', 'TP9', 'Fp1', 'Fp2', 'AFz', 'T7'],
+BIDS/sub-110_ses-01_run-01: ['TP9', 'TP10', 'Fp1', 'FCz', 'AF4', 'Pz', 'F6', 'FT7'],
 } """
 
 del raw_resmpld, ica  # free up memory

@@ -94,6 +94,27 @@ else:
 # first thing first- Remove bad channels from raw scrolling and find if you must crop useless data
 raw.plot()  # get an idea about the data, confirm stimulation order
 
+# Rename channels according to function
+"""T8 and FT10 = vertical electro-oculogram (EOG), 
+T7 and FT9 = horizontal EOG;
+TP9 and TP10 = mastoids, 
+Fz = on-line referenc.
+57 channels on the head."""
+
+raw.rename_channels({'T8':'vEOG1', 
+                     'FT10':'vEOG2',
+                     'T7':'hEOG1',
+                     'FT9':'hEOG2'}
+                     )
+# Set both vEOG and hEOG as EOG channels
+raw.set_channel_types({'vEOG1':'eog', 
+                       'vEOG2':'eog',
+                       'hEOG1':'eog', 
+                       'hEOG2':'eog'}
+                       )  
+# Remove channels on mastoid
+raw.info["bads"].extend(['TP9','TP10'])  
+
 # Read events from raw object
 events, _ = mne.events_from_annotations(raw, event_id='auto')
 # Create Annotation object with correct labels
@@ -190,7 +211,7 @@ for dirs in direction_onset:
     events_dict[dirs + "_left"] = event_onsets.loc[event_onsets['trial_type'].str.contains(f'{dirs}_left'),
                                                 'onset'].to_numpy()
 
-# compare number of trials with stimuli and responses
+# Compare number of trials with stimuli and responses
 numbers_dict = {}
 for numbers in  ['cue_onset_right', 'cue_onset_left', 'dot_onset_right', 'dot_onset_left', 
                         'response_press_onset']:
