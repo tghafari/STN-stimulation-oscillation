@@ -84,23 +84,6 @@ def cleaning_and_saving_epochs(stim, epochs):
     else:
         deriv_fname = op.join(deriv_folder, bids_path.basename 
                                + '_' + no_stim_suffix + '_' + deriv_suffix + extension)  
-    # Might need to reconsider this section. might not even be needed
-    original_bads = deepcopy(epochs.info["bads"])
-    print(f'These are the original bads: {original_bads}')
-    user_list = input('Are there any bad channels after rejecting bad epochs? name of channel, e.g. FT10 T9 (separate by space) or return.')
-    bad_channels = user_list.split()
-    # Mark bad channels before ICA
-    if len(bad_channels) > 0:
-        print(f'These are the original bads: {original_bads}')
-        print(f'{len(bad_channels)}')
-        epochs.copy().pick(bad_channels).compute_psd(fmin=0.1, fmax=100).plot()  # double check bad channels
-        if len(bad_channels) == 1:
-            print('one bad channel removing')
-            epochs.info["bads"].append(bad_channels[0])  # add a single channel
-        elif len(bad_channels) > 1:
-            print(f'{len(bad_channels)} bad channels removing')
-            epochs.info["bads"].extend(bad_channels)  # add a list of channels - should there be more than one channel to drop
-
     reject = get_rejection_threshold(epochs)  # reject without bad channels                               
     print(f"\n\n Numer of epochs BEFORE rejection: {len(epochs.events)} \n\n")
     epochs.drop_bad(reject=reject)
@@ -142,13 +125,15 @@ elif platform == 'mac':
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
-if pilot:
-    bids_root = op.join(project_root, 'data', 'pilot-BIDS')
-else:
-    bids_root = op.join(project_root, 'data', 'BIDS')
+bids_root = op.join(project_root, 'data', 'BIDS')
+# for bear outage
+bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/BIDS'
 
 # Epoch stim segments and add to report
 report_root = op.join(project_root, 'derivatives/reports')  
+# for bear outage
+report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/reports'
+
 report_folder = op.join(report_root , 'sub-' + subject)
 
 report_fname = op.join(report_folder, 

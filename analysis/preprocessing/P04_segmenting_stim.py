@@ -63,14 +63,14 @@ elif platform == 'mac':
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
-if pilot:
-    data_root = op.join(project_root, 'Data/pilot-data/AO')
-else:
-    data_root = op.join(project_root, 'Data/real-data')
 
 # Specify specific file names
 ROI_dir = op.join(project_root, 'results/lateralisation-indices')
 bids_root = op.join(project_root, 'data', 'BIDS')
+
+# for bear outage
+bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/BIDS'
+
 bids_path = BIDSPath(subject=subject, session=session,
                      task=task, run=run, root=bids_root, 
                      datatype ='eeg', suffix=eeg_suffix)
@@ -107,6 +107,9 @@ stim_segment.save(stim_fname, overwrite=True)
 
 if summary_rprt:
     report_root = op.join(project_root, 'derivatives/reports')  
+   # for bear outage
+    report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/reports'
+
     report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 
