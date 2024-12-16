@@ -64,7 +64,7 @@ platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
 test_plot = False
 
 # Select ROI sensors for erp
-occipital_channels = ['O1', 'O2', 'Oz', 'PO4', 'POz', 'PO3']
+occipital_channels = ['O1', 'PO3', 'O2', 'PO4', 'Oz', 'POz']
 
 if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
@@ -86,8 +86,8 @@ report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-Univers
 report_folder = op.join(report_root , 'sub-' + subject)
 
 report_fname = op.join(report_folder, 
-                    f'sub-{subject}_091224.hdf5')    # it is in .hdf5 for later adding images
-html_report_fname = op.join(report_folder, f'sub-{subject}_091224.html')
+                    f'sub-{subject}_161224.hdf5')    # it is in .hdf5 for later adding images
+html_report_fname = op.join(report_folder, f'sub-{subject}_161224.html')
 
 report = mne.open_report(report_fname)
 
@@ -95,7 +95,8 @@ for epoching in epoching_list:
     print(f'Working on {epoching}')
     input_suffix = 'epo-' + epoching
     deriv_suffix = 'evo-' + epoching
-    evoked_list = []
+    evoked_list_cropped = []  #  -0.1 to 0.5
+    evoked_list = []  # -0.1 to 1
 
     for stim in stim_segments_ls:
         print(f'Working on stim = {stim}')
@@ -110,6 +111,7 @@ for epoching in epoching_list:
 
             epochs, evoked = reading_epochs_evoking(stim)
             evoked.comment = f'stim:{stim_segments_ls[stim]}, {epoching} onset'
+            evoked_list_cropped.append(evoked.copy().crop(-0.1,0.5))
             evoked_list.append(evoked)  # append evokeds for later comparison
 
             # Plot ERPs for summary report
@@ -145,19 +147,26 @@ for epoching in epoching_list:
             del epochs, evoked
 
     # Plot both stim and no stim evoked in one plot
-    fig_comp_chs, axis = plt.subplots(6, 1, figsize=(24, 6))
-    for ax, ch in enumerate(occipital_channels):
-         mne.viz.plot_compare_evokeds(evoked_list, 
-                                    picks=ch,
-                                    colors=['blue','orange'], 
-                                    combine="mean",
-                                    axes=axis[ax], 
-                                    show_sensors=True,
-                                    invert_y=False,
-                                    truncate_xaxis=False,
-                                    truncate_yaxis=False)
-         axis[ax].title.set_text(f'{ch}')
+    fig_comp_chs, axis = plt.subplots(3, 2, figsize=(24, 12)) 
+    axis = axis.flatten()  # flatten the axes for easier iteration (3x2 grid)
 
+    # Plot for each occipital channel
+    for ax_idx, ch in enumerate(occipital_channels):
+        mne.viz.plot_compare_evokeds(
+            evoked_list_cropped,
+            picks=ch,
+            colors=['blue', 'orange'],  # Specify colors for comparison
+            combine="mean",
+            axes=axis[ax_idx],  # Use correct axis
+            show_sensors=True,  
+            invert_y=False,
+            truncate_xaxis=False,
+            truncate_yaxis=False,
+            show=False
+        )
+        axis[ax_idx].set_title(f'{ch}')
+        axis[ax_idx].set_xlim(-0.1, 0.5)
+    plt.show()
         
     fig_comp_plot_topo = mne.viz.plot_evoked_topo(evoked_list,
                                           color=['blue','orange'], 

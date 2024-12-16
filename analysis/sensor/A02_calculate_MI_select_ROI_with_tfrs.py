@@ -71,7 +71,7 @@ def tfr_calculation_first_plot(stim, report):
                         # 'it relates to the temporal (deltaT) and spectral (deltaF)' 
                         # 'smoothing'
                         # 'the more tapers, the more smooth'->useful for high freq data
-    baseline = [-2,-5]  # baseline for TFRs are longer than for ERPs
+    baseline = [-0.5, -0.2]  # baseline for TFRs are longer than for ERPs
     
     tfr_slow_cue_both = mne.time_frequency.tfr_multitaper(epochs['cue_onset_right','cue_onset_left'],  
                                                     freqs=freqs, 
@@ -154,9 +154,9 @@ def representative_sensors_second_plot(tfr_slow_cue_right, tfr_slow_cue_left, re
     # ========================================= SECOND PLOT (REPRESENTATIVE SENSROS) ====================================
 
     # Plot TFR for representative sensors - same in all participants
-    fig_tfr, axis = plt.subplots(3, 2, figsize = (14, 7))
+    fig_tfr, axis = plt.subplots(6, 2, figsize = (14, 7))
     occipital_channels = ['O1', 'PO3', 'O2', 'PO4', 'Oz', 'POz']
-    baseline=[-.2, -5]
+    baseline=[-0.5, -0.2]
 
     for idx, ch in enumerate(occipital_channels):
         tfr_slow_cue_left.plot(picks=ch, 
@@ -168,7 +168,8 @@ def representative_sensors_second_plot(tfr_slow_cue_right, tfr_slow_cue_left, re
                                 vmax=.75,
                                 axes=axis[idx,0], 
                                 show=False)
-        axis[idx, 0].set_title(f'stim={stim}-cue left-{ch}')        
+        axis[idx, 0].set_title(f'stim={stim}-cue left-{ch}') 
+        # axis[idx, 1].set_xlabel('')        
         tfr_slow_cue_right.plot(picks=ch,
                                 baseline=baseline,
                                 mode='percent', 
@@ -176,18 +177,14 @@ def representative_sensors_second_plot(tfr_slow_cue_right, tfr_slow_cue_left, re
                                 tmax=1.5,
                                 vmin=-.75, 
                                 vmax=.75, 
-                                axes=axis[idx,1], 
+                                axes=axis[idx,1],
                                 show=False)
         axis[idx, 1].set_title(f'stim={stim}-cue right-{ch}') 
+        # axis[idx, 1].set_ylabel('') 
+        # axis[idx, 1].set_xlabel('') 
             
-    axis[0, 0].set_ylabel('left sensors')  
-    axis[1, 0].set_ylabel('right sensors')  
-    axis[2, 0].set_ylabel('central sensors')  
-    axis[0, 1].set_ylabel('left sensors')  
-    axis[1, 1].set_ylabel('right sensors')
-    axis[2, 1].set_ylabel('central sensors')  
-    axis[0, 0].set_xlabel('')  # Remove x-axis label for top plots
-    axis[0, 1].set_xlabel('')
+    # axis[0, 1].set_xlabel('Time (s)')  # Remove x-axis label for top plots
+    # axis[1, 1].set_xlabel('Time (s)')
 
     fig_tfr.set_tight_layout(True)
     plt.show()      
@@ -205,8 +202,8 @@ def peak_alpha_calculation_third_plot(occipital_channels, tfr_slow_cue_right, tf
     # ========================================= PEAK ALPHA FREQUENCY (PAF) AND THIRD PLOT ====================================
 
     # Crop post stim alpha
-    tfr_slow_cue_right_post_stim = tfr_slow_cue_right.copy().crop(tmin=.3,tmax=.8,fmin=4, fmax=14).pick(occipital_channels)
-    tfr_slow_cue_left_post_stim = tfr_slow_cue_left.copy().crop(tmin=.3,tmax=.8,fmin=4, fmax=14).pick(occipital_channels)
+    tfr_slow_cue_right_post_stim = tfr_slow_cue_right.copy().crop(tmin=.3,tmax=.8,fmin=8, fmax=14).pick(occipital_channels)
+    tfr_slow_cue_left_post_stim = tfr_slow_cue_left.copy().crop(tmin=.3,tmax=.8,fmin=8, fmax=14).pick(occipital_channels)
 
     # Find the frequency with the highest power by averaging over sensors and time points (data)
     freq_idx_right = np.argmax(np.mean(np.abs(tfr_slow_cue_right_post_stim.data), axis=(0,2)))
@@ -218,7 +215,7 @@ def peak_alpha_calculation_third_plot(occipital_channels, tfr_slow_cue_right, tf
 
     peak_alpha_freq = np.average([peak_freq_cue_right, peak_freq_cue_left])
     peak_alpha_freq_range = np.arange(peak_alpha_freq-2, peak_alpha_freq+3)  # for MI calculations
-    np.savez(peak_alpha_fname, **{'peak_alpha_freq':peak_alpha_freq, 'peak_alpha_freq_range':peak_alpha_freq_range})
+    # np.savez(peak_alpha_fname, **{'peak_alpha_freq':peak_alpha_freq, 'peak_alpha_freq_range':peak_alpha_freq_range})
 
     # Plot psd and show the peak alpha frequency for this participant
     n_fft = int((epochs.tmax - epochs.tmin)*1000)
@@ -264,7 +261,7 @@ def peak_alpha_calculation_third_plot(occipital_channels, tfr_slow_cue_right, tf
 
     report.add_figure(fig=fig_peak_alpha, title=f'stim:{stim}, PSD and PAF',
                         caption='range of peak alpha frequency on \
-                        occipital gradiometers', 
+                        occipital channels', 
                         tags=('tfr'),
                         section='TFR'  
                         )
@@ -279,7 +276,7 @@ def topographic_maps_fourth_plot(peak_alpha_freq_range, tfr_slow_cue_both, tfr_s
                         tmin=.3,
                         tmax=.8,
                         vlim=(-.5,.5),
-                        baseline=(-2, -5), # only baseline that's tuple (not list)
+                        baseline=(-0.5, -0.2), # only baseline that's tuple (not list)
                         mode='percent')
 
     fig_topo, axis = plt.subplots(1, 3, figsize=(8, 4))
@@ -301,7 +298,7 @@ def topographic_maps_fourth_plot(peak_alpha_freq_range, tfr_slow_cue_both, tfr_s
 
     report.add_figure(fig=fig_topo, title=f'stim:{stim}, post stim alpha',
                             caption='PAF range, 0.3-0.8sec, \
-                            baseline corrected', 
+                            baseline corrected (-0.5, -0.2)', 
                             tags=('tfr'),
                             section='TFR'  # only in ver 1.1
                             )   

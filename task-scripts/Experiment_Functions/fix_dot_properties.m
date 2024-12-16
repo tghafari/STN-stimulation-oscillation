@@ -20,7 +20,7 @@ cfgScreen.fixDotColorSmall = [0 0 0];  % color of fixation dot in rgb (black)
 % Inputs to 'fillOval'
 cfgScreen.fixDotRect = [cfgScreen.fixDotRectBig; cfgScreen.fixDotRectSmall]';  % rect for fixation dots 
 cfgScreen.fixDotColor = [cfgScreen.fixDotColorBig; cfgScreen.fixDotColorSmall]';  % color of fixation dot in rgb
-cfgScreen.fixDotFlashColor = [1 0 0];  % color of fixation dot in rgb (red) when it flashes for participant's response
+cfgScreen.fixDotFlashColor = [1 1 1];  % color of fixation dot in rgb (red) when it flashes for participant's response
 
 end
 

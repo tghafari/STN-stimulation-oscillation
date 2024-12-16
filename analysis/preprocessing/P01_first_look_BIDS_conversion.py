@@ -98,7 +98,7 @@ raw.plot()  # get an idea about the data, confirm stimulation order
 """T8 and FT10 = vertical electro-oculogram (EOG), 
 T7 and FT9 = horizontal EOG;
 TP9 and TP10 = mastoids, 
-Fz = on-line referenc.
+Fz = on-line reference
 57 channels on the head."""
 
 raw.rename_channels({'T8':'vEOG1', 

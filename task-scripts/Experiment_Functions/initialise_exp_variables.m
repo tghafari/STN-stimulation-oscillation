@@ -10,7 +10,7 @@ rng('shuffle')
 cfgExp.numBlock = 8;  % total number of blocks (8)
 cfgExp.numTrial = 40;  % number of trials in each block (40)
 cfgExp.numStim = cfgExp.numTrial * cfgExp.numBlock;  % number of stimuli in total
-cfgExp.catchPercentage = 0.1;        % percentage of catch trials
+cfgExp.catchPercentage = 0.1;  % percentage of catch trials
 cfgExp.numCatchTrialsPerBlock = round(cfgExp.catchPercentage * cfgExp.numTrial);
 cfgExp.numRightCatchTrialsPerBlock = cfgExp.numCatchTrialsPerBlock / 2;
 cfgExp.numLeftCatchTrialsPerBlock = cfgExp.numCatchTrialsPerBlock / 2;
@@ -23,8 +23,8 @@ cfgExp.numLeftCuesPerBlock = cfgExp.numTrial / 2;
 cfgExp.ITIDur =  1000 + (1500 - 1000) .* rand(cfgExp.numStim,1);  % duration of ITI in ms (jitter between 1 and 2 sec)
 cfgExp.cueDur = 200;  % duration of cue presentation in ms
 cfgExp.ISIDur = 1000;  % interval between cue and grating (stimulus)
-cfgExp.stimDur = 1000 + (2000 - 1000) .* rand(cfgExp.numStim,1);  % duration of visual stimulus in ms (jitter between 1 and 3 sec)
-cfgExp.dotDur = 100;  % duration of red dot presentation
+cfgExp.stimDur = 100 + (2000 - 1000) .* rand(cfgExp.numStim,1);  % duration of visual stimulus in ms (jitter between 100ms and 3 sec)
+cfgExp.dotDur = 50;  % duration of red(white) dot presentation
 cfgExp.respTimOut = 3000;  % time during which subject can respond in ms
 
 % Preallocate for output

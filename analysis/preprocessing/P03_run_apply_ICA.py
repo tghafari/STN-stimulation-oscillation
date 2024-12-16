@@ -90,6 +90,7 @@ n_fft = int(raw.info['sfreq']*2)  # to ensure window size = 2sec
 raw_filtered.compute_psd(n_fft=n_fft,  # default method is welch here (multitaper for epoch)
                          n_overlap=int(n_fft/2),
                          fmax=105).plot()  
+# S110: Channels marked bad in this stage: Fp1 FCz
 
 ## 2. Mark bad channels before ICA
 original_bads = deepcopy(raw.info["bads"])
@@ -107,35 +108,21 @@ if len(bad_channels) > 0:
         raw.info["bads"].extend(bad_channels)  # add a list of channels - should there be more than one channel to drop
 
 # Plot the channel layout (use to find those from bad components too)
-mne.viz.plot_sensors(raw.info, 
-                     ch_type='all', 
-                     show_names=True, 
-                     ch_groups='position',
-                     to_sphere=False,  # the sensor array appears similar as to looking downwards straight above the subject’s head.
-                     linewidth=0,
-                     )
+raw.plot_sensors(show_names=True)
 
-## 3. Set average reference once before ICA
-"""If channels distrubited evenly, do average reference (eeglab resources)"""
-raw.set_eeg_reference(ref_channels="average")
-
-# Set standard montage
+# Set standard montage - easycap-M1
 """it is important to bring the montage to the standard space. Otherwise the 
 ICA and PSDs look weird."""
 # Only do this after Sirui sent the montage
+# montage = mne.channels.make_standard_montage("easycap-M1")
 # montage = mne.channels.read_custom_montage(montage_fname)
 # montage.plot()  # 2D
 # raw.set_montage(montage, verbose=False)
-# Double check the layout
-# mne.viz.plot_sensors(raw.info, 
-#                      ch_type='all', 
-#                      show_names=True, 
-#                      ch_groups='position',
-#                      to_sphere=False,  # the sensor array appears similar as to looking downwards straight above the subject’s head.
-#                      linewidth=0,
-#                      )
 
-## 4. Resample and filter for ICA
+# Double check the layout and removed sensors
+raw.plot_sensors(show_names=True)
+
+## 3. Resample and filter for ICA
 """
 we down sample the data in order to make ICA run faster, 
 highpass filter at 1Hz to remove slow drifts and lowpass 40Hz
@@ -150,24 +137,7 @@ ica.plot_components()
 
 # Take another look at bad channels
 raw.plot() # Mark bad channels from ICA here on raw.plot()
-# Channels marked as bad with ica: ['AF4', 'Pz', 'F6', 'FT7']
-
-## 5. Reject channels associated with bad components and rereference
-original_bads = deepcopy(raw.info["bads"])
-print(f'these are original bads: {original_bads}')
-user_list = input('Are there any channels associated with bad components? name of channel, e.g. FT10 T9 (separate by space) or return.')
-bad_channels = user_list.split()
-
-if len(bad_channels) > 0:
-    raw.copy().pick(bad_channels).compute_psd().plot()  # double check bad channels
-    if len(bad_channels) == 1:
-        print('one bad channel removing')
-        raw.info["bads"].append(bad_channels[0])  # add a single channel
-        raw.set_eeg_reference(ref_channels="average")
-    else:
-        print(f'{len(bad_channels)} bad channels removing')
-        raw.info["bads"].extend(bad_channels)  # add a list of channels - should there be more than one channel to drop
-        raw.set_eeg_reference(ref_channels="average")
+# S110: Channels marked as bad with ica: ['AF4', 'Pz', 'F6', 'FT7']
 
 """
 list bad channels for all participants:
@@ -183,6 +153,10 @@ BIDS/sub-110_ses-01_run-01: ['TP9', 'TP10', 'Fp1', 'FCz', 'AF4', 'Pz', 'F6', 'FT
 } """
 
 del raw_resmpld, ica  # free up memory
+
+## 5. Rereference to average
+"""If channels distrubited evenly, do average reference (eeglab resources)"""
+raw.set_eeg_reference(ref_channels="average")
 
 ##################################### MAIN ICA ######################################
 """This is the ica that will be applied to the data. You can redo the previous steps
