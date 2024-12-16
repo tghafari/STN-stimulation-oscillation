@@ -164,17 +164,34 @@ for stim in stim_segments_ls:
 
                 rejected_epochs = input("Copy & paste the rejected epochs:")
                                               
-                # manual_rejection_html = ("<p>These epochs were rejected manually:</p> 
+                # manual_rejection_html = (f"<p>These epochs were rejected manually:</p> 
                 # <ol>
-                # <li> rejected_epochs </li>
+                # <li> {rejected_epochs} </li>
                 # </ol>
+
                 # [0, 6, 7, 10, 11, 21, 28, 31, 40, 64, 75, 78, 80, 105, 109, 120, 146]\
                 #     The following epochs were marked as bad and are dropped:\
                 #     [4, 42, 50, 77, 86, 157, 205, 225, 293, 449, 516, 537, 557, 734, 760, 837, 1022]\
                 #     Channels marked as bad:\
                 #     ['TP9', 'TP10', 'Fp1', 'FCz', 'AF4', 'Pz', 'F6', 'FT7']</li>\
                 # </ol>")  # cue, stim off
-                
+                # Dropped 25 epochs: 0, 5, 10, 20, 24, 28, 31, 36, 43, 57, 58, 62, 63, 67, 69, 70, 72, 85, 89, 94, 102, 108, 114, 119, 132
+                # The following epochs were marked as bad and are dropped:
+                # [7, 44, 88, 174, 200, 226, 246, 295, 339, 444, 451, 485, 492, 517, 531, 538, 559, 660, 689, 721, 793, 839, 879, 919, 1023]
+                # Channels marked as bad:
+                # ['TP9', 'TP10', 'Fp1', 'FCz', 'AF4', 'Pz', 'F6', 'FT7']  # stim, stim off
+
+                # Dropped 24 epochs: 17, 29, 33, 40, 47, 57, 66, 68, 73, 80, 88, 91, 92, 93, 99, 112, 120, 125, 126, 134, 136, 140, 149, 157
+                # The following epochs were marked as bad and are dropped:
+                # [110, 179, 203, 260, 300, 365, 418, 430, 461, 525, 574, 596, 603, 611, 646, 726, 787, 819, 825, 875, 889, 914, 968, 1015]
+                # Channels marked as bad:
+                # ['TP9', 'TP10', 'Fp1', 'FCz', 'AF4', 'Pz', 'F6', 'FT7']  # cue- stim on
+
+                # Dropped 21 epochs: 4, 13, 19, 30, 32, 34, 36, 48, 63, 65, 72, 79, 83, 89, 100, 108, 113, 117, 122, 123, 134
+                # The following epochs were marked as bad and are dropped:
+                # [30, 86, 128, 206, 220, 232, 261, 347, 449, 462, 526, 576, 605, 648, 728, 789, 820, 852, 884, 891, 969]
+                # Channels marked as bad:
+                # ['TP9', 'TP10', 'Fp1', 'FCz', 'AF4', 'Pz', 'F6', 'FT7']  # stim- stim on
 
             if epoching == 'cue':  # only cue has two (right and left) epochs
                 mne.epochs.equalize_epoch_counts([epochs_of_interest['cue_onset_right'], epochs_of_interest['cue_onset_left']])
