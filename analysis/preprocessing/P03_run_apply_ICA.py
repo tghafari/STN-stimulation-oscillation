@@ -42,6 +42,7 @@ extension = '.fif'
 
 summary_rprt = True  # do you want to add evokeds figures to the summary report?
 platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
+montage = False  # 'standard' for setting standard montage, 'costume' for Sirui's montage, False for not doing anything with montage
 
 if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
@@ -110,14 +111,18 @@ if len(bad_channels) > 0:
 # Plot the channel layout (use to find those from bad components too)
 raw.plot_sensors(show_names=True)
 
-# Set standard montage - easycap-M1
-"""it is important to bring the montage to the standard space. Otherwise the 
-ICA and PSDs look weird."""
-# Only do this after Sirui sent the montage
-# montage = mne.channels.make_standard_montage("easycap-M1")
-# montage = mne.channels.read_custom_montage(montage_fname)
-# montage.plot()  # 2D
-# raw.set_montage(montage, verbose=False)
+
+if montage == 'standard':  # set standard montage - easycap-M1
+    """it is important to bring the montage to the standard space. Otherwise the 
+    ICA and PSDs look weird."""
+    montage = mne.channels.make_standard_montage("easycap-M1")
+    montage.plot()  # 2D
+    raw.set_montage(montage, verbose=False)
+elif montage == 'costume':  # set costume montage from Sirui's layout
+    montage = mne.channels.read_custom_montage(montage_fname)
+    montage.plot()  # 2D
+    raw.set_montage(montage, verbose=False)
+
 
 # Double check the layout and removed sensors
 raw.plot_sensors(show_names=True)
