@@ -75,9 +75,14 @@ elif platform == 'mac':
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
 bids_root = op.join(project_root, 'data', 'BIDS')
+# for bear outage
+bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/BIDS'
 
 # Epoch stim segments and add to report
 report_root = op.join(project_root, 'derivatives/reports')  
+# for bear outage
+report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/reports'
+
 report_folder = op.join(report_root , 'sub-' + subject)
 
 report_fname = op.join(report_folder, 
@@ -121,10 +126,10 @@ for epoching in epoching_list:
             fig_epochs, axis = plt.subplots(6, 2, figsize=(24, 6))
             for ax, ch in enumerate(occipital_channels):
                 epochs.plot_image(picks=ch,
-                                    axes=axis[ax,:],
-                                    colorbar=False,
-                                    show=False)
-                axis[ax].title.set_text(f'{ch}')
+                                 axes=axis[ax,:],
+                                 colorbar=False,
+                                 show=False)
+                axis[ax][0].title.set_text(f'{ch}')
 
             fig_epochs.suptitle(f"stim={stim}- epochs for {epoching}")
             fig_epochs.set_tight_layout(True)
@@ -146,7 +151,7 @@ for epoching in epoching_list:
                                     picks=ch,
                                     colors=['blue','orange'], 
                                     combine="mean",
-                                    axes=axis[ax,:], 
+                                    axes=axis[ax], 
                                     show_sensors=True,
                                     invert_y=False,
                                     truncate_xaxis=False,

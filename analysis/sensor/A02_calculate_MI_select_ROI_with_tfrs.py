@@ -440,6 +440,8 @@ elif platform == 'mac':
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
 bids_root = op.join(project_root, 'data', 'BIDS')
+# for bear outage
+bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/BIDS'
 
 # Specify specific file names
 ROI_dir = op.join(project_root, 'derivatives/lateralisation-indices')
@@ -452,6 +454,9 @@ tfr_params = dict(use_fft=True, return_itc=False, average=True, decim=2, n_jobs=
 
 # Epoch stim segments and add to report
 report_root = op.join(project_root, 'derivatives/reports')  
+# for bear outage
+report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/reports'
+
 report_folder = op.join(report_root , 'sub-' + subject)
 report_fname = op.join(report_folder, 
                     f'sub-{subject}_091224.hdf5')    # it is in .hdf5 for later adding images
