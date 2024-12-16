@@ -160,14 +160,21 @@ for stim in stim_segments_ls:
             manual_annotation = input('Do you want to visually inspect the clean epochs? y/n')
             if manual_annotation == 'y':
                 epochs_of_interest.plot()
-                input("Press return when you're done annotating bad segments...")
+                input("Press return when you're done annotating bad segments ...")
 
-                manual_rejection_html = """
-                <p>These epochs were rejected manually:</p>
-                <ol>
-                <li></li>
-                </ol>
-                """
+                rejected_epochs = input("Copy & paste the rejected epochs:")
+                                              
+                # manual_rejection_html = ("<p>These epochs were rejected manually:</p> 
+                # <ol>
+                # <li> rejected_epochs </li>
+                # </ol>
+                # [0, 6, 7, 10, 11, 21, 28, 31, 40, 64, 75, 78, 80, 105, 109, 120, 146]\
+                #     The following epochs were marked as bad and are dropped:\
+                #     [4, 42, 50, 77, 86, 157, 205, 225, 293, 449, 516, 537, 557, 734, 760, 837, 1022]\
+                #     Channels marked as bad:\
+                #     ['TP9', 'TP10', 'Fp1', 'FCz', 'AF4', 'Pz', 'F6', 'FT7']</li>\
+                # </ol>")  # cue, stim off
+                
 
             if epoching == 'cue':  # only cue has two (right and left) epochs
                 mne.epochs.equalize_epoch_counts([epochs_of_interest['cue_onset_right'], epochs_of_interest['cue_onset_left']])
