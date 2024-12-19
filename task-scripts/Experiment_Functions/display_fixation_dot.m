@@ -5,9 +5,10 @@ function cfgOutput = display_fixation_dot(cfgScreen, cfgExp, nstim, ITI, cfgOutp
 % for the duration specified in cfgExp for either ITI or ISI
 
 if ITI
-    for frm = 1:cfgExp.ITIFrm(nstim)/2
-        Screen('Flip', cfgScreen.window, cfgScreen.vbl + (cfgScreen.waitFrm - 0.5) * cfgScreen.ifi);
-    end
+    % Adds a blank screen after each trial. DO NOT DO IT, bad idea. 
+    %for frm = 1:cfgExp.ITIFrm(nstim)/2
+    %    Screen('Flip', cfgScreen.window, cfgScreen.vbl + (cfgScreen.waitFrm - 0.5) * cfgScreen.ifi);
+    %end
 
     for frm = cfgExp.ITIFrm(nstim)/2:cfgExp.ITIFrm(nstim)
         Screen('FillOval', cfgScreen.window, cfgScreen.fixDotColor, cfgScreen.fixDotRect);
