@@ -23,7 +23,7 @@ cfgExp.numLeftCuesPerBlock = cfgExp.numTrial / 2;
 cfgExp.ITIDur =  1000 + (1500 - 1000) .* rand(cfgExp.numStim,1);  % duration of ITI in ms (jitter between 1 and 2 sec)
 cfgExp.cueDur = 200;  % duration of cue presentation in ms
 cfgExp.ISIDur = 1000;  % interval between cue and grating (stimulus)
-cfgExp.stimDur = 1000 + (2000 - 1000) .* rand(cfgExp.numStim,1);  % duration of visual stimulus in ms (jitter between 1 and 3 sec)
+cfgExp.stimDur = 100 + (2000 - 1000) .* rand(cfgExp.numStim,1);  % duration of visual stimulus in ms (jitter between 100ms and 3 sec)
 cfgExp.dotDur = 50;  % duration of red(white) dot presentation
 cfgExp.respTimOut = 3000;  % time during which subject can respond in ms
 
