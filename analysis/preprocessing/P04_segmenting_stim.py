@@ -39,7 +39,7 @@ import matplotlib.pyplot as plt
 
 
 # BIDS settings: fill these out 
-subject = '110'
+subject = '102'
 session = '01'
 task = 'SpAtt'
 run = '01'  # change this for subjects with two stim or two no-stim segments
@@ -91,7 +91,9 @@ stimulation_cropped_time = {"sub-107_no-stim": [15, 974],
                             "sub-108_no-stim": [8, 890],
                             "sub-108_stim": [930, 1882],
                             "sub-110_no-stim": [905, 1711],
-                            "sub-110_stim": [0, 840]}
+                            "sub-110_stim": [0, 840],
+                            "sub-102_no-stim": [0, 965],
+                            "sub-102_stim": [1497, 2244]}
 
 # Crop and save segments separately
 no_stim_segment = raw_ica.copy().crop(tmin=stimulation_cropped_time[f'sub-{subject}_no-stim'][0], 
@@ -108,7 +110,7 @@ stim_segment.save(stim_fname, overwrite=True)
 if summary_rprt:
     report_root = op.join(project_root, 'derivatives/reports')  
    # for bear outage
-    report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/reports'
+    report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/derivatives/reports'
 
     report_folder = op.join(report_root , 'sub-' + subject)
 

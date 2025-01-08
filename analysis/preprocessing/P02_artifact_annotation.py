@@ -25,7 +25,7 @@ from mne_bids import BIDSPath, read_raw_bids
 
 
 # BIDS settings: fill these out 
-subject = '110'
+subject = '102'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -64,7 +64,6 @@ deriv_fname = op.join(deriv_folder, bids_path.basename + '_' + deriv_suffix + ex
 # Read raw data 
 raw = read_raw_bids(bids_path=bids_path, verbose=False, 
                      extra_params={'preload':True})
-
 
 # Identifying and annotating eye blinks using vEOG
 eog_events = find_eog_events(raw)

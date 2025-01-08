@@ -30,7 +30,7 @@ from copy import deepcopy
 from mne_bids import BIDSPath, read_raw_bids
 
 # BIDS settings: fill these out 
-subject = '110'
+subject = '102'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -76,7 +76,7 @@ raw = mne.io.read_raw_fif(input_fname, verbose=True, preload=True)
 raw.plot()  
 
 # Here crop any extra segments at the beginning or end of the recording
-raw.crop(tmin=290)  # sub110
+raw.crop(tmin=200)  # sub102
 
 ########################## BAD CHANNEL REJECTION ######################################
 
@@ -111,21 +111,21 @@ if len(bad_channels) > 0:
 # Plot the channel layout (use to find those from bad components too)
 raw.plot_sensors(show_names=True)
 
-
-if montage == 'standard':  # set standard montage - easycap-M1
+if not montage:
+    print('not setting standard or costume montage as default.')
+elif montage == 'standard':  # set standard montage - easycap-M1
     """it is important to bring the montage to the standard space. Otherwise the 
     ICA and PSDs look weird."""
     montage = mne.channels.make_standard_montage("easycap-M1")
     montage.plot()  # 2D
     raw.set_montage(montage, verbose=False)
+    raw.plot_sensors(show_names=True)
+
 elif montage == 'costume':  # set costume montage from Sirui's layout
     montage = mne.channels.read_custom_montage(montage_fname)
     montage.plot()  # 2D
     raw.set_montage(montage, verbose=False)
-
-
-# Double check the layout and removed sensors
-raw.plot_sensors(show_names=True)
+    raw.plot_sensors(show_names=True)
 
 ## 3. Resample and filter for ICA
 """
@@ -138,11 +138,14 @@ raw_resmpld = raw.copy().pick('eeg').resample(200).filter(0.1, 40)
 # Apply ICA and identify artifact components
 ica = ICA(method='fastica', random_state=97, n_components=30, verbose=True)
 ica.fit(raw_resmpld, verbose=True)
+raw.plot_sensors(show_names=True)
 ica.plot_components()
 
-# Take another look at bad channels
+# Take another look at bad channels and remove
 raw.plot() # Mark bad channels from ICA here on raw.plot()
+
 # S110: Channels marked as bad with ica: ['AF4', 'Pz', 'F6', 'FT7']
+# S102: Channels marked as bad with ica: ['C5']
 
 """
 list bad channels for all participants:
@@ -155,12 +158,16 @@ BIDS/sub-05_ses-01_run-01: ["almost all channels look terrible in psd"],
 BIDS/sub-107_ses-01_run-01: ["FT10"], #"all good!"
 BIDS/sub-108_ses-01_run-01: ["FT9", "T8", "T7"],
 BIDS/sub-110_ses-01_run-01: ['TP9', 'TP10', 'Fp1', 'FCz', 'AF4', 'Pz', 'F6', 'FT7'],
+BIDS/sub-102_ses-01_run-01: ['TP9', 'TP10', 'F7', 'TP7', 'PO7', 'F6', 'FT8', 'Fp1', 
+                            'F8', 'FT7', 'FC6', 'F5', 'Fp2', 'C5'],
 } """
+
 
 del raw_resmpld, ica  # free up memory
 
 ## 5. Rereference to average
-"""If channels distrubited evenly, do average reference (eeglab resources)"""
+"""If channels distrubited evenly, do average reference (eeglab resources)
+do not average reference before removing all the bad channels."""
 raw.set_eeg_reference(ref_channels="average")
 
 ##################################### MAIN ICA ######################################
@@ -217,7 +224,7 @@ fig_ica = ica.plot_components(picks=artifact_ICs, title='removed components')
 if summary_rprt:
     report_root = op.join(project_root, 'derivatives/reports')  # RDS folder for reports
     # for bear outage
-    report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/reports'
+    report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/derivatives/reports'
    
     if not op.exists(op.join(report_root , 'sub-' + subject)):
         os.makedirs(op.join(report_root , 'sub-' + subject))

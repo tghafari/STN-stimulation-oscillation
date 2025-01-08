@@ -46,10 +46,11 @@ stim_sequence = {'sub-01':["no_stim-left rec", "no_stim-right rec", "Right stim-
                  'sub-107':["no_stim-right rec", "no_stim-left rec", "Right stim- no rec", "Left stim- no rec"],  # stimulation on STN
                  'sub-108':["no_stim-right rec", "no_stim-left rec", "left stim- no rec", "right stim- no rec"],  # stimulation on STN
                  'sub-110': ["Right stim- no rec", "Left stim- no rec", "no_stim-no rec", "no_stim-no rec"],  # no LFP recording, stimulation on VLM
+                 'sub-102': ["no_stim-left rec", "no_stim-right rec", "Left stim- no rec", "Right stim- no rec"],
                  } 
 # BIDS settings
-subject = '110'
-brainVision_basename = f'ao_{subject[-2:]}'  # might need modification per subject
+subject = '102'
+brainVision_basename = f'{subject[-2:]}_ao'  # might need modification per subject
 
 session = '01'
 task = 'SpAtt'
@@ -66,9 +67,13 @@ if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
 elif platform == 'mac':
     rds_dir = '/Volumes/jenseno-avtemporal-attention'
+    # '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage'  # only for bear outage time
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
+# rds_dir  # only for bear outage time
 data_root = op.join(project_root, 'data/data-organised')
+# rds_dir  # only for bear outage time
+
 
 base_fpath = op.join(data_root, f'sub-{subject}', f'ses-{session}', f'{modality}')  
 base_fname = f'sub-{subject}_ses-{session}_task-{task}_run-{run}_{modality}'
@@ -76,7 +81,8 @@ eeg_fname = op.join(base_fpath, brainVision_basename + '.eeg')
 vhdr_fname = op.join(base_fpath, brainVision_basename + '.vhdr')
 events_fname = op.join(base_fpath, base_fname + '-eve.fif')
 annotated_raw_fname = op.join(base_fpath, base_fname + extension)
-beh_fig_fname = op.join(project_root, 'derivatives/figures', f'sub-{subject}-beh-performance.png')  # where you save the matlab output of behavioural performance plots
+beh_fig_fname = op.join(project_root, f'sub-{subject}', 'figures', f'sub-{subject}-beh-performance.png')  # where you save the matlab output of behavioural performance plots
+# op.join(project_root, 'derivatives/
 
 # BIDS events
 events_suffix = 'events'  
@@ -160,7 +166,7 @@ event_dict = {'cue_onset_right':1,
            'block_end':21,
            'experiment_end':30,  #sub02 does not have this
            #'abort':31,  # participant 04_wmf has abort
-           #'new_stim_segment_maybe':10001,  # sub01 has an extra trigger
+           'new_stim_segment_maybe':255,  # sub102 has an extra trigger
            'new_stim_segment':99999, 
         }
 _, events_id = mne.events_from_annotations(raw, event_id=event_dict)
@@ -182,7 +188,6 @@ write_raw_bids(raw,
                overwrite=True, 
                allow_preload=True,
                format='BrainVision')
-
 
 # Plot all events
 fig = mne.viz.plot_events(events, 
@@ -222,7 +227,6 @@ bars = ax.bar(range(len(numbers_dict)), list(numbers_dict.values()))
 plt.xticks(range(len(numbers_dict)), list(numbers_dict.keys()), rotation=45)
 ax.bar_label(bars)
 plt.show()
-
 
 if sanity_test:
     # Check duration of cue presentation  
