@@ -6,14 +6,14 @@
 % On the same plot we display performance (%correct).
 
 % Load the behavioural data
-subject = '102';
+subject = '112';
 session = '01';
 task = 'spatt';
 run = '01';
 platform = 'mac';  % are you using mac or bluebear
 
 if contains(platform, "mac")
-    BIDS_folder = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage';  % only for bear outage time
+    BIDS_folder = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/data-organised';  % only for bear outage time
     % '/Volumes/jenseno-avtemporal-attention/Projects/subcortical-structures/STN-in-PD/data/BIDS';
 else
     BIDS_folder = '/rds/projects/j/jenseno-avtemporal-attention/Projects/subcortical-structures/STN-in-PD/data-organised/BIDS';

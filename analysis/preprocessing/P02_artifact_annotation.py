@@ -25,7 +25,7 @@ from mne_bids import BIDSPath, read_raw_bids
 
 
 # BIDS settings: fill these out 
-subject = '102'
+subject = '101'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -35,6 +35,7 @@ deriv_suffix = 'ann'
 extension = '.fif'
 
 platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
+muscle_reject = False  # rejecting muscle artefact?
 
 if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
@@ -50,7 +51,7 @@ project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
 bids_root = op.join(project_root, 'data', 'BIDS')
 
 # for bear outage
-bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/BIDS'
+bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
 
 # Specify specific file names
 bids_path = BIDSPath(subject=subject, session=session,
@@ -66,7 +67,8 @@ raw = read_raw_bids(bids_path=bids_path, verbose=False,
                      extra_params={'preload':True})
 
 # Identifying and annotating eye blinks using vEOG
-eog_events = find_eog_events(raw)
+"""sub-101 had to add thresh=6e-4. about 1300 blinks detected (I scrolled most of the data)"""
+eog_events = find_eog_events(raw, thresh=6e-4)
 onset = eog_events[:,0] / raw.info['sfreq'] -.25 #'from flux pipline and mne tutorial but why?'
 n_blinks = len(eog_events)  # length of the event file is the number of blinks in total
 duration = np.repeat(.5, n_blinks)  # duration of each blink is assumed to be 500ms
@@ -75,23 +77,24 @@ orig_time = raw.info['meas_date']
 annotation_blink = mne.Annotations(onset, duration, description, orig_time)
 
 # Identifying and annotating muscle artefact
-"""I prefer not to do muscle annotation, as stimulation influences this.
-better do it manually after segmenting and epoching"""
-threshold_muscle = 10
-min_length_good = .2
-filter_freq = [60,100]
-annotation_muscle, scores_muscle = annotate_muscle_zscore(raw.copy().filter(0.1,100),  # remove stimulation frequency
-                                                        ch_type='eeg',
-                                                        threshold=threshold_muscle,
-                                                        min_length_good=min_length_good,
-                                                        filter_freq=filter_freq
-                                                        )
-# Plot muscle annotation zscores
-_, ax = plt.subplots()
-ax.plot(raw.times, scores_muscle)
-ax.axhline(y=threshold_muscle, color='r')
-ax.set(xlabel='time, (s)', ylabel='zscore', title='Muscle activity (threshold = %s)' % threshold_muscle)
-plt.show()
+if muscle_reject:
+    """I prefer not to do muscle annotation, as stimulation influences this.
+    better do it manually after segmenting and epoching"""
+    threshold_muscle = 10
+    min_length_good = .2
+    filter_freq = [60,100]
+    annotation_muscle, scores_muscle = annotate_muscle_zscore(raw.copy().filter(0.1,100),  # remove stimulation frequency
+                                                            ch_type='eeg',
+                                                            threshold=threshold_muscle,
+                                                            min_length_good=min_length_good,
+                                                            filter_freq=filter_freq
+                                                            )
+    # Plot muscle annotation zscores
+    _, ax = plt.subplots()
+    ax.plot(raw.times, scores_muscle)
+    ax.axhline(y=threshold_muscle, color='r')
+    ax.set(xlabel='time, (s)', ylabel='zscore', title='Muscle activity (threshold = %s)' % threshold_muscle)
+    plt.show()
 
 # Include annotations in dataset and inspect
 """make sure to add event annotations here again, 

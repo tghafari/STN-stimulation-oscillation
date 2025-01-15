@@ -30,7 +30,7 @@ from copy import deepcopy
 from mne_bids import BIDSPath, read_raw_bids
 
 # BIDS settings: fill these out 
-subject = '102'
+subject = '101'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -55,7 +55,7 @@ project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
 bids_root = op.join(project_root, 'data', 'BIDS')
 
 # for bear outage
-bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/BIDS'
+bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
 
 # Specify specific file names
 bids_path = BIDSPath(subject=subject, session=session,
@@ -73,10 +73,10 @@ montage_fname = op.join(project_root, 'data', 'data-organised', 'new-64.bvef')
 raw = mne.io.read_raw_fif(input_fname, verbose=True, preload=True)
 
 # Scan through the data 
-raw.plot()  
+# raw.plot()  
 
 # Here crop any extra segments at the beginning or end of the recording
-raw.crop(tmin=200)  # sub102
+raw.crop(tmin=405)  # sub101
 
 ########################## BAD CHANNEL REJECTION ######################################
 
@@ -94,7 +94,7 @@ raw_filtered.compute_psd(n_fft=n_fft,  # default method is welch here (multitape
 # S110: Channels marked bad in this stage: Fp1 FCz
 
 ## 2. Mark bad channels before ICA
-original_bads = deepcopy(raw.info["bads"])
+original_bads = deepcopy(raw.info["bads"]) #P8, F3
 print(f'these are original bads: {original_bads}')
 user_list = input('Any other bad channels from psd? name of channel, e.g. FT10 T9 (separate by space) or return.')
 bad_channels = user_list.split()
@@ -231,8 +231,8 @@ if summary_rprt:
     report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 
-                        f'sub-{subject}_091224.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub-{subject}_091224.html')
+                        f'sub-{subject}_150125.hdf5')    # it is in .hdf5 for later adding images
+    html_report_fname = op.join(report_folder, f'sub-{subject}_150125.html')
     
     report = mne.open_report(report_fname)
     report.add_figure(fig_ica, 

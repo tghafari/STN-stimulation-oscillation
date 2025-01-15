@@ -47,9 +47,10 @@ stim_sequence = {'sub-01':["no_stim-left rec", "no_stim-right rec", "Right stim-
                  'sub-108':["no_stim-right rec", "no_stim-left rec", "left stim- no rec", "right stim- no rec"],  # stimulation on STN
                  'sub-110': ["Right stim- no rec", "Left stim- no rec", "no_stim-no rec", "no_stim-no rec"],  # no LFP recording, stimulation on VLM
                  'sub-102': ["no_stim-left rec", "no_stim-right rec", "Left stim- no rec", "Right stim- no rec"],
+                 'sub-101': ["no_stim-left rec", "no_stim-right-rec", "Right stim- no rec", "Left stim- no rec"],
                  } 
 # BIDS settings
-subject = '102'
+subject = '101'
 brainVision_basename = f'{subject[-2:]}_ao'  # might need modification per subject
 
 session = '01'
@@ -67,13 +68,11 @@ if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
 elif platform == 'mac':
     rds_dir = '/Volumes/jenseno-avtemporal-attention'
-    # '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage'  # only for bear outage time
 
-project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
-# rds_dir  # only for bear outage time
-data_root = op.join(project_root, 'data/data-organised')
-# rds_dir  # only for bear outage time
-
+project_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD'  # only for bear outage time
+# op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
+data_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/data-organised'  # only for bear outage time
+# op.join(project_root, 'data/data-organised')
 
 base_fpath = op.join(data_root, f'sub-{subject}', f'ses-{session}', f'{modality}')  
 base_fname = f'sub-{subject}_ses-{session}_task-{task}_run-{run}_{modality}'
@@ -97,7 +96,7 @@ if subject == '110':
 else:
     raw = mne.io.read_raw_brainvision(vhdr_fname, eog=('HEOGL', 'HEOGR', 'VEOGb'), preload=True)
 
-# first thing first- Remove bad channels from raw scrolling and find if you must crop useless data
+# first thing first- find if you must crop useless data
 raw.plot()  # get an idea about the data, confirm stimulation order
 
 # Rename channels according to function
@@ -166,7 +165,7 @@ event_dict = {'cue_onset_right':1,
            'block_end':21,
            'experiment_end':30,  #sub02 does not have this
            #'abort':31,  # participant 04_wmf has abort
-           'new_stim_segment_maybe':255,  # sub102 has an extra trigger
+           #'new_stim_segment_maybe':255,  # sub102 has an extra trigger
            'new_stim_segment':99999, 
         }
 _, events_id = mne.events_from_annotations(raw, event_id=event_dict)
@@ -249,8 +248,8 @@ if summary_rprt:
     report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 
-                        f'sub-{subject}_091224.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub-{subject}_091224.html')
+                        f'sub-{subject}_150125.hdf5')    # it is in .hdf5 for later adding images
+    html_report_fname = op.join(report_folder, f'sub-{subject}_150125.html')
     
     report = mne.Report(title=f'Subject {subject}')
     report.add_image(beh_fig_fname,
