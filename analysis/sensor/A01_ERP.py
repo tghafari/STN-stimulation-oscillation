@@ -46,7 +46,7 @@ def reading_epochs_evoking(stim):
 
 
 # BIDS settings: fill these out 
-subject = '102'
+subject = '101'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -56,7 +56,6 @@ stim_suffix = 'stim'
 no_stim_suffix = 'no-stim'
 extension = '.fif'
 
-runs = ['01']
 stim_segments_ls = [False, True]
 epoching_list = ['cue', 'stim']  # epoching on cue onset or stimulus onset
 
@@ -76,18 +75,18 @@ elif platform == 'mac':
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
 bids_root = op.join(project_root, 'data', 'BIDS')
 # for bear outage
-bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/BIDS'
+bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
 
 # Epoch stim segments and add to report
 report_root = op.join(project_root, 'derivatives/reports')  
 # for bear outage
-report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/derivatives/reports'
+report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/derivatives/reports' # only for bear outage time
 
 report_folder = op.join(report_root , 'sub-' + subject)
 
 report_fname = op.join(report_folder, 
-                    f'sub-{subject}_091224.hdf5')    # it is in .hdf5 for later adding images
-html_report_fname = op.join(report_folder, f'sub-{subject}_091224.html')
+                    f'sub-{subject}_150125.hdf5')    # it is in .hdf5 for later adding images
+html_report_fname = op.join(report_folder, f'sub-{subject}_150125.html')
 
 report = mne.open_report(report_fname)
 
@@ -101,50 +100,47 @@ for epoching in epoching_list:
     for stim in stim_segments_ls:
         print(f'Working on stim = {stim}')
 
-        for run in runs:
-            print(f'Reading run:{run}')
+        bids_path = BIDSPath(subject=subject, session=session,
+                    task=task, run=run, root=bids_root, 
+                    datatype ='eeg', suffix=eeg_suffix)
+        deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
 
-            bids_path = BIDSPath(subject=subject, session=session,
-                        task=task, run=run, root=bids_root, 
-                        datatype ='eeg', suffix=eeg_suffix)
-            deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
+        epochs, evoked = reading_epochs_evoking(stim)
+        evoked.comment = f'stim:{stim_segments_ls[stim]}, {epoching} onset'
+        evoked_list_cropped.append(evoked.copy().crop(-0.1,0.5))
+        evoked_list.append(evoked)  # append evokeds for later comparison
 
-            epochs, evoked = reading_epochs_evoking(stim)
-            evoked.comment = f'stim:{stim_segments_ls[stim]}, {epoching} onset'
-            evoked_list_cropped.append(evoked.copy().crop(-0.1,0.5))
-            evoked_list.append(evoked)  # append evokeds for later comparison
+        # Plot ERPs for summary report
+        topos_times = np.arange(50, 450, 30)*0.001
+        fig_evo = evoked.copy().plot_joint(times=topos_times)
+    
+        report.add_figure(fig=fig_evo, title=f'stim:{stim}, evoked response',
+                            caption=f'evoked response for {epoching}- baseline=(-100,0), filter=(0,30) \
+                                    cue=200ms, ISI=1000, stim=1000-2000ms', 
+                            tags=('evo'),
+                            section='stim'
+                            )
+        # Plot epochs separately 
+        fig_epochs, axis = plt.subplots(6, 2, figsize=(24, 6))
+        for ax, ch in enumerate(occipital_channels):
+            epochs.plot_image(picks=ch,
+                                axes=axis[ax,:],
+                                colorbar=False,
+                                show=False)
+            axis[ax][0].title.set_text(f'{ch}')
 
-            # Plot ERPs for summary report
-            topos_times = np.arange(50, 450, 30)*0.001
-            fig_evo = evoked.copy().plot_joint(times=topos_times)
+        fig_epochs.suptitle(f"stim={stim}- epochs for {epoching}")
+        fig_epochs.set_tight_layout(True)
+        plt.show()
         
-            report.add_figure(fig=fig_evo, title=f'stim:{stim}, evoked response',
-                                caption=f'evoked response for {epoching}- baseline=(-100,0), filter=(0,30) \
-                                        cue=200ms, ISI=1000, stim=1000-2000ms', 
-                                tags=('evo'),
-                                section='stim'
-                                )
-            # Plot epochs separately 
-            fig_epochs, axis = plt.subplots(6, 2, figsize=(24, 6))
-            for ax, ch in enumerate(occipital_channels):
-                epochs.plot_image(picks=ch,
-                                 axes=axis[ax,:],
-                                 colorbar=False,
-                                 show=False)
-                axis[ax][0].title.set_text(f'{ch}')
+        report.add_figure(fig=fig_epochs, title=f'stim:{stim}, epochs separately',
+                            caption=f'epochs for {epoching}- baseline=(-100,0), filter=(0,30) \
+                                    cue=200ms, ISI=1000, stim=1000-2000ms', 
+                            tags=('epo'),
+                            section='stim'
+                            )
 
-            fig_epochs.suptitle(f"stim={stim}- epochs for {epoching}")
-            fig_epochs.set_tight_layout(True)
-            plt.show()
-            
-            report.add_figure(fig=fig_epochs, title=f'stim:{stim}, epochs separately',
-                                caption=f'epochs for {epoching}- baseline=(-100,0), filter=(0,30) \
-                                        cue=200ms, ISI=1000, stim=1000-2000ms', 
-                                tags=('epo'),
-                                section='stim'
-                                )
-
-            del epochs, evoked
+        del epochs, evoked
 
     # Plot both stim and no stim evoked in one plot
     fig_comp_chs, axis = plt.subplots(3, 2, figsize=(24, 12)) 

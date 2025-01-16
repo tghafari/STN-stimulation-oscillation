@@ -48,9 +48,11 @@ stim_sequence = {'sub-01':["no_stim-left rec", "no_stim-right rec", "Right stim-
                  'sub-110': ["Right stim- no rec", "Left stim- no rec", "no_stim-no rec", "no_stim-no rec"],  # no LFP recording, stimulation on VLM
                  'sub-102': ["no_stim-left rec", "no_stim-right rec", "Left stim- no rec", "Right stim- no rec"],
                  'sub-101': ["no_stim-left rec", "no_stim-right-rec", "Right stim- no rec", "Left stim- no rec"],
+                 'sub-111': ["Left stim- no rec", "Right stim- no rec", "no_stim-right rec", "no_stim-left rec"],
+                 'sub-112': ["Left stim- no rec", "no_stim-right rec", "no_stim-left rec", "Right stim- no rec"],
                  } 
 # BIDS settings
-subject = '101'
+subject = '112'
 brainVision_basename = f'{subject[-2:]}_ao'  # might need modification per subject
 
 session = '01'
@@ -93,11 +95,15 @@ if subject == '110':
     raw_fnames = [op.join(base_fpath, brainVision_basename + '_blocks1-2.vhdr'), 
                   op.join(base_fpath, brainVision_basename + '_blocks3-8.vhdr')]
     raw = mne.concatenate_raws([mne.io.read_raw_brainvision(f, preload=True) for f in raw_fnames])
+elif subject == '111':
+        raw_fnames = [op.join(base_fpath, brainVision_basename + '_blocks1-2.vhdr'), 
+                  op.join(base_fpath, brainVision_basename + '_blocks3-8.vhdr')]
+        raw = mne.concatenate_raws([mne.io.read_raw_brainvision(f, preload=True) for f in raw_fnames])
 else:
     raw = mne.io.read_raw_brainvision(vhdr_fname, eog=('HEOGL', 'HEOGR', 'VEOGb'), preload=True)
 
 # first thing first- find if you must crop useless data
-raw.plot()  # get an idea about the data, confirm stimulation order
+raw.plot()  # get an idea about the data, confirm stimulation order and annotate break spans with BAD
 
 # Rename channels according to function
 """T8 and FT10 = vertical electro-oculogram (EOG), 

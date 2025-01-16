@@ -154,7 +154,7 @@ def representative_sensors_second_plot(tfr_slow_cue_right, tfr_slow_cue_left, re
     # ========================================= SECOND PLOT (REPRESENTATIVE SENSROS) ====================================
 
     # Plot TFR for representative sensors - same in all participants
-    fig_tfr, axis = plt.subplots(6, 2, figsize = (14, 7))
+    fig_tfr, axis = plt.subplots(6, 2, figsize = (30, 10))
     occipital_channels = ['O1', 'PO3', 'O2', 'PO4', 'Oz', 'POz']
     baseline=[-0.5, -0.2]
 
@@ -409,7 +409,7 @@ def MI_overtime_sixth_plot(tfr_alpha_MI_occ_chans, report):
 
 # =================================================================================================================
 # BIDS settings: fill these out 
-subject = '102'
+subject = '101'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -419,7 +419,6 @@ stim_suffix = 'stim'
 no_stim_suffix = 'no-stim'
 extension = '.fif'
 
-runs = ['01']
 stim_segments_ls = [False, True]
 epoching_list = ['cue']#, 'stim']  # epoching on cue onset or stimulus onset
 
@@ -438,7 +437,7 @@ elif platform == 'mac':
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
 bids_root = op.join(project_root, 'data', 'BIDS')
 # for bear outage
-bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/BIDS'
+bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
 
 # Specify specific file names
 ROI_dir = op.join(project_root, 'derivatives/lateralisation-indices')
@@ -452,12 +451,12 @@ tfr_params = dict(use_fft=True, return_itc=False, average=True, decim=2, n_jobs=
 # Epoch stim segments and add to report
 report_root = op.join(project_root, 'derivatives/reports')  
 # for bear outage
-report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/derivatives/reports'
+report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/derivatives/reports' # only for bear outage time
 
 report_folder = op.join(report_root , 'sub-' + subject)
 report_fname = op.join(report_folder, 
-                    f'sub-{subject}_161224.hdf5')    # it is in .hdf5 for later adding images
-html_report_fname = op.join(report_folder, f'sub-{subject}_161224.html')
+                    f'sub-{subject}_150125.hdf5')    # it is in .hdf5 for later adding images
+html_report_fname = op.join(report_folder, f'sub-{subject}_150125.html')
 
 report = mne.open_report(report_fname)
 
@@ -468,36 +467,34 @@ for epoching in epoching_list:
 
     for stim in stim_segments_ls:
         print(f'Reading stim:{stim}')
-        for run in runs:
-            print(f'Reading run:{run}')
-            bids_path = BIDSPath(subject=subject, session=session,
-                        task=task, run=run, root=bids_root, 
-                        datatype ='eeg', suffix=eeg_suffix)
-            deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
+        bids_path = BIDSPath(subject=subject, session=session,
+                    task=task, run=run, root=bids_root, 
+                    datatype ='eeg', suffix=eeg_suffix)
+        deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
 
-            (epochs, tfr_slow_cue_both, tfr_slow_cue_right, 
-             tfr_slow_cue_left, report) = tfr_calculation_first_plot(stim, report)
-            report = representative_sensors_second_plot(tfr_slow_cue_right, 
-                                                        tfr_slow_cue_left, 
-                                                        report)
-            peak_alpha_freq_range, report = peak_alpha_calculation_third_plot(occipital_channels, 
-                                                                            tfr_slow_cue_right, 
-                                                                            tfr_slow_cue_left, 
-                                                                            epochs,
-                                                                            report)
-            report = topographic_maps_fourth_plot(peak_alpha_freq_range, 
-                                                  tfr_slow_cue_both, 
-                                                  tfr_slow_cue_right, 
-                                                  tfr_slow_cue_left, 
-                                                  report
-                                                  )
-            
-            tfr_alpha_MI_occ_chans, report = MI_calculation_fifth_plot(tfr_params, 
-                                                                    peak_alpha_freq_range, 
-                                                                    epochs, 
-                                                                    occipital_channels,
-                                                                    report)
-            # report = MI_overtime_sixth_plot(tfr_alpha_MI_occ_chans, report)  # Don't plot now, it looks terrible 
+        (epochs, tfr_slow_cue_both, tfr_slow_cue_right, 
+            tfr_slow_cue_left, report) = tfr_calculation_first_plot(stim, report)
+        report = representative_sensors_second_plot(tfr_slow_cue_right, 
+                                                    tfr_slow_cue_left, 
+                                                    report)
+        peak_alpha_freq_range, report = peak_alpha_calculation_third_plot(occipital_channels, 
+                                                                        tfr_slow_cue_right, 
+                                                                        tfr_slow_cue_left, 
+                                                                        epochs,
+                                                                        report)
+        report = topographic_maps_fourth_plot(peak_alpha_freq_range, 
+                                                tfr_slow_cue_both, 
+                                                tfr_slow_cue_right, 
+                                                tfr_slow_cue_left, 
+                                                report
+                                                )
+        
+        tfr_alpha_MI_occ_chans, report = MI_calculation_fifth_plot(tfr_params, 
+                                                                peak_alpha_freq_range, 
+                                                                epochs, 
+                                                                occipital_channels,
+                                                                report)
+        # report = MI_overtime_sixth_plot(tfr_alpha_MI_occ_chans, report)  # Don't plot now, it looks terrible 
 
 report.save(report_fname, overwrite=True)
 report.save(html_report_fname, overwrite=True, open_browser=True)  # to check how the report looks

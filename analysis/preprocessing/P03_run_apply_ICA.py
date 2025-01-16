@@ -30,7 +30,7 @@ from copy import deepcopy
 from mne_bids import BIDSPath, read_raw_bids
 
 # BIDS settings: fill these out 
-subject = '101'
+subject = '112'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -73,10 +73,10 @@ montage_fname = op.join(project_root, 'data', 'data-organised', 'new-64.bvef')
 raw = mne.io.read_raw_fif(input_fname, verbose=True, preload=True)
 
 # Scan through the data 
-# raw.plot()  
+raw.plot()  
 
 # Here crop any extra segments at the beginning or end of the recording
-raw.crop(tmin=405)  # sub101
+raw.crop(tmin=230)  # sub101
 
 ########################## BAD CHANNEL REJECTION ######################################
 
@@ -135,7 +135,7 @@ because that's what we need
 """
 raw_resmpld = raw.copy().pick('eeg').resample(200).filter(0.1, 40)
 
-# Apply ICA and identify artifact components
+# Apply ICA and identify bad channels
 ica = ICA(method='fastica', random_state=97, n_components=30, verbose=True)
 ica.fit(raw_resmpld, verbose=True)
 raw.plot_sensors(show_names=True)
@@ -144,8 +144,9 @@ ica.plot_components()
 # Take another look at bad channels and remove
 raw.plot() # Mark bad channels from ICA here on raw.plot()
 
-# S110: Channels marked as bad with ica: ['AF4', 'Pz', 'F6', 'FT7']
-# S102: Channels marked as bad with ica: ['C5']
+# s110: Channels marked as bad with ica: ['AF4', 'Pz', 'F6', 'FT7']
+# s102: Channels marked as bad with ica: ['C5']
+# s101: Channels marked as bad with ica: ['TP8', 'F5', 'FC6']
 
 """
 list bad channels for all participants:
@@ -160,8 +161,12 @@ BIDS/sub-108_ses-01_run-01: ["FT9", "T8", "T7"],
 BIDS/sub-110_ses-01_run-01: ['TP9', 'TP10', 'Fp1', 'FCz', 'AF4', 'Pz', 'F6', 'FT7'],
 BIDS/sub-102_ses-01_run-01: ['TP9', 'TP10', 'F7', 'TP7', 'PO7', 'F6', 'FT8', 'Fp1', 
                             'F8', 'FT7', 'FC6', 'F5', 'Fp2', 'C5'],
+BIDS/sub-101_ses-01_run-01: ['TP9', 'TP10', 'CP5', 'P7', 'TP7', 'P5', 'C5', 'P6', 
+                            'PO8', 'PO7', 'P8', 'F3', 'FC6', 'F5', 'TP8']
+BIDS/sub-112_ses-01_run-01: ['TP10', 'Fp1', 'CP6', 'FC5', 'AF8', 'Fp2', 'F5', 
+                            'AF7', 'F8', 'AF3', 'FC4', 'F6', 'F3', 'Cz', 'CPz', 
+                            'Pz', 'P1', 'FC6', 'FC1']
 } """
-
 
 del raw_resmpld, ica  # free up memory
 
@@ -180,7 +185,7 @@ ica.fit(raw_resmpld, verbose=True)
 ica.plot_sources(raw_resmpld, title='ICA')
 ica.plot_components()
 
-ICA_rej_dic = {f'sub-{subject}_ses-{session}':[0, 1]} # manually selected bad ICs or from sub config file 
+ICA_rej_dic = {f'sub-{subject}_ses-{session}':[0, 3, 4, 15, 19, 28, 29]} # manually selected bad ICs or from sub config file 
 artifact_ICs = ICA_rej_dic[f'sub-{subject}_ses-{session}']
 """
 list bad ICA components for all participants:
@@ -192,7 +197,11 @@ list bad ICA components for all participants:
 'BIDS/sub-05_ses-01_run-01': [0, 1, 8, 58, 59], # don't know-almost all look terrible
 'BIDS/sub-107_ses-01_run-01': [28], # maybe eye movement?  
 'BIDS/sub-108_ses-01_run-01': [1, 13], # don't know-almost all look terrible
-'BIDS/sub-110_ses-01_run-01': [1, 2], # 0:blink, 4:saccades
+'BIDS/sub-110_ses-01_run-01': [1, 2], # 1:blink, 2:saccades
+'BIDS/sub-102_ses-01_run-01': [0, 1], # 0:blink, 4:saccades  
+'BIDS/sub-101_ses-01_run-01': [0, 1, 3, 4, 5], # 0:saccade, 1,3,4,5:blink  !this participant has blinked too many times!
+'BIDS/sub-112_ses-01_run-01': [0, 3, 4, 15, 19, 28, 29], # 0:blink, 4:saccades  
+
 } """
 
 # Double check the manually selected artifactual ICs
@@ -224,7 +233,7 @@ fig_ica = ica.plot_components(picks=artifact_ICs, title='removed components')
 if summary_rprt:
     report_root = op.join(project_root, 'derivatives/reports')  # RDS folder for reports
     # for bear outage
-    report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/derivatives/reports'
+    report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/derivatives/reports' # only for bear outage time
    
     if not op.exists(op.join(report_root , 'sub-' + subject)):
         os.makedirs(op.join(report_root , 'sub-' + subject))

@@ -25,7 +25,7 @@ from mne_bids import BIDSPath, read_raw_bids
 
 
 # BIDS settings: fill these out 
-subject = '101'
+subject = '112'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -68,7 +68,7 @@ raw = read_raw_bids(bids_path=bids_path, verbose=False,
 
 # Identifying and annotating eye blinks using vEOG
 """sub-101 had to add thresh=6e-4. about 1300 blinks detected (I scrolled most of the data)"""
-eog_events = find_eog_events(raw, thresh=6e-4)
+eog_events = find_eog_events(raw)
 onset = eog_events[:,0] / raw.info['sfreq'] -.25 #'from flux pipline and mne tutorial but why?'
 n_blinks = len(eog_events)  # length of the event file is the number of blinks in total
 duration = np.repeat(.5, n_blinks)  # duration of each blink is assumed to be 500ms
@@ -107,16 +107,3 @@ raw.plot()
 
 # Save the artifact annotated file
 raw.save(deriv_fname, overwrite=True)
-
-
-
-
-
-
-
-
-
-
-
-
-

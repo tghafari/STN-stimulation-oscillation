@@ -39,7 +39,7 @@ import matplotlib.pyplot as plt
 
 
 # BIDS settings: fill these out 
-subject = '102'
+subject = '101'
 session = '01'
 task = 'SpAtt'
 run = '01'  # change this for subjects with two stim or two no-stim segments
@@ -69,7 +69,7 @@ ROI_dir = op.join(project_root, 'results/lateralisation-indices')
 bids_root = op.join(project_root, 'data', 'BIDS')
 
 # for bear outage
-bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/BIDS'
+bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
 
 bids_path = BIDSPath(subject=subject, session=session,
                      task=task, run=run, root=bids_root, 
@@ -93,11 +93,22 @@ stimulation_cropped_time = {"sub-107_no-stim": [15, 974],
                             "sub-110_no-stim": [905, 1711],
                             "sub-110_stim": [0, 840],
                             "sub-102_no-stim": [0, 965],
-                            "sub-102_stim": [1497, 2244]}
+                            "sub-102_stim": [1497, 2244],
+                            "sub-101_no-stim": [0, 360, 515, 865],
+                            "sub-101_stim": [1144, 1900]
+                            }
 
 # Crop and save segments separately
-no_stim_segment = raw_ica.copy().crop(tmin=stimulation_cropped_time[f'sub-{subject}_no-stim'][0], 
+if subject == '101':  # there is some stimulation in the break between two no-stim blocks
+    no_stim_fragements = [raw_ica.copy().crop(tmin=stimulation_cropped_time[f'sub-{subject}_no-stim'][0], 
+                          tmax=stimulation_cropped_time[f'sub-{subject}_no-stim'][1]), 
+                          raw_ica.copy().crop(tmin=stimulation_cropped_time[f'sub-{subject}_no-stim'][2], 
+                          tmax=stimulation_cropped_time[f'sub-{subject}_no-stim'][3])]
+    no_stim_segment = mne.concatenate_raws(no_stim_fragements)
+else:
+    no_stim_segment = raw_ica.copy().crop(tmin=stimulation_cropped_time[f'sub-{subject}_no-stim'][0], 
                                       tmax=stimulation_cropped_time[f'sub-{subject}_no-stim'][1])
+    
 fig_no_stim_psd = no_stim_segment.compute_psd(fmin=0.1, fmax=200).plot()  # double check and save if ok
 no_stim_segment.save(no_stim_fname, overwrite=True)
 
@@ -110,13 +121,13 @@ stim_segment.save(stim_fname, overwrite=True)
 if summary_rprt:
     report_root = op.join(project_root, 'derivatives/reports')  
    # for bear outage
-    report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/derivatives/reports'
+    report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/derivatives/reports' # only for bear outage time
 
     report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 
-                        f'sub-{subject}_091224.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub-{subject}_091224.html')
+                        f'sub-{subject}_150125.hdf5')    # it is in .hdf5 for later adding images
+    html_report_fname = op.join(report_folder, f'sub-{subject}_150125.html')
     
     report = mne.open_report(report_fname)
     report.add_figure(fig=fig_no_stim_psd, title='no stimulation psd',
