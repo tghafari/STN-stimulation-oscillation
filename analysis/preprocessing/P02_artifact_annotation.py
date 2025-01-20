@@ -102,7 +102,16 @@ because set_annotations overwrites all annotations"""
 annotations_event = raw.annotations 
 raw.set_annotations(annotations_event + annotation_blink)
 
-# Plot annotated dataset
+# Annotate break sections and plot
+break_annots = mne.preprocessing.annotate_break(
+    raw=raw,
+    min_break_duration=20,  # consider segments of at least 20 s duration
+    t_start_after_previous=5,  # start annotation 5 s after end of previous one
+    t_stop_before_next=2,  # stop annotation 2 s before beginning of next one
+    ignore=('blink'),
+)
+
+raw.set_annotations(raw.annotations + break_annots)  # add to existing
 raw.plot()
 
 # Save the artifact annotated file

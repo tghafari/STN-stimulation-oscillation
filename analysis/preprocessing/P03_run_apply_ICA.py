@@ -72,17 +72,16 @@ montage_fname = op.join(project_root, 'data', 'data-organised', 'new-64.bvef')
 # Read annotated data
 raw = mne.io.read_raw_fif(input_fname, verbose=True, preload=True)
 
-# Scan through the data 
-raw.plot()  
-
-# Here crop any extra segments at the beginning or end of the recording
-raw.crop(tmin=230)  # sub101
+# Here crop any extra segments at the beginning or end of the recording 
+"""there's no need for this if you've annotated breaks in P02"""
+# raw.plot() 
+# raw.crop(tmin=230)  # sub101
 
 ########################## BAD CHANNEL REJECTION ######################################
 
 ## 1. Scroll one more time and psd to remove any other bad channels after filtering
 """Mark bad channels on the plots"""
-raw_filtered = raw.copy().filter(l_freq=0.1, h_freq=100)  # filter only for plotting now
+raw_filtered = raw.copy().filter(l_freq=1, h_freq=100)  # filter only for plotting now 
 raw_filtered.plot()  # mark bad channels after filtering stimulation frequency
 raw.info["bads"] = raw_filtered.info["bads"]  # add marked bad channels to raw
 
@@ -133,11 +132,11 @@ we down sample the data in order to make ICA run faster,
 highpass filter at 1Hz to remove slow drifts and lowpass 40Hz
 because that's what we need
 """
-raw_resmpld = raw.copy().pick('eeg').resample(200).filter(0.1, 40)
+raw_resmpld = raw.copy().pick('eeg').resample(200).filter(1, 40) # l_freq=1 recommended by mne
 
 # Apply ICA and identify bad channels
 ica = ICA(method='fastica', random_state=97, n_components=30, verbose=True)
-ica.fit(raw_resmpld, verbose=True)
+ica.fit(raw_resmpld, reject_by_annotation=True, verbose=True)
 raw.plot_sensors(show_names=True)
 ica.plot_components()
 
@@ -179,13 +178,13 @@ raw.set_eeg_reference(ref_channels="average")
 """This is the ica that will be applied to the data. You can redo the previous steps
 as many times as you want."""
 # Run ica again after bad channel rejection
-raw_resmpld = raw.copy().pick('eeg').resample(200).filter(0.1, 40)
+raw_resmpld = raw.copy().pick('eeg').resample(200).filter(0.5, 40) # l_freq=1 recommended by mne
 ica = ICA(method='fastica', random_state=97, n_components=30, verbose=True)
-ica.fit(raw_resmpld, verbose=True)
+ica.fit(raw_resmpld, reject_by_annotation=True, verbose=True)
 ica.plot_sources(raw_resmpld, title='ICA')
 ica.plot_components()
 
-ICA_rej_dic = {f'sub-{subject}_ses-{session}':[0, 3, 4, 15, 19, 28, 29]} # manually selected bad ICs or from sub config file 
+ICA_rej_dic = {f'sub-{subject}_ses-{session}':[0, 15]} # manually selected bad ICs or from sub config file 
 artifact_ICs = ICA_rej_dic[f'sub-{subject}_ses-{session}']
 """
 list bad ICA components for all participants:
