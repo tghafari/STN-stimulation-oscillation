@@ -409,7 +409,7 @@ def MI_overtime_sixth_plot(tfr_alpha_MI_occ_chans, report):
 
 # =================================================================================================================
 # BIDS settings: fill these out 
-subject = '101'
+subject = '112'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -431,13 +431,13 @@ if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
     camcan_dir = '/rds/projects/q/quinna-camcan/dataman/data_information'
 elif platform == 'mac':
-    rds_dir = '/Volumes/jenseno-avtemporal-attention'
+    rds_dir = '/Volumes/jenseno-avtemporal-attention-1'
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
 bids_root = op.join(project_root, 'data', 'BIDS')
 # for bear outage
-bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
+# bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
 
 # Specify specific file names
 ROI_dir = op.join(project_root, 'derivatives/lateralisation-indices')
@@ -451,12 +451,12 @@ tfr_params = dict(use_fft=True, return_itc=False, average=True, decim=2, n_jobs=
 # Epoch stim segments and add to report
 report_root = op.join(project_root, 'derivatives/reports')  
 # for bear outage
-report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/derivatives/reports' # only for bear outage time
+# report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/derivatives/reports' # only for bear outage time
 
 report_folder = op.join(report_root , 'sub-' + subject)
 report_fname = op.join(report_folder, 
-                    f'sub-{subject}_150125.hdf5')    # it is in .hdf5 for later adding images
-html_report_fname = op.join(report_folder, f'sub-{subject}_150125.html')
+                    f'sub-{subject}_060225.hdf5')    # it is in .hdf5 for later adding images
+html_report_fname = op.join(report_folder, f'sub-{subject}_060225.html')
 
 report = mne.open_report(report_fname)
 
