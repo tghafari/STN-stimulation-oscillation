@@ -50,10 +50,11 @@ stim_sequence = {'sub-01':["no_stim-left rec", "no_stim-right rec", "Right stim-
                  'sub-101': ["no_stim-left rec", "no_stim-right-rec", "Right stim- no rec", "Left stim- no rec"],
                  'sub-111': ["Left stim- no rec", "Right stim- no rec", "no_stim-right rec", "no_stim-left rec"],
                  'sub-112': ["Left stim- no rec", "no_stim-right rec", "no_stim-left rec", "Right stim- no rec"],
+                 'sub-103': ["Right stim- no rec", "no_stim-left rec", "no_stim-right rec", "Left stim- no rec"],
                  } 
 # BIDS settings
-subject = '112'
-brainVision_basename = f'{subject[-2:]}_ao'  # might need modification per subject
+subject = '103'
+brainVision_basename = f'{subject[-2:]}_AO'  # might need modification per subject
 
 session = '01'
 task = 'SpAtt'
@@ -71,10 +72,10 @@ if platform == 'bluebear':
 elif platform == 'mac':
     rds_dir = '/Volumes/jenseno-avtemporal-attention'
 
-project_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD'  # only for bear outage time
-# op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
-data_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/data-organised'  # only for bear outage time
-# op.join(project_root, 'data/data-organised')
+project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
+# '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD'  # only for bear outage time
+data_root = op.join(project_root, 'data/data-organised')
+# '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/data-organised'  # only for bear outage time
 
 base_fpath = op.join(data_root, f'sub-{subject}', f'ses-{session}', f'{modality}')  
 base_fname = f'sub-{subject}_ses-{session}_task-{task}_run-{run}_{modality}'
@@ -82,8 +83,7 @@ eeg_fname = op.join(base_fpath, brainVision_basename + '.eeg')
 vhdr_fname = op.join(base_fpath, brainVision_basename + '.vhdr')
 events_fname = op.join(base_fpath, base_fname + '-eve.fif')
 annotated_raw_fname = op.join(base_fpath, base_fname + extension)
-beh_fig_fname = op.join(project_root, f'sub-{subject}', 'figures', f'sub-{subject}-beh-performance.png')  # where you save the matlab output of behavioural performance plots
-# op.join(project_root, 'derivatives/
+beh_fig_fname = op.join(project_root, 'derivatives/figures', f'sub-{subject}-beh-performance.png')  # where you save the matlab output of behavioural performance plots
 
 # BIDS events
 events_suffix = 'events'  
@@ -96,8 +96,9 @@ if subject == '110':
                   op.join(base_fpath, brainVision_basename + '_blocks3-8.vhdr')]
     raw = mne.concatenate_raws([mne.io.read_raw_brainvision(f, preload=True) for f in raw_fnames])
 elif subject == '111':
-        raw_fnames = [op.join(base_fpath, brainVision_basename + '_blocks1-2.vhdr'), 
-                  op.join(base_fpath, brainVision_basename + '_blocks3-8.vhdr')]
+        raw_fnames = [op.join(base_fpath, brainVision_basename + '_stimright.vhdr'), 
+                  op.join(base_fpath, brainVision_basename + '_nostimright.vhdr'),
+                  op.join(base_fpath, brainVision_basename + '_nostimleft.vhdr')]
         raw = mne.concatenate_raws([mne.io.read_raw_brainvision(f, preload=True) for f in raw_fnames])
 else:
     raw = mne.io.read_raw_brainvision(vhdr_fname, eog=('HEOGL', 'HEOGR', 'VEOGb'), preload=True)
@@ -254,14 +255,14 @@ if summary_rprt:
     report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 
-                        f'sub-{subject}_150125.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub-{subject}_150125.html')
+                        f'sub-{subject}_070225.hdf5')    # it is in .hdf5 for later adding images
+    html_report_fname = op.join(report_folder, f'sub-{subject}_070225.html')
     
     report = mne.Report(title=f'Subject {subject}')
-    report.add_image(beh_fig_fname,
-                    title='RT and performance',
-                    caption='reaction time and behavioural performance',
-                    tags=('beh'))
+    # report.add_image(beh_fig_fname,
+    #                 title='RT and performance',
+    #                 caption='reaction time and behavioural performance',
+    #                 tags=('beh'))
     report.add_events(events=events, 
                     event_id=events_id, 
                     tags=('eve'),

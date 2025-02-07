@@ -117,7 +117,7 @@ def cleaning_and_saving_epochs(stim, epochs, autoreject=False):
     return fig_psd, fig_bads
 
 # BIDS settings: fill these out 
-subject = '112'
+subject = '103'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -143,7 +143,7 @@ if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
     camcan_dir = '/rds/projects/q/quinna-camcan/dataman/data_information'
 elif platform == 'mac':
-    rds_dir = '/Volumes/jenseno-avtemporal-attention-1'
+    rds_dir = '/Volumes/jenseno-avtemporal-attention'
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
@@ -154,13 +154,13 @@ bids_root = op.join(project_root, 'data', 'BIDS')
 # Epoch stim segments and add to report
 report_root = op.join(project_root, 'derivatives/reports')  
 # for bear outage
-report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/derivatives/reports' # only for bear outage time
+# report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/derivatives/reports' # only for bear outage time
 
 report_folder = op.join(report_root , 'sub-' + subject)
 
 report_fname = op.join(report_folder, 
-                    f'sub-{subject}_150125.hdf5')    # it is in .hdf5 for later adding images
-html_report_fname = op.join(report_folder, f'sub-{subject}_150125.html')
+                    f'sub-{subject}_070225.hdf5')    # it is in .hdf5 for later adding images
+html_report_fname = op.join(report_folder, f'sub-{subject}_070225.html')
 
 report = mne.open_report(report_fname)
 
@@ -289,7 +289,7 @@ report.save(html_report_fname, overwrite=True, open_browser=True)  # to check ho
 # Channels marked as bad:
 # ['TP9', 'TP10', 'F7', 'TP7', 'PO7', 'F6', 'FT8', 'Fp1', 'F8', 'FT7', 'FC6', 'F5', 'Fp2', 'C5']
 
-####################################### sub-101 #################################################
+####################################### sub-112 #################################################
 # #cue, stim off
 # Press return when you're done annotating bad segments ...Dropped 44 epochs: 2, 5, 20, 25, 26, 29, 33, 36, 40, 41, 42, 43, 44, 45, 46, 47, 48, 52, 57, 60, 62, 64, 68, 71, 74, 77, 79, 80, 86, 93, 95, 97, 108, 112, 116, 122, 124, 126, 128, 140, 142, 147, 154, 156
 # The following epochs were marked as bad and are dropped:
@@ -318,3 +318,31 @@ report.save(html_report_fname, overwrite=True, open_browser=True)  # to check ho
 # Channels marked as bad:
 # ['TP9', 'TP10', 'Fp1', 'CP6', 'FC5', 'F7', 'FC6', 'AF7', 'AF3', 'Fp2', 'F8', 'F4', 'F5', 'FT7', 'C5', 'TP7', 'AF8', 'FT8', 'C6', 'AF4', 'F6', 'Cz', 'P1', 'CPz']
 
+####################################### sub-103 #################################################
+# #cue, stim off
+# Dropped 48 epochs: 0, 22, 23, 24, 32, 33, 38, 41, 43, 44, 49, 53, 77, 78, 79, 80, 81, 84, 87, 88, 89, 91, 92, 93, 94, 102, 103, 104, 105, 106, 107, 108, 109, 110, 115, 120, 122, 126, 127, 135, 136, 137, 138, 141, 154, 155, 156, 157
+# The following epochs were marked as bad and are dropped:
+# [3, 140, 146, 152, 199, 205, 235, 264, 276, 281, 310, 334, 479, 485, 492, 502, 509, 527, 545, 551, 557, 569, 576, 583, 587, 637, 643, 649, 655, 661, 667, 672, 679, 684, 718, 761, 777, 800, 807, 858, 864, 871, 877, 895, 977, 984, 990, 998]
+# Channels marked as bad:
+# ['TP9', 'TP10', 'P5', 'PO7', 'AF4', 'TP8', 'FC1', 'AFz', 'F6', 'P1', 'P6', 'F4', 'AF3']
+
+# stim, stim off
+# Press return when you're done annotating bad segments ...Dropped 32 epochs: 0, 15, 21, 34, 42, 59, 69, 70, 71, 72, 74, 76, 79, 81, 84, 86, 87, 91, 92, 93, 96, 102, 107, 108, 112, 113, 121, 122, 123, 126, 133, 134
+# The following epochs were marked as bad and are dropped:
+# [6, 112, 147, 230, 300, 420, 480, 487, 493, 503, 516, 528, 546, 558, 577, 595, 601, 626, 632, 638, 656, 710, 744, 762, 795, 802, 859, 865, 872, 896, 941, 947]
+# Channels marked as bad:
+# ['TP9', 'TP10', 'P5', 'PO7', 'AF4', 'TP8', 'FC1', 'AFz', 'F6', 'P1', 'P6', 'F4', 'AF3']
+
+# cue, stim on
+# Press return when you're done annotating bad segments ...Dropped 30 epochs: 24, 51, 54, 58, 63, 75, 80, 81, 87, 89, 101, 103, 106, 111, 119, 120, 125, 126, 127, 128, 129, 132, 134, 137, 138, 139, 140, 147, 148, 158
+# The following epochs were marked as bad and are dropped:
+# [139, 316, 336, 358, 388, 458, 492, 498, 537, 551, 628, 641, 662, 694, 746, 761, 791, 797, 805, 810, 817, 834, 847, 868, 874, 881, 888, 933, 940, 1004]
+# Channels marked as bad:
+# ['TP9', 'TP10', 'P5', 'PO7', 'AF4', 'TP8', 'FC1', 'AFz', 'F6', 'P1', 'P6', 'F4', 'AF3']
+
+# stim, stim on
+# Press return when you're done annotating bad segments ...Dropped 28 epochs: 6, 32, 46, 48, 49, 72, 73, 89, 90, 91, 92, 93, 94, 95, 96, 97, 104, 108, 113, 114, 115, 116, 117, 123, 124, 125, 133, 136
+# The following epochs were marked as bad and are dropped:
+# [37, 199, 318, 331, 337, 493, 499, 616, 623, 630, 636, 642, 648, 655, 664, 670, 727, 763, 792, 798, 806, 812, 818, 862, 869, 876, 935, 966]
+# Channels marked as bad:
+# ['TP9', 'TP10', 'P5', 'PO7', 'AF4', 'TP8', 'FC1', 'AFz', 'F6', 'P1', 'P6', 'F4', 'AF3']

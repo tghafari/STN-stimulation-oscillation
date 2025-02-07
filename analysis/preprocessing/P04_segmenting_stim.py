@@ -39,7 +39,7 @@ import matplotlib.pyplot as plt
 
 
 # BIDS settings: fill these out 
-subject = '112'
+subject = '103'
 session = '01'
 task = 'SpAtt'
 run = '01'  # change this for subjects with two stim or two no-stim segments
@@ -59,7 +59,7 @@ if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
     camcan_dir = '/rds/projects/q/quinna-camcan/dataman/data_information'
 elif platform == 'mac':
-    rds_dir = '/Volumes/jenseno-avtemporal-attention-1'
+    rds_dir = '/Volumes/jenseno-avtemporal-attention'
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
@@ -98,10 +98,12 @@ stimulation_cropped_time = {"sub-107_no-stim": [15, 974],
                             "sub-101_stim": [1144, 1900],
                             "sub-112_no-stim": [878, 1289, 1870, 2280],
                             "sub-112_stim": [244, 650, 2708, 3117],
+                            "sub-103_no-stim": [785, 1113, 1380, 1715],
+                            "sub-103_stim": [72, 476, 1862, 2182],
                             }
 
 # Crop and save segments separately
-if subject in ['101', '112']:  # there is some stimulation in the break between two no-stim blocks
+if subject in ['101', '112', '103']:  # there is some stimulation in the break between two no-stim blocks
     no_stim_fragements = [raw_ica.copy().crop(tmin=stimulation_cropped_time[f'sub-{subject}_no-stim'][0], 
                           tmax=stimulation_cropped_time[f'sub-{subject}_no-stim'][1]), 
                           raw_ica.copy().crop(tmin=stimulation_cropped_time[f'sub-{subject}_no-stim'][2], 
@@ -115,7 +117,7 @@ else:
 fig_no_stim_psd = no_stim_segment.compute_psd(fmin=0.1, fmax=200).plot()  # double check and save if ok
 no_stim_segment.save(no_stim_fname, overwrite=True)
 
-if subject == '112':  # there is some stimulation in the break between two stim blocks
+if subject in ['112', '103']:  # there is some stimulation in the break between two stim blocks
     stim_fragements = [raw_ica.copy().crop(tmin=stimulation_cropped_time[f'sub-{subject}_stim'][0], 
                           tmax=stimulation_cropped_time[f'sub-{subject}_stim'][1]), 
                           raw_ica.copy().crop(tmin=stimulation_cropped_time[f'sub-{subject}_stim'][2], 
@@ -138,8 +140,8 @@ if summary_rprt:
     report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 
-                        f'sub-{subject}_150125.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub-{subject}_150125.html')
+                        f'sub-{subject}_070225.hdf5')    # it is in .hdf5 for later adding images
+    html_report_fname = op.join(report_folder, f'sub-{subject}_070225.html')
     
     report = mne.open_report(report_fname)
     report.add_figure(fig=fig_no_stim_psd, title='no stimulation psd',

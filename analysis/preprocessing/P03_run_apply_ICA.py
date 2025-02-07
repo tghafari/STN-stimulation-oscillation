@@ -30,7 +30,7 @@ from copy import deepcopy
 from mne_bids import BIDSPath, read_raw_bids
 
 # BIDS settings: fill these out 
-subject = '112'
+subject = '103'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -55,7 +55,7 @@ project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
 bids_root = op.join(project_root, 'data', 'BIDS')
 
 # for bear outage
-bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
+# bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
 
 # Specify specific file names
 bids_path = BIDSPath(subject=subject, session=session,
@@ -107,20 +107,19 @@ if len(bad_channels) > 0:
         print(f'{len(bad_channels)} bad channels removing')
         raw.info["bads"].extend(bad_channels)  # add a list of channels - should there be more than one channel to drop
 
-# Plot the channel layout (use to find those from bad components too)
-raw.plot_sensors(show_names=True)
-
 if not montage:
     print('not setting standard or costume montage as default.')
 elif montage == 'standard':  # set standard montage - easycap-M1
     """it is important to bring the montage to the standard space. Otherwise the 
     ICA and PSDs look weird."""
+    raw.plot_sensors(show_names=True)
     montage = mne.channels.make_standard_montage("easycap-M1")
     montage.plot()  # 2D
     raw.set_montage(montage, verbose=False)
     raw.plot_sensors(show_names=True)
 
 elif montage == 'costume':  # set costume montage from Sirui's layout
+    raw.plot_sensors(show_names=True)
     montage = mne.channels.read_custom_montage(montage_fname)
     montage.plot()  # 2D
     raw.set_montage(montage, verbose=False)
@@ -143,12 +142,9 @@ ica.plot_components()
 # Take another look at bad channels and remove
 raw.plot() # Mark bad channels from ICA here on raw.plot()
 
-# s110: Channels marked as bad with ica: ['AF4', 'Pz', 'F6', 'FT7']
-# s102: Channels marked as bad with ica: ['C5']
-# s101: Channels marked as bad with ica: ['TP8', 'F5', 'FC6']
-
 """
 list bad channels for all participants:
+bad ICA channels in second line
 {
 pilot_BIDS/sub-01_ses-01_run-01: ["FCz"],
 pilot_BIDS/sub-02_ses-01_run-01: [],
@@ -157,11 +153,14 @@ BIDS/sub-02_ses-01_run-01: ["TP10"],
 BIDS/sub-05_ses-01_run-01: ["almost all channels look terrible in psd"],
 BIDS/sub-107_ses-01_run-01: ["FT10"], #"all good!"
 BIDS/sub-108_ses-01_run-01: ["FT9", "T8", "T7"],
-BIDS/sub-110_ses-01_run-01: ['TP9', 'TP10', 'Fp1', 'FCz', 'AF4', 'Pz', 'F6', 'FT7'],
-BIDS/sub-102_ses-01_run-01: ['TP9', 'TP10', 'F7', 'TP7', 'PO7', 'F6', 'FT8', 'Fp1', 
-                            'F8', 'FT7', 'FC6', 'F5', 'Fp2', 'C5'],
-BIDS/sub-101_ses-01_run-01: ['TP9', 'TP10', 'CP5', 'P7', 'TP7', 'P5', 'C5', 'P6', 
-                            'PO8', 'PO7', 'P8', 'F3', 'FC6', 'F5', 'TP8']
+BIDS/sub-110_ses-01_run-01: ['TP9', 'TP10', 'Fp1', 'FCz', 
+                            'AF4', 'Pz', 'F6', 'FT7'],
+BIDS/sub-102_ses-01_run-01: ['TP9', 'TP10', 'F7', 'TP7', 'PO7', 'F6', 'FT8', 'Fp1', 'F8', 'FT7', 'FC6', 'F5', 'Fp2', 
+                            'C5'],
+BIDS/sub-103_ses-01_run-01: ['TP9', 'TP10', 'P5', 'PO7', 'AF4', 'TP8', 'FC1',
+                             'AFz','F6', 'P1', 'P6', 'F4, 'AF3']
+BIDS/sub-101_ses-01_run-01: ['TP9', 'TP10', 'CP5', 'P7', 'TP7', 'P5', 'C5', 'P6', 'PO8', 'PO7', 'P8', 'F3', 
+                            'FC6', 'F5', 'TP8']
 BIDS/sub-112_ses-01_run-01: ['TP10', 'Fp1', 'CP6', 'FC5', 'AF8', 'Fp2', 'F5', 
                             'AF7', 'F8', 'AF3', 'FC4', 'F6', 'F3', 'Cz', 'CPz', 
                             'Pz', 'P1', 'FC6', 'FC1']
@@ -184,7 +183,7 @@ ica.fit(raw_resmpld, reject_by_annotation=True, verbose=True)
 ica.plot_sources(raw_resmpld, title='ICA')
 ica.plot_components()
 
-ICA_rej_dic = {f'sub-{subject}_ses-{session}':[0, 15]} # manually selected bad ICs or from sub config file 
+ICA_rej_dic = {f'sub-{subject}_ses-{session}':[0, 1]} # manually selected bad ICs or from sub config file 
 artifact_ICs = ICA_rej_dic[f'sub-{subject}_ses-{session}']
 """
 list bad ICA components for all participants:
@@ -198,6 +197,7 @@ list bad ICA components for all participants:
 'BIDS/sub-108_ses-01_run-01': [1, 13], # don't know-almost all look terrible
 'BIDS/sub-110_ses-01_run-01': [1, 2], # 1:blink, 2:saccades
 'BIDS/sub-102_ses-01_run-01': [0, 1], # 0:blink, 4:saccades  
+'BIDS/sub-103_ses-01_run-01': [0, 1], # 0:blink, 4:saccades  
 'BIDS/sub-101_ses-01_run-01': [0, 1, 3, 4, 5], # 0:saccade, 1,3,4,5:blink  !this participant has blinked too many times!
 'BIDS/sub-112_ses-01_run-01': [0, 3, 4, 15, 19, 28, 29], # 0:blink, 4:saccades  
 
@@ -232,15 +232,15 @@ fig_ica = ica.plot_components(picks=artifact_ICs, title='removed components')
 if summary_rprt:
     report_root = op.join(project_root, 'derivatives/reports')  # RDS folder for reports
     # for bear outage
-    report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/derivatives/reports' # only for bear outage time
+    # report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/derivatives/reports' # only for bear outage time
    
     if not op.exists(op.join(report_root , 'sub-' + subject)):
         os.makedirs(op.join(report_root , 'sub-' + subject))
     report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 
-                        f'sub-{subject}_150125.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub-{subject}_150125.html')
+                        f'sub-{subject}_070225.hdf5')    # it is in .hdf5 for later adding images
+    html_report_fname = op.join(report_folder, f'sub-{subject}_070225.html')
     
     report = mne.open_report(report_fname)
     report.add_figure(fig_ica, 
