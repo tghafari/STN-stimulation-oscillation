@@ -156,6 +156,7 @@ for epoching in epoching_list:
             deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
 
             epoch, _ = reading_epochs_evoking(stim, deriv_folder, bids_path.basename)
+            epoch.selection = np.arange(97)
             if subject in ['107', '108']:
                 epoch.event_id.update({'cue_onset_left':5,'cue_onset_right':6})
 
