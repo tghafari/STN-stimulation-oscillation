@@ -42,14 +42,14 @@ def reading_epochs_evoking(stim, deriv_folder, basename, save=False):
                                + '_' + no_stim_suffix + '_' + deriv_suffix + extension)  
 
     # Read epoched data and equalize right and left
-    epochs = mne.read_epochs(input_fname, verbose=True, preload=True)  # -.5 to 1.5sec
+    epoch = mne.read_epochs(input_fname, verbose=True, preload=True)  # -.5 to 1.5sec
     # Make evoked data for conditions of interest and save
-    evoked = epochs.copy().average(method='mean').filter(0.0,30).crop(-.1,1)
+    evoked = epoch.copy().average(method='mean').filter(0.0,30).crop(-.1,1)
     evoked = evoked.apply_baseline(baseline=(-.1,0), verbose=True) 
     if save:
         mne.write_evokeds(deriv_fname, evoked, verbose=True, overwrite=True)
 
-    return epochs, evoked
+    return epoch, evoked
 
 def fig_compare_chs_plot_topos(occipital_channels, evoked_list_chs, evoked_list_topo, epoching):
 
@@ -141,6 +141,7 @@ report = mne.Report(title='subs_101-102-107-108-110-112-103')
 # Concatenate subjects together based on conditions
 for epoching in epoching_list:
     input_suffix = 'epo-' + epoching
+    deriv_suffix = 'evo-' + epoching
     print(f'Working on {epoching}')
 
     for stim in stim_segments_ls:
@@ -154,11 +155,11 @@ for epoching in epoching_list:
             datatype ='eeg', suffix=eeg_suffix)
             deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
 
-            epochs, _ = reading_epochs_evoking(stim, deriv_folder, bids_path.basename)
-            epochs_all_subs_ls.append = epochs
-            del epochs
+            epoch, _ = reading_epochs_evoking(stim, deriv_folder, bids_path.basename)
+            epochs_all_subs_ls.append(epoch)
+            del epoch
 
-        epochs_concat_all_subs = mne.concatenate_raws(epochs_all_subs_ls)
+        epochs_concat_all_subs = mne.concatenate_epochs(epochs_all_subs_ls)
         epochs_concat_all_subs.save(deriv_epoching_stim_fname)
 
 for subject in subject_list:  
