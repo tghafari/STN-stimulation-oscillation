@@ -95,7 +95,7 @@ def fig_compare_chs_plot_topos(occipital_channels, evoked_list_chs, evoked_list_
             
 
 # BIDS settings: fill these out 
-subject_list = ['101','102','107', '108', '110','112','103','concat']
+subject_list = ['101', '102', '107', '108', '110', '112', '103', 'concat']
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -156,6 +156,9 @@ for epoching in epoching_list:
             deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
 
             epoch, _ = reading_epochs_evoking(stim, deriv_folder, bids_path.basename)
+            if subject in ['107', '108']:
+                epoch.event_id.update({'cue_onset_left':5,'cue_onset_right':6})
+
             epochs_all_subs_ls.append(epoch.pick(occipital_channels))
             del epoch
 
