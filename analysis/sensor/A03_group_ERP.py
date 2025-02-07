@@ -156,7 +156,7 @@ for epoching in epoching_list:
             deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
 
             epoch, _ = reading_epochs_evoking(stim, deriv_folder, bids_path.basename)
-            epochs_all_subs_ls.append(epoch)
+            epochs_all_subs_ls.append(epoch.pick(occipital_channels))
             del epoch
 
         epochs_concat_all_subs = mne.concatenate_epochs(epochs_all_subs_ls)
