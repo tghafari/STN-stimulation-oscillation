@@ -105,13 +105,7 @@ stim_suffix = 'stim'
 no_stim_suffix = 'no-stim'
 extension = '.fif'
 
-
 stim_segments_ls = [False, True]
-epoching_types = {
-    'cue': ['cue_onset_right', 'cue_onset_left'],
-    'stim': ['stim_onset']
-}
-
 epoching_list = ['cue', 'stim']  # epoching on cue onset or stimulus onset
 
 platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
@@ -132,7 +126,7 @@ bids_root = op.join(project_root, 'data', 'BIDS')
 # for bear outage
 # bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
 deriv_folder_group = op.join(bids_root, 'derivatives', 'group') 
-deriv_epo_basename = 'sub-concat_ses-01_task-SpAtt_run-01_eeg'
+deriv_group_basename = 'sub-concat_ses-01_task-SpAtt_run-01_eeg'
 
 # Epoch stim segments and add to report
 report_root = op.join(project_root, 'derivatives/reports')  
@@ -151,7 +145,7 @@ for epoching in epoching_list:
 
     for stim in stim_segments_ls:
         print(f'Working on {epoching} stim = {stim}')
-        deriv_epoching_stim_fname = op.join(deriv_folder_group, deriv_epo_basename 
+        deriv_epoching_stim_fname = op.join(deriv_folder_group, deriv_group_basename 
                                             + '_' + stim_suffix + '_' + input_suffix + extension)
         epochs_all_subs_ls = []
         for subject in subject_list[:-1]:  
@@ -179,7 +173,7 @@ for subject in subject_list:
             print(f'Working on stim = {stim}')            
             if subject == subject_list[-1]:
                 epochs, evoked = reading_epochs_evoking(stim, deriv_folder_group, 
-                                                        deriv_epo_basename, save=True)
+                                                        deriv_group_basename, save=True)
             else:
                 bids_path = BIDSPath(subject=subject, session=session,
                                     task=task, run=run, root=bids_root, 
