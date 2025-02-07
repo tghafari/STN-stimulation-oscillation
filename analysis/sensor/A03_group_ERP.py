@@ -146,8 +146,13 @@ for epoching in epoching_list:
 
     for stim in stim_segments_ls:
         print(f'Working on {epoching} stim = {stim}')
-        deriv_epoching_stim_fname = op.join(deriv_folder_group, deriv_group_basename 
+        if stim:
+            deriv_epoching_stim_fname = op.join(deriv_folder_group, deriv_group_basename 
                                             + '_' + stim_suffix + '_' + input_suffix + extension)
+        else:
+            deriv_epoching_stim_fname = op.join(deriv_folder_group, deriv_group_basename 
+                                            + '_' + no_stim_suffix + '_' + input_suffix + extension)
+
         epochs_all_subs_ls = []
         for subject in subject_list[:-1]:  
             bids_path = BIDSPath(subject=subject, session=session,
@@ -175,7 +180,7 @@ for subject in subject_list:
         evoked_list = []  # -0.1 to 1
 
         for stim in stim_segments_ls:
-            print(f'Working on stim = {stim}')            
+            print(f'Stimulation = {stim}')            
             if subject == subject_list[-1]:
                 epochs, evoked = reading_epochs_evoking(stim, deriv_folder_group, 
                                                         deriv_group_basename, save=True)
@@ -191,7 +196,7 @@ for subject in subject_list:
             evoked_list.append(evoked)  # append evokeds for later comparison
             del epochs, evoked
 
-            fig_compare_chs_plot_topos(occipital_channels, evoked_list_cropped, evoked_list, epoching)
+        fig_compare_chs_plot_topos(occipital_channels, evoked_list_cropped, evoked_list, epoching)
 
 report.save(report_fname, overwrite=True)
 report.save(html_report_fname, overwrite=True, open_browser=True)  # to check how the report looks
