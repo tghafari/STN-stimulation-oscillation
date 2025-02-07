@@ -136,7 +136,7 @@ report_root = op.join(project_root, 'derivatives/reports')
 report_folder = op.join(report_root , 'group')
 report_fname = op.join(report_folder, 'subs_101-102-107-108-110-112-103_070225.hdf5')
 html_report_fname = op.join(report_folder, 'subs_101-102-107-108-110-112-103_070225.html')
-report = mne.open_report(report_fname)
+report = mne.Report(title='subs_101-102-107-108-110-112-103')
 
 # Concatenate subjects together based on conditions
 for epoching in epoching_list:
