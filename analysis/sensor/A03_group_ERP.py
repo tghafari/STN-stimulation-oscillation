@@ -95,7 +95,7 @@ def fig_compare_chs_plot_topos(occipital_channels, evoked_list_chs, evoked_list_
             
 
 # BIDS settings: fill these out 
-subject_list = ['101', '102', '110', '112', '103', 'concat']  #  '107', '108',  raise error due to different event_ids
+subject_list = ['101', '102', '107', '108', '110', '112', '103', 'concat']  #  '107', '108',  raise error due to different event_ids
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -134,9 +134,9 @@ report_root = op.join(project_root, 'derivatives/reports')
 # report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/derivatives/reports' # only for bear outage time
 
 report_folder = op.join(report_root , 'group')
-report_fname = op.join(report_folder, 'subs_101-102-110-112-103_070225.hdf5')
-html_report_fname = op.join(report_folder, 'subs_101-102-110-112-103_070225.html')
-report = mne.Report(title='subs_101-102-110-112-103')
+report_fname = op.join(report_folder, 'subs_101-102-107-108-110-112-103_090225.hdf5')
+html_report_fname = op.join(report_folder, 'subs_101-102-107-108-110-112-103_090225.html')
+report = mne.Report(title='subs_101-102-107-108-110-112-103')
 
 # Concatenate subjects together based on conditions
 for epoching in epoching_list:
@@ -164,7 +164,8 @@ for epoching in epoching_list:
             # if subject in ['107', '108']:
             #     epoch.event_id._({'cue_onset_left':5,'cue_onset_right':6})  # here do something to
             #     # keep the information about events but change the values from 4,5 to 5,6
-
+            # epoch.event_id.clear()
+            # epoch.event_id = {'no_id':1}  # here try to concat all event_ids avout cue/ stim. like this: event_id['{event_id_1}/{event_id_2}/...'] = new_id_number
             epochs_all_subs_ls.append(epoch.pick(occipital_channels))
             del epoch
 
