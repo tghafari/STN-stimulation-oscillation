@@ -9,7 +9,6 @@
     brainvision data.
     4. corrects the annotation and event_ids 
     5. adds annotations to the raw 
-    6. standardise montage and set reference
     7. saves as .fif
     8. then converts the raw data to bids
     9. It also plots triggers and RT to quality

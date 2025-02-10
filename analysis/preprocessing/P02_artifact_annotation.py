@@ -100,8 +100,8 @@ if muscle_reject:
 """make sure to add event annotations here again, 
 because set_annotations overwrites all annotations"""
 annotations_event = raw.annotations 
-raw.set_annotations(annotations_event + annotation_blink)
-raw.plot() # check the blink annotations
+# raw.set_annotations(annotations_event + annotation_blink)
+# raw.plot() # check the blink annotations
 
 # Annotate break sections and plot
 break_annots = mne.preprocessing.annotate_break(
@@ -112,7 +112,7 @@ break_annots = mne.preprocessing.annotate_break(
     ignore=('blink'),
 )
 
-raw.set_annotations(raw.annotations + break_annots)  # add to existing
+raw.set_annotations(raw.annotations + break_annots + annotation_blink)  # add to existing
 raw.plot()
 
 # Save the artifact annotated file
