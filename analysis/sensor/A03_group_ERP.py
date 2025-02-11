@@ -164,6 +164,9 @@ for epoching in epoching_list:
             epoch, _ = reading_epochs_evoking(stim, deriv_folder, bids_path.basename)
             if subject in subject_list_event_id:
                 epoch.event_id.update({'cue_onset_right':1,'cue_onset_left':2})
+                # Modify the third column where values are 5 or 6
+                epoch.events[epoch.events[:, 2] == 5, 2] = 1
+                epoch.events[epoch.events[:, 2] == 6, 2] = 2
             # if subject in ['107', '108']:
             #     epoch.event_id._({'cue_onset_left':5,'cue_onset_right':6})  # here do something to
             #     # keep the information about events but change the values from 4,5 to 5,6
