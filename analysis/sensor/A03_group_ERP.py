@@ -162,23 +162,25 @@ for epoching in epoching_list:
 
             epoch, _ = reading_epochs_evoking(stim, deriv_folder, bids_path.basename)
             if subject in subject_list_event_id:
-                # Modify the third column where values are 5 or 6
-                if 4 in epoch.event_id.values():
-                    epoch.events[epoch.events[:, 2] == 4, 2] = 1
-                    epoch.events[epoch.events[:, 2] == 5, 2] = 2
-                elif 6 in epoch.event_id.values():
-                    epoch.events[epoch.events[:, 2] == 5, 2] = 1
-                    epoch.events[epoch.events[:, 2] == 6, 2] = 2
-                elif 10 in epoch.event_id.values():
-                    epoch.events[epoch.events[:, 2] == 10, 2] = 4
-                elif 11 in epoch.event_id.values():
-                    epoch.events[epoch.events[:, 2] == 11, 2] = 4
-                elif 9 in epoch.event_id.values():
-                    epoch.events[epoch.events[:, 2] == 9, 2] = 4
+                # Define mapping based on event_id values for old subjects with wrong event_ids from epoching
+                event_mappings = {
+                    4: {4: 1, 5: 2},
+                    6: {5: 1, 6: 2},
+                    10: {10: 4},
+                    11: {11: 4},
+                    9: {9: 4}
+                }
+
+                # Apply the mapping based on existing values in event_id
+                for key, mapping in event_mappings.items():
+                    if key in epoch.event_id.values():
+                        for old_val, new_val in mapping.items():
+                            epoch.events[epoch.events[:, 2] == old_val, 2] = new_val
+                            
                 # also update event_id for easier later use
                 epoch.event_id.update({'cue_onset_right':1,
-                                       'cue_onset_left':2, 
-                                       'stim_onset':4})
+                                        'cue_onset_left':2, 
+                                        'stim_onset':4})
 
             epochs_all_subs_ls.append(epoch.pick(occipital_channels))
             del epoch
