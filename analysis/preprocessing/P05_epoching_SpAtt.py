@@ -7,12 +7,10 @@ This code will epoch continuous EEG based
 on conditions that are annotated in the
 data and generates an HTML report about epochs.
 
-IMO, cleanest way is to epoch based on all events,
-calculate reject threshold, find channel with most 
-bad epochs, remove channel, calculate threshold 
-again, apply on epochs. To ensure only clean
-epochs are selected, last step do a visual 
-inspection and annotation.
+best cleaning outcome: do not autoreject, 
+remove bad channels and clean only by manual 
+inspection. remove any epoch with slightest 
+uncleannes.
 
 
 written by Tara Ghafari
@@ -44,8 +42,21 @@ def segment_epoching(stim):
     segmented_ica.filter(l_freq=0.1, h_freq=100),  # get rid of stim frequency before epoching, otherwise too many bad channels
 
     print(f'double checking bad channels: {segmented_ica.info["bads"]}')
-
-    events, events_id = mne.events_from_annotations(segmented_ica, event_id='auto')
+    # Have to explicitly assign values to events otherwise it assigns arbitrary event_ids
+    event_dict = {'cue_onset_right':1,
+            'cue_onset_left':2,
+            'trial_onset':3,
+            'stim_onset':4,
+            'catch_onset':5,
+            'dot_onset_right':6,
+            'dot_onset_left':7,
+            'response_press_onset':8,
+            'block_onset':20,
+            'block_end':21,
+            'experiment_end':30, 
+            'new_stim_segment':99999, 
+            }
+    events, events_id = mne.events_from_annotations(segmented_ica, event_id=event_dict)
 
     # Make epochs (-0.5 t0 1.5 seconds on cue onset or all events)
     epochs = mne.Epochs(segmented_ica,
@@ -143,7 +154,7 @@ if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
     camcan_dir = '/rds/projects/q/quinna-camcan/dataman/data_information'
 elif platform == 'mac':
-    rds_dir = '/Volumes/jenseno-avtemporal-attention'
+    rds_dir = '/Volumes/jenseno-avtemporal-attention-1'
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')

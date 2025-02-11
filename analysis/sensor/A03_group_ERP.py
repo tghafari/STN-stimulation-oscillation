@@ -95,7 +95,8 @@ def fig_compare_chs_plot_topos(occipital_channels, evoked_list_chs, evoked_list_
             
 
 # BIDS settings: fill these out 
-subject_list = ['101', '102', '107', '108', '110', '112', '103', 'concat']  #  '107', '108',  raise error due to different event_ids
+subject_list = ['101', '102', '107', '108', '110', '112', '103', 'concat'] # all subjects
+subject_list_event_id = ['101', '102', '107', '108', '110', '112', '103'] # these are those with wrong event_ids from ica 
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -118,7 +119,7 @@ if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
     camcan_dir = '/rds/projects/q/quinna-camcan/dataman/data_information'
 elif platform == 'mac':
-    rds_dir = '/Volumes/jenseno-avtemporal-attention'
+    rds_dir = '/Volumes/jenseno-avtemporal-attention-1'
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
@@ -134,8 +135,8 @@ report_root = op.join(project_root, 'derivatives/reports')
 # report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/derivatives/reports' # only for bear outage time
 
 report_folder = op.join(report_root , 'group')
-report_fname = op.join(report_folder, 'subs_101-102-107-108-110-112-103_090225.hdf5')
-html_report_fname = op.join(report_folder, 'subs_101-102-107-108-110-112-103_090225.html')
+report_fname = op.join(report_folder, 'subs_101-102-107-108-110-112-103_110225.hdf5')
+html_report_fname = op.join(report_folder, 'subs_101-102-107-108-110-112-103_110225.html')
 report = mne.Report(title='subs_101-102-107-108-110-112-103')
 
 # Concatenate subjects together based on conditions
@@ -161,6 +162,8 @@ for epoching in epoching_list:
             deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
 
             epoch, _ = reading_epochs_evoking(stim, deriv_folder, bids_path.basename)
+            if subject in subject_list_event_id:
+                epoch.event_id.update({'cue_onset_right':1,'cue_onset_left':2})
             # if subject in ['107', '108']:
             #     epoch.event_id._({'cue_onset_left':5,'cue_onset_right':6})  # here do something to
             #     # keep the information about events but change the values from 4,5 to 5,6

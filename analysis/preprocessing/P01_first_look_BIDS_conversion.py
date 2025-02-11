@@ -69,7 +69,7 @@ summary_rprt = True
 if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
 elif platform == 'mac':
-    rds_dir = '/Volumes/jenseno-avtemporal-attention'
+    rds_dir = '/Volumes/jenseno-avtemporal-attention-1'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
 # '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD'  # only for bear outage time
