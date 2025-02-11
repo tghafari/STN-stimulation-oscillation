@@ -156,7 +156,7 @@ def representative_sensors_second_plot(tfr_slow_cue_right, tfr_slow_cue_left, re
     # Plot TFR for representative sensors - same in all participants
     fig_tfr, axis = plt.subplots(6, 2, figsize = (30, 10))
     occipital_channels = ['O1', 'PO3', 'O2', 'PO4', 'Oz', 'POz']
-    baseline=[-0.5, -0.2]
+    baseline=[-0.5, -0.2] #[-.3, -.1]
 
     for idx, ch in enumerate(occipital_channels):
         tfr_slow_cue_left.plot(picks=ch, 
