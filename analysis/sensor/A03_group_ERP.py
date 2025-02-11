@@ -173,6 +173,8 @@ for epoching in epoching_list:
                     epoch.events[epoch.events[:, 2] == 10, 2] = 4
                 elif 11 in epoch.event_id.values():
                     epoch.events[epoch.events[:, 2] == 11, 2] = 4
+                elif 9 in epoch.event_id.values():
+                    epoch.events[epoch.events[:, 2] == 9, 2] = 4
                 # also update event_id for easier later use
                 epoch.event_id.update({'cue_onset_right':1,
                                        'cue_onset_left':2, 
