@@ -93,7 +93,6 @@ def fig_compare_chs_plot_topos(occipital_channels, evoked_list_chs, evoked_list_
                                 section='stim'
                                 )
             
-
 # BIDS settings: fill these out 
 subject_list = ['101', '102', '107', '108', '110', '112', '103', 'concat'] # all subjects
 subject_list_event_id = ['101', '102', '107', '108', '110', '112', '103'] # these are those with wrong event_ids from ica 
@@ -163,20 +162,27 @@ for epoching in epoching_list:
 
             epoch, _ = reading_epochs_evoking(stim, deriv_folder, bids_path.basename)
             if subject in subject_list_event_id:
-                epoch.event_id.update({'cue_onset_right':1,'cue_onset_left':2})
                 # Modify the third column where values are 5 or 6
-                epoch.events[epoch.events[:, 2] == 5, 2] = 1
-                epoch.events[epoch.events[:, 2] == 6, 2] = 2
-            # if subject in ['107', '108']:
-            #     epoch.event_id._({'cue_onset_left':5,'cue_onset_right':6})  # here do something to
-            #     # keep the information about events but change the values from 4,5 to 5,6
-            # epoch.event_id.clear()
-            # epoch.event_id = {'no_id':1}  # here try to concat all event_ids avout cue/ stim. like this: event_id['{event_id_1}/{event_id_2}/...'] = new_id_number
+                if 4 in epoch.event_id.values():
+                    epoch.events[epoch.events[:, 2] == 4, 2] = 1
+                    epoch.events[epoch.events[:, 2] == 5, 2] = 2
+                elif 6 in epoch.event_id.values():
+                    epoch.events[epoch.events[:, 2] == 5, 2] = 1
+                    epoch.events[epoch.events[:, 2] == 6, 2] = 2
+                elif 10 in epoch.event_id.values():
+                    epoch.events[epoch.events[:, 2] == 10, 2] = 4
+                elif 11 in epoch.event_id.values():
+                    epoch.events[epoch.events[:, 2] == 11, 2] = 4
+                # also update event_id for easier later use
+                epoch.event_id.update({'cue_onset_right':1,
+                                       'cue_onset_left':2, 
+                                       'stim_onset':4})
+
             epochs_all_subs_ls.append(epoch.pick(occipital_channels))
             del epoch
 
         epochs_concat_all_subs = mne.concatenate_epochs(epochs_all_subs_ls)
-        epochs_concat_all_subs.save(deriv_epoching_stim_fname)
+        epochs_concat_all_subs.save(deriv_epoching_stim_fname, overwrite=True)
 
 for subject in subject_list:  
     for epoching in epoching_list:
