@@ -409,7 +409,7 @@ def MI_overtime_sixth_plot(tfr_alpha_MI_occ_chans, report):
 
 # =================================================================================================================
 # BIDS settings: fill these out 
-subject = '103'
+subject = 'concat'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -431,7 +431,7 @@ if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
     camcan_dir = '/rds/projects/q/quinna-camcan/dataman/data_information'
 elif platform == 'mac':
-    rds_dir = '/Volumes/jenseno-avtemporal-attention'
+    rds_dir = '/Volumes/jenseno-avtemporal-attention-1'
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
@@ -455,10 +455,13 @@ report_root = op.join(project_root, 'derivatives/reports')
 
 report_folder = op.join(report_root , 'sub-' + subject)
 report_fname = op.join(report_folder, 
-                    f'sub-{subject}_070225.hdf5')    # it is in .hdf5 for later adding images
-html_report_fname = op.join(report_folder, f'sub-{subject}_070225.html')
+                    f'sub-{subject}_110225.hdf5')    # it is in .hdf5 for later adding images
+html_report_fname = op.join(report_folder, f'sub-{subject}_110225.html')
 
-report = mne.open_report(report_fname)
+if subject == 'concat':
+    report = mne.Report(title='subs_101-102-107-108-110-112-103')
+else:
+    report = mne.open_report(report_fname)
 
 for epoching in epoching_list:
     input_suffix = 'epo-' + epoching

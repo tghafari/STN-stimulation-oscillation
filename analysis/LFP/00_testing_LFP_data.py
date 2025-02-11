@@ -20,7 +20,8 @@ t.ghafari@bham.ac.uk
 ==============================================  
 
 ToDos:
-    check the sfreq for different subjects
+    check the sfreq for different subjects 
+        it is 1250Hz
 
 
 """
@@ -43,7 +44,7 @@ platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
 pilot = False  # is it pilot data or real data?
 rprt = True
 
-sfreq = 1000  # the sampling frequency of the lfp data (1000 for ly and wmf 2000 for others) !!TODO:is this correct?
+sfreq = 1000  #the correct sfreq is 1250  
 
 if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention-1'

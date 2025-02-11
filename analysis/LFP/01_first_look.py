@@ -95,11 +95,14 @@ annotated_raw_fname = op.join(base_fpath, base_fname + '_ann.fif')
 raw = mne.io.read_raw_edf(lfp_fname, preload=True)
 raw.plot()  # first thing first
 
+sfreq = 1250  # note that the file headers incorrectly mention 1000 whereas the correct sfreq is 1250Hz
+
 # Remove the first few seconds while the LFP is warming up.
 cropped_raw = raw.copy().crop(tmin=0, tmax=119)
 cropped_raw.plot()
 
 cropped_raw.info["line_freq"] = 50  # specify power line frequency as required by BIDS
+cropped_raw.info["sfreq"] = sfreq 
 
 # Read events from raw object
 """Note that events_from_annotations messes up the 

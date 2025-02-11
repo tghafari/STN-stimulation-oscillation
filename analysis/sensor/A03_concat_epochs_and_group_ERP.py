@@ -125,7 +125,7 @@ project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
 bids_root = op.join(project_root, 'data', 'BIDS')
 # for bear outage
 # bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
-deriv_folder_group = op.join(bids_root, 'derivatives', 'group') 
+deriv_folder_group = op.join(bids_root, 'derivatives', 'concat') 
 deriv_group_basename = 'sub-concat_ses-01_task-SpAtt_run-01_eeg'
 
 # Epoch stim segments and add to report
@@ -133,7 +133,7 @@ report_root = op.join(project_root, 'derivatives/reports')
 # for bear outage
 # report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/derivatives/reports' # only for bear outage time
 
-report_folder = op.join(report_root , 'group')
+report_folder = op.join(report_root , 'concat')
 report_fname = op.join(report_folder, 'subs_101-102-107-108-110-112-103_110225.hdf5')
 html_report_fname = op.join(report_folder, 'subs_101-102-107-108-110-112-103_110225.html')
 report = mne.Report(title='subs_101-102-107-108-110-112-103')
