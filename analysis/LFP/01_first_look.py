@@ -43,17 +43,25 @@ from mne_bids.stats import count_events
 # Stimulation sequence
 """copy the stim sequence for each participant from here: 
 https://github.com/tghafari/STN-stimulation-oscillation/wiki/Stimulation-table"""
-stim_sequence = {'sub-01':["no_stim-left rec", "no_stim-right rec", "right stim- no rec", "left stim- no rec"],
-                 'sub-02':["no_stim-left rec", "no_stim-right rec", "left stim- no rec", "right stim- no rec"],
-                 'sub-05':["left stim- no rec", "right stim- no rec", "no_stim-left rec", "no_stim-right rec"],
-                 'sub-08':["no_stim-right rec", "no_stim-left rec", "left stim- no rec", "right stim- no rec"]}  
-
+stim_sequence = {'sub-01':["no_stim-left rec", "no_stim-right rec", "Right stim- no rec", "Left stim- no rec"],  # stimulation on STN
+                 'sub-02':["no_stim-left rec", "no_stim-right rec", "Left stim- no rec", "Right stim- no rec"],  # stimulation on STN
+                 'sub-05':["Left stim- no rec", "Right stim- no rec", "no_stim-left rec", "no_stim-right rec"],  # stimulation on STN
+                 'sub-107':["no_stim-right rec", "no_stim-left rec", "Right stim- no rec", "Left stim- no rec"],  # stimulation on STN
+                 'sub-108':["no_stim-right rec", "no_stim-left rec", "left stim- no rec", "right stim- no rec"],  # stimulation on STN
+                 'sub-110': ["Right stim- no rec", "Left stim- no rec", "no_stim-no rec", "no_stim-no rec"],  # no LFP recording, stimulation on VLM
+                 'sub-102': ["no_stim-left rec", "no_stim-right rec", "Left stim- no rec", "Right stim- no rec"],
+                 'sub-101': ["no_stim-left rec", "no_stim-right-rec", "Right stim- no rec", "Left stim- no rec"],
+                 'sub-111': ["Left stim- no rec", "Right stim- no rec", "no_stim-right rec", "no_stim-left rec"],
+                 'sub-112': ["Left stim- no rec", "no_stim-right rec", "no_stim-left rec", "Right stim- no rec"],
+                 'sub-103': ["Right stim- no rec", "no_stim-left rec", "no_stim-right rec", "Left stim- no rec"],
+                 } 
 # BIDS settings
-subject = '108'
+subject = '103'
 session = '01'
 task = 'SpAtt'
 run = '01'
 modality = 'lfp'
+side = 'lfp left'
 
 # BIDS events
 events_suffix = 'events'  
@@ -68,18 +76,17 @@ summary_rprt = True
 if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
 elif platform == 'mac':
-    rds_dir = '/Volumes/jenseno-avtemporal-attention'
+    rds_dir = '/Volumes/jenseno-avtemporal-attention-1'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
-if pilot:
-    data_root = op.join(project_root, 'data/pilot-data')
-else:
-    data_root = op.join(project_root, 'data/real-data')
+# '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD'  # only for bear outage time
+data_root = op.join(project_root, 'data/data-organised')
+# '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/data-organised'  # only for bear outage time
 
-bids_root = op.join(project_root, 'data', 'pilot-BIDS')
-base_fpath = op.join(data_root, f'sub-{subject}', f'ses-{session}', f'{modality}')  
-base_fname = '1010P23812_2024_09_19_15_09_12_uv'
-#f'sub-{subject}_ses-{session}_task-{task}_run-{run}_{modality}'
+bids_root = op.join(project_root, 'data', 'BIDS')
+base_fpath = op.join(data_root, f'sub-{subject}', f'ses-{session}', f'{modality}', f'{side}')  
+base_fname = '1010P24295_2025_01_15_09_57_47_uv'
+
 lfp_fname = op.join(base_fpath, base_fname + '.edf') 
 events_fname = op.join(base_fpath, base_fname + '-eve.fif')
 annotated_raw_fname = op.join(base_fpath, base_fname + '_ann.fif')
@@ -89,7 +96,7 @@ raw = mne.io.read_raw_edf(lfp_fname, preload=True)
 raw.plot()  # first thing first
 
 # Remove the first few seconds while the LFP is warming up.
-cropped_raw = raw.copy().crop(tmin=65, tmax=980)
+cropped_raw = raw.copy().crop(tmin=0, tmax=119)
 cropped_raw.plot()
 
 cropped_raw.info["line_freq"] = 50  # specify power line frequency as required by BIDS
@@ -138,7 +145,7 @@ n_fft = int(cropped_raw.info['sfreq']*2)  # to ensure window size = 2
 psd_fig = cropped_raw.copy().compute_psd(method='welch',
                                          n_fft=n_fft,  # default method is welch here (multitaper for epoch)
                                          n_overlap=int(n_fft/2),
-                                         fmax=1000).plot()  
+                                         fmax=100).plot()  
                                                                                       
 # Have to explicitly assign values to events for brainvision data
 """list of triggers https://github.com/tghafari/STN-stimulation-oscillation/blob/main/Instructions/triggers.md"""
@@ -167,8 +174,12 @@ bids_path = BIDSPath(subject=subject, session=session,
 
 # Write to BIDS format
 cropped_raw.set_annotations(None)  # have to remove annotations to prevent duplicating when converting to BIDS
-write_raw_bids(cropped_raw, bids_path, events_data=events_fname, 
-               event_id=events_id, overwrite=True, allow_preload=True,
+write_raw_bids(cropped_raw, 
+               bids_path, 
+               events=events_fname, 
+               event_id=events_id, 
+               overwrite=True, 
+               allow_preload=True,
                format='EDF')
 
 # Plot all events

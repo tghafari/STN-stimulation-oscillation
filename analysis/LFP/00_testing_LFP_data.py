@@ -1,7 +1,7 @@
 """
 ===============================================
 00_testing_LFP_data
-    this code opens the output from the LFP
+    this code opens the csv output from the LFP
     device and plots the microvolte value of 
     each sample and the tag code that was sent 
     as trigger.
@@ -10,6 +10,9 @@
     two: microvolte value for each sample
     three: is the tag code that is 
     used as trigger.
+
+    this does not input the edf.
+    for edf use 01_first_look
         
     
 written by Tara Ghafari
@@ -31,27 +34,29 @@ import matplotlib.pyplot as plt
 
 
 # fill these out
-subj_code = 'sub05'  # subject code assigned to by Benchi's group
-session_code = 'sub05_right_LFP'  # name of the folder containing the lfp data
-csv_fname = '1010P22531_2024_04_19_11_01_49_uv'
+subject = '103'  # subject code assigned to by Benchi's group
+session = '01'  # name of the folder containing the lfp data
+modality = 'lfp'
+side = 'lfp left'  # 'lfp right'
+csv_fname = '1010P24295_2025_01_15_09_57_47_uv.csv'
 platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
-pilot = True  # is it pilot data or real data?
+pilot = False  # is it pilot data or real data?
 rprt = True
 
 sfreq = 1000  # the sampling frequency of the lfp data (1000 for ly and wmf 2000 for others) !!TODO:is this correct?
 
 if platform == 'bluebear':
-    rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
+    rds_dir = '/rds/projects/j/jenseno-avtemporal-attention-1'
 elif platform == 'mac':
     rds_dir = '/Volumes/jenseno-avtemporal-attention'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
-if pilot:
-    data_root = op.join(project_root, 'Data/pilot-data')
-else:
-    data_root = op.join(project_root, 'Data/real-data')
+# '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD'  # only for bear outage time
+data_root = op.join(project_root, 'data/data-organised')
+# '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/data-organised'  # only for bear outage time
 
-csv_lfp_fname = op.join(data_root, subj_code, session_code, csv_fname + '.csv')
+base_fpath = op.join(data_root, f'sub-{subject}', f'ses-{session}', f'{modality}', f'{side}')  
+csv_lfp_fname = op.join(base_fpath, csv_fname)
 
 # Reading the lfp csv file as a dataframe
 lfp_df = pd.read_csv(csv_lfp_fname, on_bad_lines='skip')
