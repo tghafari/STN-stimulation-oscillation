@@ -76,7 +76,7 @@ summary_rprt = True
 if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
 elif platform == 'mac':
-    rds_dir = '/Volumes/jenseno-avtemporal-attention-1'
+    rds_dir = '/Volumes/jenseno-avtemporal-attention-2'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
 # '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD'  # only for bear outage time
@@ -95,14 +95,29 @@ annotated_raw_fname = op.join(base_fpath, base_fname + '_ann.fif')
 raw = mne.io.read_raw_edf(lfp_fname, preload=True)
 raw.plot()  # first thing first
 
-sfreq = 1250  # note that the file headers incorrectly mention 1000 whereas the correct sfreq is 1250Hz
+correct_sfreq = 1250  # note that the file headers incorrectly mention 1000 whereas the correct sfreq is 1250Hz
+
+# Create a new Info object with the updated sampling frequency.
+# Here we assume all channels are EEG channels. Adjust ch_types if needed.
+new_info = mne.create_info(ch_names=raw.info['ch_names'], 
+                           sfreq=correct_sfreq, 
+                           ch_types='eeg')
+
+# Create a new RawArray with the same data and the new info
+new_raw = mne.io.RawArray(raw.get_data(), new_info)
+# Copy annotations and set orig_time to None
+new_annotations = raw.annotations.copy()
+new_annotations.orig_time = None     # this doesn't work
+
+# Set the annotations on the new raw object
+new_raw.set_annotations(new_annotations)
 
 # Remove the first few seconds while the LFP is warming up.
-cropped_raw = raw.copy().crop(tmin=0, tmax=119)
+cropped_raw = new_raw.copy().crop(tmin=119, tmax=491)
 cropped_raw.plot()
 
 cropped_raw.info["line_freq"] = 50  # specify power line frequency as required by BIDS
-cropped_raw.info["sfreq"] = sfreq 
+# cropped_raw.info['sfreq'] = 1250
 
 # Read events from raw object
 """Note that events_from_annotations messes up the 
@@ -123,20 +138,32 @@ however many events are in the raw file in some order I don't understand.
 Make sure to plot and check which value corresponds to which event and define 
 them in the mapping dictionary below."""
 
-mapping = {1:'cue_onset_right',
-           4:'cue_onset_left',
-           5:'trial_onset',
-           6:'stim_onset',
-           7:'catch_onset',
-           8:'dot_onset_right',
-           9:'dot_onset_left',
-           10:'response_press_onset',
-           2:'block_onset',
-           3:'block_end',         
-        }
+# mapping = {1:'cue_onset_right',
+#            4:'cue_onset_left',
+#            5:'trial_onset',
+#            6:'stim_onset',
+#            7:'catch_onset',
+#            8:'dot_onset_right',
+#            9:'dot_onset_left',
+#            10:'response_press_onset',
+#            2:'block_onset',
+#            3:'block_end',         
+#         }  % maybe for 108? or old subjects
+
+mapping_103 = {1:'cue_onset_left',
+           2:'cue_onset_right',
+           3:'trial_onset',
+           4:'stim_onset',
+           5:'catch_onset',
+           7:'dot_onset_right',
+           6:'dot_onset_left',
+           8:'response_press_onset',
+           15:'block_onset',
+           14:'block_end',         
+        }  # right and left dot/cue might be the other way around
 #annotations_from_events with mapping decreases events 217->170 and messes up the ids
 annotations_from_events = mne.annotations_from_events(events=events_messed_up,
-                                                    event_desc=mapping,
+                                                    event_desc=mapping_103,
                                                     sfreq=cropped_raw.info["sfreq"],
                                                     orig_time=cropped_raw.info["meas_date"],
                                                     )
@@ -247,17 +274,17 @@ if sanity_test:
 
 
 if summary_rprt:
-    report_root = op.join(project_root, 'derivatives/reports/pilot')  # RDS folder for reports
+    report_root = op.join(project_root, 'derivatives/reports')  # RDS folder for reports
    
     if not op.exists(op.join(report_root , 'sub-' + subject)):
         os.makedirs(op.join(report_root , 'sub-' + subject))
     report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 
-                        f'sub-{subject}_preproc_1.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub-{subject}_preproc_1.html')
+                        f'sub-{subject}_LFP.hdf5')    # it is in .hdf5 for later adding images
+    html_report_fname = op.join(report_folder, f'sub-{subject}_LFP.html')
     
-    report = mne.Report(title=f'Subject {subject}')
+    report = mne.Report(title=f'Subject {subject}-LFP')
     if eve_rprt:
         report.add_events(events=events, 
                         event_id=events_id, 
