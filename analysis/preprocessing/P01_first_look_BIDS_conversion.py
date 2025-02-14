@@ -52,8 +52,8 @@ stim_sequence = {'sub-01':["no_stim-left rec", "no_stim-right rec", "Right stim-
                  'sub-103': ["Right stim- no rec", "no_stim-left rec", "no_stim-right rec", "Left stim- no rec"],
                  } 
 # BIDS settings
-subject = '103'
-brainVision_basename = f'{subject[-2:]}_AO'  # might need modification per subject
+subject = '107'
+brainVision_basename = f'ao_{subject[-2:]}'  # might need modification per subject
 
 session = '01'
 task = 'SpAtt'
@@ -69,7 +69,7 @@ summary_rprt = True
 if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
 elif platform == 'mac':
-    rds_dir = '/Volumes/jenseno-avtemporal-attention-1'
+    rds_dir = '/Volumes/jenseno-avtemporal-attention'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
 # '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD'  # only for bear outage time
@@ -258,10 +258,10 @@ if summary_rprt:
     html_report_fname = op.join(report_folder, f'sub-{subject}_070225.html')
     
     report = mne.Report(title=f'Subject {subject}')
-    # report.add_image(beh_fig_fname,
-    #                 title='RT and performance',
-    #                 caption='reaction time and behavioural performance',
-    #                 tags=('beh'))
+    report.add_image(beh_fig_fname,
+                    title='RT and performance',
+                    caption='reaction time and behavioural performance',
+                    tags=('beh'))
     report.add_events(events=events, 
                     event_id=events_id, 
                     tags=('eve'),

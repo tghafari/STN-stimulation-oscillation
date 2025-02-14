@@ -71,7 +71,7 @@ def tfr_calculation_first_plot(stim, report):
                         # 'it relates to the temporal (deltaT) and spectral (deltaF)' 
                         # 'smoothing'
                         # 'the more tapers, the more smooth'->useful for high freq data
-    baseline = [-0.5, -0.2]  # baseline for TFRs are longer than for ERPs
+    baseline = [-0.3, -0.1]  # baseline for TFRs are longer than for ERPs
     
     tfr_slow_cue_both = mne.time_frequency.tfr_multitaper(epochs['cue_onset_right','cue_onset_left'],  
                                                     freqs=freqs, 
@@ -156,7 +156,7 @@ def representative_sensors_second_plot(tfr_slow_cue_right, tfr_slow_cue_left, re
     # Plot TFR for representative sensors - same in all participants
     fig_tfr, axis = plt.subplots(6, 2, figsize = (30, 10))
     occipital_channels = ['O1', 'PO3', 'O2', 'PO4', 'Oz', 'POz']
-    baseline=[-0.5, -0.2] #[-.3, -.1]
+    baseline = [-.3, -.1] # [-0.5, -0.2]
 
     for idx, ch in enumerate(occipital_channels):
         tfr_slow_cue_left.plot(picks=ch, 
@@ -276,7 +276,7 @@ def topographic_maps_fourth_plot(peak_alpha_freq_range, tfr_slow_cue_both, tfr_s
                         tmin=.3,
                         tmax=.8,
                         vlim=(-.5,.5),
-                        baseline=(-0.5, -0.2), # only baseline that's tuple (not list)
+                        baseline=(-0.3, -0.1), # only baseline that's tuple (not list)
                         mode='percent')
 
     fig_topo, axis = plt.subplots(1, 3, figsize=(8, 4))
@@ -298,7 +298,7 @@ def topographic_maps_fourth_plot(peak_alpha_freq_range, tfr_slow_cue_both, tfr_s
 
     report.add_figure(fig=fig_topo, title=f'stim:{stim}, post stim alpha',
                             caption='PAF range, 0.3-0.8sec, \
-                            baseline corrected (-0.5, -0.2)', 
+                            baseline corrected (-0.3, -0.1)', 
                             tags=('tfr'),
                             section='TFR'  # only in ver 1.1
                             )   
@@ -409,7 +409,7 @@ def MI_overtime_sixth_plot(tfr_alpha_MI_occ_chans, report):
 
 # =================================================================================================================
 # BIDS settings: fill these out 
-subject = 'concat'
+subject = '107'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -431,7 +431,7 @@ if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
     camcan_dir = '/rds/projects/q/quinna-camcan/dataman/data_information'
 elif platform == 'mac':
-    rds_dir = '/Volumes/jenseno-avtemporal-attention-1'
+    rds_dir = '/Volumes/jenseno-avtemporal-attention'
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
@@ -455,8 +455,8 @@ report_root = op.join(project_root, 'derivatives/reports')
 
 report_folder = op.join(report_root , 'sub-' + subject)
 report_fname = op.join(report_folder, 
-                    f'sub-{subject}_110225.hdf5')    # it is in .hdf5 for later adding images
-html_report_fname = op.join(report_folder, f'sub-{subject}_110225.html')
+                    f'sub-{subject}_070225.hdf5')    # it is in .hdf5 for later adding images
+html_report_fname = op.join(report_folder, f'sub-{subject}_070225.html')
 
 if subject == 'concat':
     report = mne.Report(title='subs_101-102-107-108-110-112-103')

@@ -30,7 +30,7 @@ from copy import deepcopy
 from mne_bids import BIDSPath, read_raw_bids
 
 # BIDS settings: fill these out 
-subject = '103'
+subject = '107'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -72,14 +72,9 @@ montage_fname = op.join(project_root, 'data', 'data-organised', 'new-64.bvef')
 # Read annotated data
 raw = mne.io.read_raw_fif(input_fname, verbose=True, preload=True)
 
-# Here crop any extra segments at the beginning or end of the recording 
-"""there's no need for this if you've annotated breaks in P02"""
-# raw.plot() 
-# raw.crop(tmin=230)  # sub101
-
 ########################## BAD CHANNEL REJECTION ######################################
 
-## 1. Scroll one more time and psd to remove any other bad channels after filtering
+## 1. Scroll and psd to remove any other bad channels after filtering
 """Mark bad channels on the plots"""
 raw_filtered = raw.copy().filter(l_freq=1, h_freq=100)  # filter only for plotting now 
 raw_filtered.plot()  # mark bad channels after filtering stimulation frequency
@@ -90,10 +85,12 @@ n_fft = int(raw.info['sfreq']*2)  # to ensure window size = 2sec
 raw_filtered.compute_psd(n_fft=n_fft,  # default method is welch here (multitaper for epoch)
                          n_overlap=int(n_fft/2),
                          fmax=105).plot()  
-# S110: Channels marked bad in this stage: Fp1 FCz
+"""Channels marked bad in this stage:
+ {'sub-110': 'Fp1 FCz'
+ 'sub-107':'C2 FC1 F3 AF7'}"""
 
 ## 2. Mark bad channels before ICA
-original_bads = deepcopy(raw.info["bads"]) #P8, F3
+original_bads = deepcopy(raw.info["bads"]) 
 print(f'these are original bads: {original_bads}')
 user_list = input('Any other bad channels from psd? name of channel, e.g. FT10 T9 (separate by space) or return.')
 bad_channels = user_list.split()
@@ -151,7 +148,7 @@ pilot_BIDS/sub-02_ses-01_run-01: [],
 BIDS/sub-01_ses-01_run-01: ["T7", "FT10"],
 BIDS/sub-02_ses-01_run-01: ["TP10"],
 BIDS/sub-05_ses-01_run-01: ["almost all channels look terrible in psd"],
-BIDS/sub-107_ses-01_run-01: ["FT10"], #"all good!"
+BIDS/sub-107_ses-01_run-01: ["AFz", "C6", "AF4", "P3", "Pz", "F1"], 
 BIDS/sub-108_ses-01_run-01: ["FT9", "T8", "T7"],
 BIDS/sub-110_ses-01_run-01: ['TP9', 'TP10', 'Fp1', 'FCz', 
                             'AF4', 'Pz', 'F6', 'FT7'],
@@ -183,7 +180,7 @@ ica.fit(raw_resmpld, reject_by_annotation=True, verbose=True)
 ica.plot_sources(raw_resmpld, title='ICA')
 ica.plot_components()
 
-ICA_rej_dic = {f'sub-{subject}_ses-{session}':[0, 1]} # manually selected bad ICs or from sub config file 
+ICA_rej_dic = {f'sub-{subject}_ses-{session}':[0, 3, 5]} # manually selected bad ICs or from sub config file 
 artifact_ICs = ICA_rej_dic[f'sub-{subject}_ses-{session}']
 """
 list bad ICA components for all participants:
@@ -193,7 +190,7 @@ list bad ICA components for all participants:
 'BIDS/sub-01_ses-01_run-01': [0, 1, 2], # 0:blink, 1:saccades, 2:blink/saccades
 'BIDS/sub-02_ses-01_run-01': [0, 1, 2, 3, 4], # 0:blink, 1:saccades, 2:blink/saccades, 3&4: empty
 'BIDS/sub-05_ses-01_run-01': [0, 1, 8, 58, 59], # don't know-almost all look terrible
-'BIDS/sub-107_ses-01_run-01': [28], # maybe eye movement?  
+'BIDS/sub-107_ses-01_run-01': [0, 3, 5], saccade and blink  
 'BIDS/sub-108_ses-01_run-01': [1, 13], # don't know-almost all look terrible
 'BIDS/sub-110_ses-01_run-01': [1, 2], # 1:blink, 2:saccades
 'BIDS/sub-102_ses-01_run-01': [0, 1], # 0:blink, 4:saccades  

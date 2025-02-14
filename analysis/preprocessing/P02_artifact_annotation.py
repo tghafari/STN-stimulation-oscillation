@@ -25,7 +25,7 @@ from mne_bids import BIDSPath, read_raw_bids
 
 
 # BIDS settings: fill these out 
-subject = '103'
+subject = '107'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -44,7 +44,7 @@ elif platform == 'windows':
     rds_dir = 'Z:'
     camcan_dir = 'X:/dataman/data_information'
 elif platform == 'mac':
-    rds_dir = '/Volumes/jenseno-avtemporal-attention-1'
+    rds_dir = '/Volumes/jenseno-avtemporal-attention'
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
@@ -66,9 +66,25 @@ deriv_fname = op.join(deriv_folder, bids_path.basename + '_' + deriv_suffix + ex
 raw = read_raw_bids(bids_path=bids_path, verbose=False, 
                      extra_params={'preload':True})
 
+# Here crop any extra segments at the beginning or end of the recording 
+"""this helps better detecting blinks"""
+# raw.plot() 
+raw.crop(tmax=1859)  
+
+# Annotate break sections and plot
+break_annots = mne.preprocessing.annotate_break(
+    raw=raw,
+    min_break_duration=20,  # consider segments of at least 20 s duration
+    t_start_after_previous=5,  # start annotation 5 s after end of previous one
+    t_stop_before_next=2,  # stop annotation 2 s before beginning of next one
+    ignore=('blink'),
+)
+
 # Identifying and annotating eye blinks using vEOG
 """sub-101 had to add thresh=6e-4. about 1300 blinks detected (I scrolled most of the data)"""
-eog_events = find_eog_events(raw)
+eog_events = find_eog_events(raw, thresh=1e-4)
+"""{'sub-107':'thresh=1e-4',
+}"""
 onset = eog_events[:,0] / raw.info['sfreq'] -.25 #'from flux pipline and mne tutorial but why?'
 n_blinks = len(eog_events)  # length of the event file is the number of blinks in total
 duration = np.repeat(.5, n_blinks)  # duration of each blink is assumed to be 500ms
@@ -100,18 +116,6 @@ if muscle_reject:
 """make sure to add event annotations here again, 
 because set_annotations overwrites all annotations"""
 annotations_event = raw.annotations 
-# raw.set_annotations(annotations_event + annotation_blink)
-# raw.plot() # check the blink annotations
-
-# Annotate break sections and plot
-break_annots = mne.preprocessing.annotate_break(
-    raw=raw,
-    min_break_duration=20,  # consider segments of at least 20 s duration
-    t_start_after_previous=5,  # start annotation 5 s after end of previous one
-    t_stop_before_next=2,  # stop annotation 2 s before beginning of next one
-    ignore=('blink'),
-)
-
 raw.set_annotations(raw.annotations + break_annots + annotation_blink)  # add to existing
 raw.plot()
 

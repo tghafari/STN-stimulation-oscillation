@@ -46,7 +46,7 @@ def reading_epochs_evoking(stim):
 
 
 # BIDS settings: fill these out 
-subject = '103'
+subject = '107'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -172,13 +172,13 @@ for epoching in epoching_list:
                                 caption=f'evoked response for {epoching} \
                                     cue=200ms, ISI=1000, stim=1000-2000ms', 
                                 tags=('evo'),
-                                section='stim'
+                                section='evoked'
                                 )
     report.add_figure(fig=fig_comp_plot_topo, title=f'compare evoked responses',
                                 caption=f'evoked response for {epoching} \
                                     cue=200ms, ISI=1000, stim=1000-2000ms', 
                                 tags=('evo'),
-                                section='stim'
+                                section='evoked'
                                 )
 
 report.save(report_fname, overwrite=True)
