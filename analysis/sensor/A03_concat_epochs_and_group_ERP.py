@@ -118,14 +118,14 @@ if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
     camcan_dir = '/rds/projects/q/quinna-camcan/dataman/data_information'
 elif platform == 'mac':
-    rds_dir = '/Volumes/jenseno-avtemporal-attention-1'
+    rds_dir = '/Volumes/jenseno-avtemporal-attention'
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
 bids_root = op.join(project_root, 'data', 'BIDS')
 # for bear outage
 # bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
-deriv_folder_group = op.join(bids_root, 'derivatives', 'concat') 
+deriv_folder_group = op.join(bids_root, 'derivatives', 'sub-concat') 
 deriv_group_basename = 'sub-concat_ses-01_task-SpAtt_run-01_eeg'
 
 # Epoch stim segments and add to report
@@ -134,14 +134,14 @@ report_root = op.join(project_root, 'derivatives/reports')
 # report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/derivatives/reports' # only for bear outage time
 
 report_folder = op.join(report_root , 'concat')
-report_fname = op.join(report_folder, 'subs_101-102-107-108-110-112-103_110225.hdf5')
-html_report_fname = op.join(report_folder, 'subs_101-102-107-108-110-112-103_110225.html')
+report_fname = op.join(report_folder, 'subs_101-102-107-108-110-112-103_170225.hdf5')
+html_report_fname = op.join(report_folder, 'subs_101-102-107-108-110-112-103_170225.html')
 report = mne.Report(title='subs_101-102-107-108-110-112-103')
 
 # Concatenate subjects together based on conditions
 for epoching in epoching_list:
     input_suffix = 'epo-' + epoching
-    deriv_suffix = 'evo-' + epoching
+    deriv_suffix = epoching + '-ave'
     print(f'Working on {epoching}')
 
     for stim in stim_segments_ls:
@@ -149,18 +149,23 @@ for epoching in epoching_list:
         if stim:
             deriv_epoching_stim_fname = op.join(deriv_folder_group, deriv_group_basename 
                                             + '_' + stim_suffix + '_' + input_suffix + extension)
+            deriv_evoked_stim_fname = op.join(deriv_folder_group, deriv_group_basename 
+                                            + '_' + stim_suffix + '_' + deriv_suffix + extension)
         else:
             deriv_epoching_stim_fname = op.join(deriv_folder_group, deriv_group_basename 
                                             + '_' + no_stim_suffix + '_' + input_suffix + extension)
+            deriv_evoked_stim_fname = op.join(deriv_folder_group, deriv_group_basename 
+                                            + '_' + no_stim_suffix + '_' + deriv_suffix + extension)
 
         epochs_all_subs_ls = []
+        evokeds_all_subs_ls = []
         for subject in subject_list[:-1]:  
             bids_path = BIDSPath(subject=subject, session=session,
             task=task, run=run, root=bids_root, 
             datatype ='eeg', suffix=eeg_suffix)
             deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
 
-            epoch, _ = reading_epochs_evoking(stim, deriv_folder, bids_path.basename)
+            epoch, evoked = reading_epochs_evoking(stim, deriv_folder, bids_path.basename)
             if subject in subject_list_event_id:
                 # Define mapping based on event_id values for old subjects with wrong event_ids from epoching
                 event_mappings = {
@@ -183,10 +188,14 @@ for epoching in epoching_list:
                                         'stim_onset':4})
 
             epochs_all_subs_ls.append(epoch.pick(occipital_channels))
+            evokeds_all_subs_ls.append(evoked.pick(occipital_channels))
+
             del epoch
 
-        epochs_concat_all_subs = mne.concatenate_epochs(epochs_all_subs_ls)
+        epochs_concat_all_subs = mne.concatenate_epochs(epochs_all_subs_ls)  # this will treat all data as one subject
         epochs_concat_all_subs.save(deriv_epoching_stim_fname, overwrite=True)
+        grand_average_evokeds = mne.grand_average(evokeds_all_subs_ls)  # this will create a grand average and hence is more generaliseable
+        grand_average_evokeds.save(deriv_evoked_stim_fname, overwrite=True)
 
 for subject in subject_list:  
     for epoching in epoching_list:
@@ -199,19 +208,19 @@ for subject in subject_list:
         for stim in stim_segments_ls:
             print(f'Stimulation = {stim}')            
             if subject == subject_list[-1]:
-                epochs, evoked = reading_epochs_evoking(stim, deriv_folder_group, 
-                                                        deriv_group_basename, save=True)
+                evoked = mne.read_evokeds(deriv_evoked_stim_fname, condition=0)  # condition=0 is the only condition in the evokeds, has to be here for the grand average to output one grand averaged evoked
             else:
                 bids_path = BIDSPath(subject=subject, session=session,
                                     task=task, run=run, root=bids_root, 
                                     datatype ='eeg', suffix=eeg_suffix)
                 deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
-                epochs, evoked = reading_epochs_evoking(stim, deriv_folder, bids_path.basename)
+                _, evoked = reading_epochs_evoking(stim, deriv_folder, bids_path.basename)
 
             evoked.comment = f'stim:{stim_segments_ls[stim]}, {epoching} onset'
-            evoked_list_cropped.append(evoked.copy().crop(-0.1,0.5))
+            evoked_list_cropped.append(evoked.copy().crop(-0.1, 0.5))
             evoked_list.append(evoked)  # append evokeds for later comparison
-            del epochs, evoked
+
+            del evoked
 
         fig_compare_chs_plot_topos(occipital_channels, evoked_list_cropped, evoked_list, epoching)
 
