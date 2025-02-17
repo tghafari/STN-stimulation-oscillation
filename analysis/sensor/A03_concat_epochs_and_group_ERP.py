@@ -13,7 +13,6 @@ This code will
 
 
 written by Tara Ghafari
-adapted from flux pipeline
 ==============================================
 ToDos:    
 Questions:
@@ -223,6 +222,17 @@ for subject in subject_list:
             del evoked
 
         fig_compare_chs_plot_topos(occipital_channels, evoked_list_cropped, evoked_list, epoching)
+
+        freqs = np.arange(2, 31, 1)  # the frequency range over which we perform the analysis
+        n_cycles = freqs / 2  # the length of sliding window in cycle units. 
+        time_bandwidth = 2.0  # '(2deltaTdeltaF) number of DPSS tapers to be used + 1.'
+                            # 'it relates to the temporal (deltaT) and spectral (deltaF)' 
+                            # 'smoothing'
+                            # 'the more tapers, the more smooth'->useful for high freq data
+        baseline = [-0.3, -0.1]  # baseline for TFRs are longer than for ERPs
+
+        method_kw = dict(n_cycles=n_cycles, time_bandwidth=time_bandwidth, use_fft=True)
+        test_tfr = evoked.compute_tfr(method='multitaper',freqs=np.arange(2,31), picks='all',**method_kw)
 
 report.save(report_fname, overwrite=True)
 report.save(html_report_fname, overwrite=True, open_browser=True)  # to check how the report looks

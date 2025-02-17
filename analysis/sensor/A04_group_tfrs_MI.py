@@ -1,10 +1,13 @@
-# -*- coding: utf-8 -*-
 """
 ===============================================
-A02. calculate MI and select ROI
+A04. Grand average TFRs
 
-This code will:
-
+This code will 
+    1. navigate to each subjects clean epochs
+    2. appends each subject's tfr to a list.
+    3. calculates a grand average of al subjects'
+    tfrs.
+    then:
     A. Peak Alpha Frequency
     1. calculate TFR for cue right and left
     2. plot TFR plot_topo and TFR on two
@@ -18,14 +21,17 @@ This code will:
     B. MI
     6. calculate MI = (attend right - attend left) \
     / (attend right + attend left) 
-    7. plot MI topographically 
+    7. plot MI over time
+
+    note that plot_topomap is irrelavant as in the
+    group average we only keep the occipital 
+    channels
 
 
 written by Tara Ghafari
 ==============================================
-ToDos:
-
-questions?
+ToDos:    
+Questions:
 
 """
 
@@ -268,44 +274,8 @@ def peak_alpha_calculation_third_plot(occipital_channels, tfr_slow_cue_right, tf
 
     return peak_alpha_freq_range, report
 
-def topographic_maps_fourth_plot(peak_alpha_freq_range, tfr_slow_cue_both, tfr_slow_cue_right, tfr_slow_cue_left, report):
-    # ========================================= TOPOGRAPHIC MAPS AND FOURTH PLOT ============================================
-    # Plot post cue peak alpha range topographically
-    topomap_params = dict(fmin=peak_alpha_freq_range[0], 
-                        fmax=peak_alpha_freq_range[-1],
-                        tmin=.3,
-                        tmax=.8,
-                        vlim=(-.5,.5),
-                        baseline=(-0.3, -0.1), # only baseline that's tuple (not list)
-                        mode='percent')
-
-    fig_topo, axis = plt.subplots(1, 3, figsize=(8, 4))
-    tfr_slow_cue_both.plot_topomap(**topomap_params,
-                            axes=axis[0],
-                            show=False)    
-    tfr_slow_cue_left.plot_topomap(**topomap_params,
-                            axes=axis[1],
-                            show=False)
-    tfr_slow_cue_right.plot_topomap(**topomap_params,
-                                axes=axis[2],
-                                show=False)
-    axis[0].title.set_text('cue both')
-    axis[1].title.set_text('cue left')
-    axis[2].title.set_text('cue right')
-    fig_topo.suptitle(f"Post stim alpha (PAF)-stim={stim}")
-    fig_topo.set_tight_layout(True)
-    plt.show()
-
-    report.add_figure(fig=fig_topo, title=f'stim:{stim}, post stim alpha',
-                            caption='PAF range, 0.3-0.8sec, \
-                            baseline corrected (-0.3, -0.1)', 
-                            tags=('tfr'),
-                            section='TFR'  # only in ver 1.1
-                            )   
-    return report
-
 def MI_calculation_fifth_plot(tfr_params, peak_alpha_freq_range, epochs, occipital_channels, report):
-    # ================================== B. MI on occipital (+ parietal) channels - poststim alpha topomap ==================================
+    # ================================== B. MI over time - poststim alpha topomap ==================================
 
     freqs = peak_alpha_freq_range  # peak frequency range calculated earlier
     n_cycles = freqs / 2  # the length of sliding window in cycle units. 
@@ -345,34 +315,6 @@ def MI_calculation_fifth_plot(tfr_params, peak_alpha_freq_range, epochs, occipit
     tfr_alpha_modulation_power.data = (tfr_right_peak_alpha_all_chans.data - tfr_left_peak_alpha_all_chans.data) \
                                     / (tfr_right_peak_alpha_all_chans.data + tfr_left_peak_alpha_all_chans.data)
 
-    fig, ax = plt.subplots()
-    fig_mi = tfr_alpha_modulation_power.plot_topomap(tmin=.3, 
-                                                    tmax=.8, 
-                                                    fmin=peak_alpha_freq_range[0],
-                                                    fmax=peak_alpha_freq_range[-1],
-                                                    vlim=(-.2,.2),
-                                                    show=False, axes=ax)
-
-    # Plot markers for the sensors in occipital (+ parietal) channels
-    for chan in occipital_channels:
-        ch_idx = tfr_alpha_modulation_power.info['ch_names'].index(chan)
-        x, y = tfr_alpha_modulation_power.info['chs'][ch_idx]['loc'][:2]
-        ax.plot(x, y, 'ko', markerfacecolor='none', markersize=10)
-                                    
-    fig_mi.suptitle(f'stim:{stim}- attention right - attention left (PAF range on occipital channels)')
-    plt.show()  
-
-    report.add_figure(fig=fig_mi, title=f'stim:{stim}, MI and ROI',
-                            caption='MI on PAF range and \
-                            occipital channels (0.3 to 0.8 sec)', 
-                            tags=('mi'),
-                            section='MI'  
-                            )  
-    
-    return tfr_alpha_MI_occ_chans, report
-
-def MI_overtime_sixth_plot(tfr_alpha_MI_occ_chans, report):
-    # ========================================= MI OVER TIME AND SIXTH PLOT =======================================
     # Plot MI avg across ROI over time
     fig, axs = plt.subplots(figsize=(12, 6))
 
@@ -405,11 +347,13 @@ def MI_overtime_sixth_plot(tfr_alpha_MI_occ_chans, report):
                 section='MI'  
                 )
 
-    return report
+    
+    return tfr_alpha_MI_occ_chans, report
+
 
 # =================================================================================================================
 # BIDS settings: fill these out 
-subject = '107'
+subject_list = ['101', '102', '107', '108', '110', '112', '103', 'concat'] # all subjects
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -463,42 +407,38 @@ if subject == 'concat':
 else:
     report = mne.open_report(report_fname)
 
-for epoching in epoching_list:
-    input_suffix = 'epo-' + epoching
-    deriv_suffix = 'tfr-' + epoching
-    evoked_list = []
+for subject in subject_list: 
+    for epoching in epoching_list:
+        input_suffix = 'epo-' + epoching
+        deriv_suffix = 'tfr-' + epoching
+        evoked_list = []
 
-    for stim in stim_segments_ls:
-        print(f'Reading stim:{stim}')
-        bids_path = BIDSPath(subject=subject, session=session,
-                    task=task, run=run, root=bids_root, 
-                    datatype ='eeg', suffix=eeg_suffix)
-        deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
+        for stim in stim_segments_ls:
+            print(f'Reading stim:{stim}')
+            bids_path = BIDSPath(subject=subject, session=session,
+                        task=task, run=run, root=bids_root, 
+                        datatype ='eeg', suffix=eeg_suffix)
+            deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
 
-        (epochs, tfr_slow_cue_both, tfr_slow_cue_right, 
-            tfr_slow_cue_left, report) = tfr_calculation_first_plot(stim, report)
-        
-        report = representative_sensors_second_plot(tfr_slow_cue_right, 
-                                                    tfr_slow_cue_left, 
-                                                    report)
-        peak_alpha_freq_range, report = peak_alpha_calculation_third_plot(occipital_channels, 
-                                                                        tfr_slow_cue_right, 
-                                                                        tfr_slow_cue_left, 
-                                                                        epochs,
-                                                                        report)
-        report = topographic_maps_fourth_plot(peak_alpha_freq_range, 
-                                                tfr_slow_cue_both, 
-                                                tfr_slow_cue_right, 
-                                                tfr_slow_cue_left, 
-                                                report
-                                                )
-        
-        tfr_alpha_MI_occ_chans, report = MI_calculation_fifth_plot(tfr_params, 
-                                                                peak_alpha_freq_range, 
-                                                                epochs, 
-                                                                occipital_channels,
-                                                                report)
-        # report = MI_overtime_sixth_plot(tfr_alpha_MI_occ_chans, report)  # Don't plot now, it looks terrible 
+            (epochs, tfr_slow_cue_both, tfr_slow_cue_right, 
+                tfr_slow_cue_left, report) = tfr_calculation_first_plot(stim, report)
+            all_subs_tfr_slow_cue_both_ls.append(tfr_slow_cue_both)                                               
+
+            report = representative_sensors_second_plot(tfr_slow_cue_right, 
+                                                        tfr_slow_cue_left, 
+                                                        report)
+            peak_alpha_freq_range, report = peak_alpha_calculation_third_plot(occipital_channels, 
+                                                                            tfr_slow_cue_right, 
+                                                                            tfr_slow_cue_left, 
+                                                                            epochs,
+                                                                            report)
+            
+            tfr_alpha_MI_occ_chans, report = MI_calculation_fifth_plot(tfr_params, 
+                                                                    peak_alpha_freq_range, 
+                                                                    epochs, 
+                                                                    occipital_channels,
+                                                                    report)
+            # report = MI_overtime_sixth_plot(tfr_alpha_MI_occ_chans, report)  # Don't plot now, it looks terrible 
 
 report.save(report_fname, overwrite=True)
 report.save(html_report_fname, overwrite=True, open_browser=True)  # to check how the report looks
