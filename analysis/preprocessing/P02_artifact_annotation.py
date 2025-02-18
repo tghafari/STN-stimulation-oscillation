@@ -25,7 +25,7 @@ from mne_bids import BIDSPath, read_raw_bids
 
 
 # BIDS settings: fill these out 
-subject = '107'
+subject = '108'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -68,8 +68,8 @@ raw = read_raw_bids(bids_path=bids_path, verbose=False,
 
 # Here crop any extra segments at the beginning or end of the recording 
 """this helps better detecting blinks"""
-# raw.plot() 
-raw.crop(tmax=1859)  
+raw.plot() 
+raw.crop(tmax=1883)  
 
 # Annotate break sections and plot
 break_annots = mne.preprocessing.annotate_break(

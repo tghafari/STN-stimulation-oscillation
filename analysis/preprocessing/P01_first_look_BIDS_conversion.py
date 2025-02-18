@@ -52,8 +52,8 @@ stim_sequence = {'sub-01':["no_stim-left rec", "no_stim-right rec", "Right stim-
                  'sub-103': ["Right stim- no rec", "no_stim-left rec", "no_stim-right rec", "Left stim- no rec"],
                  } 
 # BIDS settings
-subject = '107'
-brainVision_basename = f'ao_{subject[-2:]}'  # might need modification per subject
+subject = '102'
+brainVision_basename = f'{subject[-2:]}_ao'  # might need modification per subject
 
 session = '01'
 task = 'SpAtt'
@@ -103,7 +103,7 @@ else:
     raw = mne.io.read_raw_brainvision(vhdr_fname, eog=('HEOGL', 'HEOGR', 'VEOGb'), preload=True)
 
 # first thing first- find if you must crop useless data
-raw.plot()  # get an idea about the data, confirm stimulation order and annotate break spans with BAD
+# raw.plot()  # get an idea about the data, confirm stimulation order and annotate break spans with BAD
 
 # Rename channels according to function
 """T8 and FT10 = vertical electro-oculogram (EOG), 
@@ -254,8 +254,8 @@ if summary_rprt:
     report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 
-                        f'sub-{subject}_070225.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub-{subject}_070225.html')
+                        f'sub-{subject}_180225.hdf5')    # it is in .hdf5 for later adding images
+    html_report_fname = op.join(report_folder, f'sub-{subject}_180225.html')
     
     report = mne.Report(title=f'Subject {subject}')
     report.add_image(beh_fig_fname,
