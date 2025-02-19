@@ -1,10 +1,13 @@
-# -*- coding: utf-8 -*-
 """
 ===============================================
-A02. calculate MI and select ROI
+A04. Grand average TFRs
 
-This code will:
-
+This code will 
+    1. navigate to each subjects clean epochs
+    2. appends each subject's tfr to a list.
+    3. calculates a grand average of al subjects'
+    tfrs.
+    then:
     A. Peak Alpha Frequency
     1. calculate TFR for cue right and left
     2. plot TFR plot_topo and TFR on two
@@ -18,14 +21,17 @@ This code will:
     B. MI
     6. calculate MI = (attend right - attend left) \
     / (attend right + attend left) 
-    7. plot MI topographically 
+    7. plot MI over time
+
+    note that plot_topomap is irrelavant as in the
+    group average we only keep the occipital 
+    channels
 
 
 written by Tara Ghafari
 ==============================================
-ToDos:
-
-questions?
+ToDos:    
+Questions:
 
 """
 
@@ -73,7 +79,8 @@ def tfr_calculation_first_plot(stim, report):
                         # 'the more tapers, the more smooth'->useful for high freq data
     baseline = [-0.3, -0.1]  # baseline for TFRs are longer than for ERPs
     
-    tfr_slow_cue_both = mne.time_frequency.tfr_multitaper(epochs['cue_onset_right','cue_onset_left'],  
+    tfr_slow_cue_both = epochs['cue_onset_right','cue_onset_left'].compute_tfr(
+                                                    method='multitaper',
                                                     freqs=freqs, 
                                                     n_cycles=n_cycles,
                                                     time_bandwidth=time_bandwidth, 
@@ -81,7 +88,8 @@ def tfr_calculation_first_plot(stim, report):
                                                     )
     mne.time_frequency.write_tfrs(deriv_fname_both, tfr_slow_cue_both, overwrite=True) 
 
-    tfr_slow_cue_right = mne.time_frequency.tfr_multitaper(epochs['cue_onset_right'],  
+    tfr_slow_cue_right = epochs['cue_onset_right'].compute_tfr(
+                                                    method='multitaper',
                                                     freqs=freqs, 
                                                     n_cycles=n_cycles,
                                                     time_bandwidth=time_bandwidth, 
@@ -150,7 +158,37 @@ def tfr_calculation_first_plot(stim, report):
 
     return epochs, tfr_slow_cue_both, tfr_slow_cue_right, tfr_slow_cue_left, report
 
-def representative_sensors_second_plot(tfr_slow_cue_right, tfr_slow_cue_left, report):
+def calculate_grand_average(stim, all_subs_tfr_slow_cue_both_ls, all_subs_tfr_slow_cue_right_ls, all_subs_tfr_slow_cue_left_ls):
+    """this function calculates grand average of all tfrs, generates proper names and saves them"""
+
+    if stim:
+        deriv_fname_group_both = op.join(deriv_folder_group, deriv_group_basename
+                               + '_both_' + stim_suffix + '_' + deriv_suffix + extension) 
+        deriv_fname_group_right = op.join(deriv_folder_group, deriv_group_basename
+                               + '_right_' + stim_suffix + '_' + deriv_suffix + extension) 
+        deriv_fname_group_left = op.join(deriv_folder_group, deriv_group_basename
+                               + '_left_' + stim_suffix + '_' + deriv_suffix + extension)  
+    else:
+        deriv_fname_group_both = op.join(deriv_folder_group, deriv_group_basename 
+                               + '_both_' + stim_suffix + '_' + deriv_suffix + extension) 
+        deriv_fname_group_right = op.join(deriv_folder_group, deriv_group_basename 
+                               + '_right_' + no_stim_suffix + '_' + deriv_suffix + extension)  
+        deriv_fname_group_left = op.join(deriv_folder_group, deriv_group_basename 
+                               + '_left_' + no_stim_suffix + '_' + deriv_suffix + extension)  
+        
+    grand_avg_cue_both = mne.grand_average(all_subs_tfr_slow_cue_both_ls)    
+    grand_avg_cue_both.write_tfr(deriv_fname_group_both)
+
+    grand_avg_cue_right = mne.grand_average(all_subs_tfr_slow_cue_right_ls) 
+    grand_avg_cue_both.write_tfr(deriv_fname_group_right)
+
+    grand_avg_cue_left = mne.grand_average(all_subs_tfr_slow_cue_left_ls)      
+    grand_avg_cue_both.write_tfr(deriv_fname_group_left)
+
+    return grand_avg_cue_both, grand_avg_cue_right, grand_avg_cue_left                               
+
+
+def representative_sensors_second_plot(grand_avg_cue_right, grand_avg_cue_left, report):
     # ========================================= SECOND PLOT (REPRESENTATIVE SENSROS) ====================================
 
     # Plot TFR for representative sensors - same in all participants
@@ -159,7 +197,7 @@ def representative_sensors_second_plot(tfr_slow_cue_right, tfr_slow_cue_left, re
     baseline = [-.3, -.1] # [-0.5, -0.2]
 
     for idx, ch in enumerate(occipital_channels):
-        tfr_slow_cue_left.plot(picks=ch, 
+        grand_avg_cue_left.plot(picks=ch, 
                                 baseline=baseline,
                                 mode='percent', 
                                 tmin=-.5, 
@@ -170,7 +208,7 @@ def representative_sensors_second_plot(tfr_slow_cue_right, tfr_slow_cue_left, re
                                 show=False)
         axis[idx, 0].set_title(f'stim={stim}-cue left-{ch}') 
         # axis[idx, 1].set_xlabel('')        
-        tfr_slow_cue_right.plot(picks=ch,
+        grand_avg_cue_right.plot(picks=ch,
                                 baseline=baseline,
                                 mode='percent', 
                                 tmin=-.5, 
@@ -190,7 +228,7 @@ def representative_sensors_second_plot(tfr_slow_cue_right, tfr_slow_cue_left, re
     plt.show()      
 
     report.add_figure(fig=fig_tfr, title=f'stim:{stim}, TFR on two sensors',
-                        caption='Time Frequency Representation on \
+                        caption='Group Time Frequency Representation on \
                         right and left sensors', 
                         tags=('tfr'),
                         section='TFR'
@@ -198,12 +236,12 @@ def representative_sensors_second_plot(tfr_slow_cue_right, tfr_slow_cue_left, re
 
     return report
 
-def peak_alpha_calculation_third_plot(occipital_channels, tfr_slow_cue_right, tfr_slow_cue_left, epochs, report):
+def peak_alpha_calculation_third_plot(occipital_channels, grand_avg_cue_right, grand_avg_cue_left, epochs, report):
     # ========================================= PEAK ALPHA FREQUENCY (PAF) AND THIRD PLOT ====================================
 
     # Crop post stim alpha
-    tfr_slow_cue_right_post_stim = tfr_slow_cue_right.copy().crop(tmin=.3,tmax=.8,fmin=8, fmax=14).pick(occipital_channels)
-    tfr_slow_cue_left_post_stim = tfr_slow_cue_left.copy().crop(tmin=.3,tmax=.8,fmin=8, fmax=14).pick(occipital_channels)
+    tfr_slow_cue_right_post_stim = grand_avg_cue_right.copy().crop(tmin=.3,tmax=.8,fmin=8, fmax=14).pick(occipital_channels)
+    tfr_slow_cue_left_post_stim = grand_avg_cue_left.copy().crop(tmin=.3,tmax=.8,fmin=8, fmax=14).pick(occipital_channels)
 
     # Find the frequency with the highest power by averaging over sensors and time points (data)
     freq_idx_right = np.argmax(np.mean(np.abs(tfr_slow_cue_right_post_stim.data), axis=(0,2)))
@@ -253,7 +291,7 @@ def peak_alpha_calculation_third_plot(occipital_channels, tfr_slow_cue_right, tf
             va='bottom')
     plt.xlabel('Frequency (Hz)')
     plt.ylabel('Power (T/m)^2/Hz')
-    plt.title(f'{epoching} onset- PAF = {peak_alpha_freq} Hz- stim={stim}')
+    plt.title(f'Group {epoching} onset- PAF = {peak_alpha_freq} Hz- stim={stim}')
 
     plt.grid(True)
     fig_peak_alpha = plt.gcf()
@@ -268,54 +306,15 @@ def peak_alpha_calculation_third_plot(occipital_channels, tfr_slow_cue_right, tf
 
     return peak_alpha_freq_range, report
 
-def topographic_maps_fourth_plot(peak_alpha_freq_range, tfr_slow_cue_both, tfr_slow_cue_right, tfr_slow_cue_left, report):
-    # ========================================= TOPOGRAPHIC MAPS AND FOURTH PLOT ============================================
-    # Plot post cue peak alpha range topographically
-    topomap_params = dict(fmin=peak_alpha_freq_range[0], 
-                        fmax=peak_alpha_freq_range[-1],
-                        tmin=.3,
-                        tmax=.8,
-                        vlim=(-.5,.5),
-                        baseline=(-0.3, -0.1), # only baseline that's tuple (not list)
-                        mode='percent')
-
-    fig_topo, axis = plt.subplots(1, 3, figsize=(8, 4))
-    tfr_slow_cue_both.plot_topomap(**topomap_params,
-                            axes=axis[0],
-                            show=False)    
-    tfr_slow_cue_left.plot_topomap(**topomap_params,
-                            axes=axis[1],
-                            show=False)
-    tfr_slow_cue_right.plot_topomap(**topomap_params,
-                                axes=axis[2],
-                                show=False)
-    axis[0].title.set_text('cue both')
-    axis[1].title.set_text('cue left')
-    axis[2].title.set_text('cue right')
-    fig_topo.suptitle(f"Post stim alpha (PAF)-stim={stim}")
-    fig_topo.set_tight_layout(True)
-    plt.show()
-
-    report.add_figure(fig=fig_topo, title=f'stim:{stim}, post stim alpha',
-                            caption='PAF range, 0.3-0.8sec, \
-                            baseline corrected (-0.3, -0.1)', 
-                            tags=('tfr'),
-                            section='TFR'  # only in ver 1.1
-                            )   
-    return report
-
-def MI_calculation_fifth_plot(tfr_params, peak_alpha_freq_range, epochs, occipital_channels, report):
-    # ================================== B. MI on occipital (+ parietal) channels - poststim alpha topomap ==================================
+def MI_calculation_overtime_plot(tfr_params, peak_alpha_freq_range, grand_avg_cue_right, grand_avg_cue_left, occipital_channels, report):
+    # ================================== B. MI over time - poststim alpha topomap ==================================
 
     freqs = peak_alpha_freq_range  # peak frequency range calculated earlier
     n_cycles = freqs / 2  # the length of sliding window in cycle units. 
     time_bandwidth = 2.0 
                         
-    tfr_right_peak_alpha_all_chans = mne.time_frequency.tfr_multitaper(epochs['cue_onset_right'],  
-                                                    freqs=freqs, 
-                                                    n_cycles=n_cycles,
-                                                    time_bandwidth=time_bandwidth, 
-                                                    **tfr_params,
+                        # figure out how to only do alpha peak for grand averages.
+    tfr_right_peak_alpha_all_chans = grand_avg_cue_right.filter(alpha_PAF_range, 
                                                     )                                                
     tfr_left_peak_alpha_all_chans = mne.time_frequency.tfr_multitaper(epochs['cue_onset_left'],  
                                                     freqs=freqs, 
@@ -345,34 +344,6 @@ def MI_calculation_fifth_plot(tfr_params, peak_alpha_freq_range, epochs, occipit
     tfr_alpha_modulation_power.data = (tfr_right_peak_alpha_all_chans.data - tfr_left_peak_alpha_all_chans.data) \
                                     / (tfr_right_peak_alpha_all_chans.data + tfr_left_peak_alpha_all_chans.data)
 
-    fig, ax = plt.subplots()
-    fig_mi = tfr_alpha_modulation_power.plot_topomap(tmin=.3, 
-                                                    tmax=.8, 
-                                                    fmin=peak_alpha_freq_range[0],
-                                                    fmax=peak_alpha_freq_range[-1],
-                                                    vlim=(-.2,.2),
-                                                    show=False, axes=ax)
-
-    # Plot markers for the sensors in occipital (+ parietal) channels
-    for chan in occipital_channels:
-        ch_idx = tfr_alpha_modulation_power.info['ch_names'].index(chan)
-        x, y = tfr_alpha_modulation_power.info['chs'][ch_idx]['loc'][:2]
-        ax.plot(x, y, 'ko', markerfacecolor='none', markersize=10)
-                                    
-    fig_mi.suptitle(f'stim:{stim}- attention right - attention left (PAF range on occipital channels)')
-    plt.show()  
-
-    report.add_figure(fig=fig_mi, title=f'stim:{stim}, MI and ROI',
-                            caption='MI on PAF range and \
-                            occipital channels (0.3 to 0.8 sec)', 
-                            tags=('mi'),
-                            section='MI'  
-                            )  
-    
-    return tfr_alpha_MI_occ_chans, report
-
-def MI_overtime_sixth_plot(tfr_alpha_MI_occ_chans, report):
-    # ========================================= MI OVER TIME AND SIXTH PLOT =======================================
     # Plot MI avg across ROI over time
     fig, axs = plt.subplots(figsize=(12, 6))
 
@@ -405,11 +376,13 @@ def MI_overtime_sixth_plot(tfr_alpha_MI_occ_chans, report):
                 section='MI'  
                 )
 
-    return report
+    
+    return tfr_alpha_MI_occ_chans, report
+
 
 # =================================================================================================================
 # BIDS settings: fill these out 
-subject = '107'
+subject_list = ['101', '102', '107', '108', '110', '112', '103', 'group'] # all subjects
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -434,69 +407,74 @@ elif platform == 'mac':
     rds_dir = '/Volumes/jenseno-avtemporal-attention'
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
+
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
 bids_root = op.join(project_root, 'data', 'BIDS')
 # for bear outage
 # bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
-
-# Specify specific file names
-ROI_dir = op.join(project_root, 'derivatives/lateralisation-indices')
-peak_alpha_fname = op.join(ROI_dir, f'sub-{subject}_peak_alpha.npz')  # 2 numpy arrays saved into an uncompressed file
-
-# Select ROI sensors
-occipital_channels = ['PO4', 'POz', 'PO3']
-
-tfr_params = dict(use_fft=True, return_itc=False, average=True, decim=2, n_jobs=4, verbose=True)
+deriv_folder_group = op.join(bids_root, 'derivatives', 'group') 
+deriv_group_basename = 'sub-concat_ses-01_task-SpAtt_run-01_eeg'
 
 # Epoch stim segments and add to report
 report_root = op.join(project_root, 'derivatives/reports')  
 # for bear outage
 # report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/derivatives/reports' # only for bear outage time
 
-report_folder = op.join(report_root , 'sub-' + subject)
-report_fname = op.join(report_folder, 
-                    f'sub-{subject}_070225.hdf5')    # it is in .hdf5 for later adding images
-html_report_fname = op.join(report_folder, f'sub-{subject}_070225.html')
+report_folder = op.join(report_root , 'group')
+report_fname = op.join(report_folder, 'subs_101-102-107-108-110-112-103_170225.hdf5')
+html_report_fname = op.join(report_folder, 'subs_101-102-107-108-110-112-103_170225.html')
+report = mne.Report(title='subs_101-102-107-108-110-112-103')
+
+# Specify specific file names
+ROI_dir = op.join(project_root, 'derivatives/lateralisation-indices')
+peak_alpha_fname = op.join(ROI_dir, 'group_peak_alpha.npz')  # 2 numpy arrays saved into an uncompressed file
+
+# Select ROI sensors
+occipital_channels = ['PO4', 'POz', 'PO3']
+
+tfr_params = dict(use_fft=True, return_itc=False, average=True, decim=2, n_jobs=4, verbose=True)
+
+all_subs_tfr_slow_cue_both_ls = []
+all_subs_tfr_slow_cue_right_ls = []
+all_subs_tfr_slow_cue_left_ls = []
+
+for subject in subject_list: 
+    for epoching in epoching_list:
+        input_suffix = epoching + '-epo'
+        deriv_suffix = epoching + '-tfr'
+        evoked_list = []
+
+        for stim in stim_segments_ls:
+            print(f'Reading stim:{stim}')
+            bids_path = BIDSPath(subject=subject, session=session,
+                        task=task, run=run, root=bids_root, 
+                        datatype ='eeg', suffix=eeg_suffix)
+            deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
+
+            (epochs, tfr_slow_cue_both, tfr_slow_cue_right, 
+                tfr_slow_cue_left, report) = tfr_calculation_first_plot(stim, report)
+            
+            all_subs_tfr_slow_cue_both_ls.append(tfr_slow_cue_both)
+            all_subs_tfr_slow_cue_right_ls.append(tfr_slow_cue_right) 
+            all_subs_tfr_slow_cue_left_ls.append(tfr_slow_cue_left)  
+
+            # grand average all tfrs
 
 
-report = mne.open_report(report_fname)
-
-for epoching in epoching_list:
-    input_suffix = 'epo-' + epoching
-    deriv_suffix = 'tfr-' + epoching
-    evoked_list = []
-
-    for stim in stim_segments_ls:
-        print(f'Reading stim:{stim}')
-        bids_path = BIDSPath(subject=subject, session=session,
-                    task=task, run=run, root=bids_root, 
-                    datatype ='eeg', suffix=eeg_suffix)
-        deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
-
-        (epochs, tfr_slow_cue_both, tfr_slow_cue_right, 
-            tfr_slow_cue_left, report) = tfr_calculation_first_plot(stim, report)
-        
-        report = representative_sensors_second_plot(tfr_slow_cue_right, 
-                                                    tfr_slow_cue_left, 
-                                                    report)
-        peak_alpha_freq_range, report = peak_alpha_calculation_third_plot(occipital_channels, 
-                                                                        tfr_slow_cue_right, 
-                                                                        tfr_slow_cue_left, 
-                                                                        epochs,
-                                                                        report)
-        report = topographic_maps_fourth_plot(peak_alpha_freq_range, 
-                                                tfr_slow_cue_both, 
-                                                tfr_slow_cue_right, 
-                                                tfr_slow_cue_left, 
-                                                report
-                                                )
-        
-        tfr_alpha_MI_occ_chans, report = MI_calculation_fifth_plot(tfr_params, 
-                                                                peak_alpha_freq_range, 
-                                                                epochs, 
-                                                                occipital_channels,
-                                                                report)
-        # report = MI_overtime_sixth_plot(tfr_alpha_MI_occ_chans, report)  # Don't plot now, it looks terrible 
+            report = representative_sensors_second_plot(tfr_slow_cue_right, 
+                                                        tfr_slow_cue_left, 
+                                                        report)
+            peak_alpha_freq_range, report = peak_alpha_calculation_third_plot(occipital_channels, 
+                                                                            tfr_slow_cue_right, 
+                                                                            tfr_slow_cue_left, 
+                                                                            epochs,
+                                                                            report)
+            
+            tfr_alpha_MI_occ_chans, report = MI_calculation_overtime_plot(tfr_params, 
+                                                                    peak_alpha_freq_range, 
+                                                                    epochs, 
+                                                                    occipital_channels,
+                                                                    report)
 
 report.save(report_fname, overwrite=True)
 report.save(html_report_fname, overwrite=True, open_browser=True)  # to check how the report looks

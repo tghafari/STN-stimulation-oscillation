@@ -86,8 +86,9 @@ raw_filtered.compute_psd(n_fft=n_fft,  # default method is welch here (multitape
                          n_overlap=int(n_fft/2),
                          fmax=105).plot()  
 """Channels marked bad in this stage:
- {'sub-110': 'Fp1 FCz'
- 'sub-107':'C2 FC1 F3 AF7'}"""
+ {'sub-110': 'Fp1 FCz',
+ 'sub-107':'C2 FC1 F3 AF7'
+ 'sub-102': ['Fp1', 'F7', 'Fp2', 'F8', 'F5', 'FT7', 'AF7', 'F6', 'AF8', 'PO7', 'TP7', 'TP8', 'PO8', 'FT8']}"""
 
 ## 2. Mark bad channels before ICA
 original_bads = deepcopy(raw.info["bads"]) 
@@ -152,8 +153,8 @@ BIDS/sub-107_ses-01_run-01: ["AFz", "C6", "AF4", "P3", "Pz", "F1"],
 BIDS/sub-108_ses-01_run-01: ["FT9", "T8", "T7"],
 BIDS/sub-110_ses-01_run-01: ['TP9', 'TP10', 'Fp1', 'FCz', 
                             'AF4', 'Pz', 'F6', 'FT7'],
-BIDS/sub-102_ses-01_run-01: ['TP9', 'TP10', 'F7', 'TP7', 'PO7', 'F6', 'FT8', 'Fp1', 'F8', 'FT7', 'FC6', 'F5', 'Fp2', 
-                            'C5'],
+BIDS/sub-102_ses-01_run-01: ['Fp1', 'F7', 'Fp2', 'F8', 'F5', 'FT7', 'AF7', 'F6', 'AF8', 'PO7', 'TP7',
+                             'TP8', 'PO8', 'FT8'],
 BIDS/sub-103_ses-01_run-01: ['TP9', 'TP10', 'P5', 'PO7', 'AF4', 'TP8', 'FC1',
                              'AFz','F6', 'P1', 'P6', 'F4, 'AF3']
 BIDS/sub-101_ses-01_run-01: ['TP9', 'TP10', 'CP5', 'P7', 'TP7', 'P5', 'C5', 'P6', 'PO8', 'PO7', 'P8', 'F3', 
@@ -161,6 +162,7 @@ BIDS/sub-101_ses-01_run-01: ['TP9', 'TP10', 'CP5', 'P7', 'TP7', 'P5', 'C5', 'P6'
 BIDS/sub-112_ses-01_run-01: ['TP10', 'Fp1', 'CP6', 'FC5', 'AF8', 'Fp2', 'F5', 
                             'AF7', 'F8', 'AF3', 'FC4', 'F6', 'F3', 'Cz', 'CPz', 
                             'Pz', 'P1', 'FC6', 'FC1']
+
 } """
 
 del raw_resmpld, ica  # free up memory
@@ -180,7 +182,7 @@ ica.fit(raw_resmpld, reject_by_annotation=True, verbose=True)
 ica.plot_sources(raw_resmpld, title='ICA')
 ica.plot_components()
 
-ICA_rej_dic = {f'sub-{subject}_ses-{session}':[0, 3, 5]} # manually selected bad ICs or from sub config file 
+ICA_rej_dic = {f'sub-{subject}_ses-{session}':[0, 1]} # manually selected bad ICs or from sub config file 
 artifact_ICs = ICA_rej_dic[f'sub-{subject}_ses-{session}']
 """
 list bad ICA components for all participants:
@@ -218,10 +220,6 @@ ica.apply(raw_ica)
 # Save the ICA cleaned data
 raw_ica.save(deriv_fname, overwrite=True)
 
-# plot raw before and after ICA
-raw.plot(duration=5, title='before')
-raw_ica.plot(duration=5, title='after')
-
 # only add excluded components to the report
 fig_ica = ica.plot_components(picks=artifact_ICs, title='removed components')
 
@@ -236,8 +234,8 @@ if summary_rprt:
     report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 
-                        f'sub-{subject}_070225.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub-{subject}_070225.html')
+                        f'sub-{subject}_180225.hdf5')    # it is in .hdf5 for later adding images
+    html_report_fname = op.join(report_folder, f'sub-{subject}_180225.html')
     
     report = mne.open_report(report_fname)
     report.add_figure(fig_ica, 

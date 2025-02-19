@@ -93,8 +93,8 @@ def fig_compare_chs_plot_topos(occipital_channels, evoked_list_chs, evoked_list_
                                 )
             
 # BIDS settings: fill these out 
-subject_list = ['101', '102', '107', '108', '110', '112', '103', 'concat'] # all subjects
-subject_list_event_id = ['101', '102', '107', '108', '110', '112', '103'] # these are those with wrong event_ids from ica 
+subject_list = ['102', '107', '110', '112', '103', 'concat'] # all subjects
+subject_list_event_id = ['102', '107', '110', '112', '103'] # these are those with wrong event_ids from ica 
 session = '01'
 task = 'SpAtt'
 run = '01'
