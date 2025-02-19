@@ -25,7 +25,7 @@ from mne_bids import BIDSPath, read_raw_bids
 
 
 # BIDS settings: fill these out 
-subject = '108'
+subject = '102'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -68,8 +68,8 @@ raw = read_raw_bids(bids_path=bids_path, verbose=False,
 
 # Here crop any extra segments at the beginning or end of the recording 
 """this helps better detecting blinks"""
-raw.plot() 
-raw.crop(tmax=1883)  
+# raw.plot() 
+raw.crop(tmin=198)  
 
 # Annotate break sections and plot
 break_annots = mne.preprocessing.annotate_break(
@@ -82,8 +82,9 @@ break_annots = mne.preprocessing.annotate_break(
 
 # Identifying and annotating eye blinks using vEOG
 """sub-101 had to add thresh=6e-4. about 1300 blinks detected (I scrolled most of the data)"""
-eog_events = find_eog_events(raw, thresh=1e-4)
+eog_events = find_eog_events(raw, thresh=7e-5)
 """{'sub-107':'thresh=1e-4',
+'sub-102': 'thresh=7e-5',
 }"""
 onset = eog_events[:,0] / raw.info['sfreq'] -.25 #'from flux pipline and mne tutorial but why?'
 n_blinks = len(eog_events)  # length of the event file is the number of blinks in total

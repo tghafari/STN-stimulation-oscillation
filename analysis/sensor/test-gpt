@@ -1,0 +1,396 @@
+"""
+==============================================================
+Group Analysis of TFRs, Peak Alpha Frequency, and MI over Time
+==============================================================
+
+This script performs the following steps:
+1. For each participant, for each epoching condition (e.g. 'cue') and for each stimulation 
+   condition (stim vs. no_stim):
+    - Reads the epoched data.
+    - Computes the TFR using the multitaper method over the frequency range 2–31 Hz.
+    - Saves the TFR files.
+    - Plots TFR topographies for cue both, cue right, and cue left and adds them to an MNE Report.
+2. Aggregates participant TFRs (separately for 'stim' and 'no_stim') into a dictionary.
+   Then computes grand averages for each condition (for cue both, right, left), saves these in 
+   the group derivatives folder, and adds representative sensor plots to the report.
+3. From the grand averaged TFRs, calculates the peak alpha frequency (PAF) per condition and plots 
+   the power spectrum with the PAF range highlighted.
+4. Crops the grand average TFR to the PAF range and computes a modulation index (MI) over time 
+   (MI = (right - left) / (right + left)), and plots MI over time.
+5. Finally, all generated plots are added to a single MNE Report that is saved to disk.
+
+Author: [Your Name]
+Date: [Current Date]
+"""
+
+import os.path as op
+import os
+import numpy as np
+import pandas as pd
+import mne
+from mne_bids import BIDSPath
+import matplotlib.pyplot as plt
+
+# ---------------------------
+# Functions for subject-level processing
+# ---------------------------
+
+def tfr_calculation_first_plot(stim, report):
+    """
+    Reads epoched data for a given stimulation condition, computes the TFRs for cue both, cue right, 
+    and cue left using a multitaper method over 2–31 Hz (inclusive), saves the TFR files, and plots 
+    the TFR topographies. The plots are added to the MNE Report.
+    
+    Parameters
+    ----------
+    stim : bool
+        If True, use stimulation-specific file naming.
+    report : mne.Report
+        MNE Report object to which figures are added.
+    
+    Returns
+    -------
+    epochs : instance of mne.Epochs
+        The loaded epochs.
+    tfr_both : instance of mne.time_frequency.AverageTFR
+        TFR for both cues.
+    tfr_right : instance of mne.time_frequency.AverageTFR
+        TFR for cue right.
+    tfr_left : instance of mne.time_frequency.AverageTFR
+        TFR for cue left.
+    report : mne.Report
+        Updated report with added figures.
+    """
+    # Define file naming based on stim flag
+    if stim:
+        input_fname = op.join(deriv_folder, bids_path.basename + '_' + stim_suffix + '_' + input_suffix + extension)
+        deriv_fname_both = op.join(deriv_folder, bids_path.basename + '_both_' + stim_suffix + '_' + deriv_suffix + extension)
+        deriv_fname_right = op.join(deriv_folder, bids_path.basename + '_right_' + stim_suffix + '_' + deriv_suffix + extension)
+        deriv_fname_left = op.join(deriv_folder, bids_path.basename + '_left_' + stim_suffix + '_' + deriv_suffix + extension)
+        cond_label = 'stim'
+    else:
+        input_fname = op.join(deriv_folder, bids_path.basename + '_' + no_stim_suffix + '_' + input_suffix + extension)
+        deriv_fname_both = op.join(deriv_folder, bids_path.basename + '_both_' + no_stim_suffix + '_' + deriv_suffix + extension)
+        deriv_fname_right = op.join(deriv_folder, bids_path.basename + '_right_' + no_stim_suffix + '_' + deriv_suffix + extension)
+        deriv_fname_left = op.join(deriv_folder, bids_path.basename + '_left_' + no_stim_suffix + '_' + deriv_suffix + extension)
+        cond_label = 'no_stim'
+    
+    # Read epochs (e.g., from -0.5 to 1.5 sec)
+    epochs = mne.read_epochs(input_fname, verbose=True, preload=True)
+    
+    # TFR parameters
+    tfr_params = dict(use_fft=True, return_itc=False, average=True, decim=2, n_jobs=4, verbose=True)
+    freqs = np.arange(2, 32, 1)  # frequencies from 2 to 31 Hz (inclusive)
+    n_cycles = freqs / 2.0       # sliding window length in cycles
+    time_bandwidth = 2.0
+    baseline = [-0.3, -0.1]
+    
+    # Compute TFRs for combined cue events, and for cue right and cue left separately.
+    tfr_both = epochs['cue_onset_right', 'cue_onset_left'].compute_tfr(
+                    method='multitaper', freqs=freqs, n_cycles=n_cycles,
+                    time_bandwidth=time_bandwidth, **tfr_params)
+    mne.time_frequency.write_tfrs(deriv_fname_both, tfr_both, overwrite=True)
+    
+    tfr_right = epochs['cue_onset_right'].compute_tfr(
+                    method='multitaper', freqs=freqs, n_cycles=n_cycles,
+                    time_bandwidth=time_bandwidth, **tfr_params)
+    mne.time_frequency.write_tfrs(deriv_fname_right, tfr_right, overwrite=True)
+    
+    tfr_left = epochs['cue_onset_left'].compute_tfr(
+                    method='multitaper', freqs=freqs, n_cycles=n_cycles,
+                    time_bandwidth=time_bandwidth, **tfr_params)
+    mne.time_frequency.write_tfrs(deriv_fname_left, tfr_left, overwrite=True)
+    
+    # Plot TFR topographies for each event type
+    fig_both = tfr_both.plot_topo(tmin=-0.5, tmax=1.5, baseline=baseline, mode='percent',
+                                   title=f'{cond_label}: TFR (cue both)', show=False)
+    fig_right = tfr_right.plot_topo(tmin=-0.5, tmax=1.5, baseline=baseline, mode='percent',
+                                    title=f'{cond_label}: TFR (cue right)', show=False)
+    fig_left = tfr_left.plot_topo(tmin=-0.5, tmax=1.5, baseline=baseline, mode='percent',
+                                   title=f'{cond_label}: TFR (cue left)', show=False)
+    
+    # Add figures to the report
+    report.add_figure(fig=fig_both, title=f'{cond_label} TFR cue both',
+                      caption=f'Time-Frequency Representation (2-31 Hz) for cue both (baseline: {baseline})',
+                      tags=('tfr',), section='TFR')
+    report.add_figure(fig=fig_right, title=f'{cond_label} TFR cue right',
+                      caption=f'Time-Frequency Representation for cue right (baseline: {baseline})',
+                      tags=('tfr',), section='TFR')
+    report.add_figure(fig=fig_left, title=f'{cond_label} TFR cue left',
+                      caption=f'Time-Frequency Representation for cue left (baseline: {baseline})',
+                      tags=('tfr',), section='TFR')
+    
+    return epochs, tfr_both, tfr_right, tfr_left, report
+
+# ---------------------------
+# Functions for group-level (grand average) processing
+# ---------------------------
+
+def calculate_grand_average_group(grand_tfr_dict, deriv_folder_group, deriv_group_basename, stim_suffix, no_stim_suffix, deriv_suffix, extension):
+    """
+    Calculates the grand average TFR for each condition (stim and no_stim) and for each cue type 
+    (both, right, left) from the collected subject-level TFRs. Saves the grand average TFR files.
+
+    Parameters
+    ----------
+    grand_tfr_dict : dict
+        Dictionary with keys 'stim' and 'no_stim'; each maps to a dict with keys 'both', 'right', and 'left'
+        that contain lists of AverageTFR objects from subjects.
+    deriv_folder_group : str
+        Folder to save group-level derivative files.
+    deriv_group_basename : str
+        Base filename for the group-level files.
+    stim_suffix, no_stim_suffix, deriv_suffix, extension : str
+        Suffixes and file extension for naming.
+
+    Returns
+    -------
+    group_grand_avg : dict
+        Nested dictionary with grand averages for each condition and cue type.
+    """
+    group_grand_avg = {'stim': {}, 'no_stim': {}}
+    for cond in ['stim', 'no_stim']:
+        tag = stim_suffix if cond == 'stim' else no_stim_suffix
+        for side in ['both', 'right', 'left']:
+            grand_avg = mne.grand_average(grand_tfr_dict[cond][side])
+            # Define filename for group-level grand average
+            fname = op.join(deriv_folder_group, f"{deriv_group_basename}_{side}_{tag}_{deriv_suffix}{extension}")
+            grand_avg.save(fname, overwrite=True)
+            group_grand_avg[cond][side] = grand_avg
+    return group_grand_avg
+
+def representative_sensors_second_plot(grand_avg_right, grand_avg_left, report, cond_label):
+    """
+    Plots group-level TFRs on representative occipital sensors and adds the figure to the report.
+
+    Parameters
+    ----------
+    grand_avg_right : AverageTFR
+        Grand average TFR for cue right.
+    grand_avg_left : AverageTFR
+        Grand average TFR for cue left.
+    report : mne.Report
+        MNE Report object.
+    cond_label : str
+        Label for the condition ('stim' or 'no_stim').
+
+    Returns
+    -------
+    report : mne.Report
+        Updated report with added group sensor plots.
+    """
+    # Define representative sensors (e.g., occipital channels)
+    occipital_channels = ['O1', 'PO3', 'O2', 'PO4', 'Oz', 'POz']
+    baseline = [-0.3, -0.1]
+    
+    fig, axes = plt.subplots(6, 2, figsize=(30, 10))
+    for idx, ch in enumerate(occipital_channels):
+        grand_avg_left.plot(picks=ch, baseline=baseline, mode='percent',
+                            tmin=-0.5, tmax=1.5, vmin=-0.75, vmax=0.75, axes=axes[idx,0], show=False)
+        axes[idx,0].set_title(f'{cond_label} - cue left - {ch}')
+        grand_avg_right.plot(picks=ch, baseline=baseline, mode='percent',
+                             tmin=-0.5, tmax=1.5, vmin=-0.75, vmax=0.75, axes=axes[idx,1], show=False)
+        axes[idx,1].set_title(f'{cond_label} - cue right - {ch}')
+    fig.set_tight_layout(True)
+    plt.show()
+    report.add_figure(fig=fig, title=f'{cond_label} Grand Average TFR on Representative Sensors',
+                      caption='Group TFR plots on selected occipital channels',
+                      tags=('tfr', 'group'), section='TFR')
+    return report
+
+def group_peak_alpha_calculation_plot(occipital_channels, grand_avg_right, grand_avg_left, report, cond_label):
+    """
+    Calculates the peak alpha frequency (PAF) from the group grand average TFRs for cue right and left,
+    plots the averaged power spectrum with the PAF range highlighted, and adds the plot to the report.
+
+    Parameters
+    ----------
+    occipital_channels : list of str
+        List of channel names to include.
+    grand_avg_right : AverageTFR
+        Grand average TFR for cue right.
+    grand_avg_left : AverageTFR
+        Grand average TFR for cue left.
+    report : mne.Report
+        MNE Report object.
+    cond_label : str
+        Condition label ('stim' or 'no_stim').
+
+    Returns
+    -------
+    peak_alpha_freq_range : ndarray
+        Array representing the peak alpha frequency range (PAF ±2 Hz).
+    report : mne.Report
+        Updated report with the PAF figure.
+    """
+    # Crop grand averages in post-stimulus time and alpha band (8-14 Hz)
+    tfr_right_crop = grand_avg_right.copy().crop(tmin=0.3, tmax=0.8, fmin=8, fmax=14).pick(occipital_channels)
+    tfr_left_crop = grand_avg_left.copy().crop(tmin=0.3, tmax=0.8, fmin=8, fmax=14).pick(occipital_channels)
+    
+    # Find frequency with highest power averaged over channels and time
+    freq_idx_right = np.argmax(np.mean(np.abs(tfr_right_crop.data), axis=(0,2)))
+    freq_idx_left = np.argmax(np.mean(np.abs(tfr_left_crop.data), axis=(0,2)))
+    peak_freq_right = tfr_right_crop.freqs[freq_idx_right]
+    peak_freq_left = tfr_left_crop.freqs[freq_idx_left]
+    peak_alpha_freq = np.mean([peak_freq_right, peak_freq_left])
+    peak_alpha_freq_range = np.arange(peak_alpha_freq - 2, peak_alpha_freq + 3)  # ±2 Hz
+    
+    # Plot average power spectrum (using grand_avg_right as example)
+    avg_power = np.mean(grand_avg_right.data, axis=(0,2))
+    freqs = grand_avg_right.freqs
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.plot(freqs, avg_power, color='black')
+    ymin, ymax = ax.get_ylim()
+    ax.axvline(x=peak_alpha_freq_range[0], color='gray', linestyle='--', linewidth=2)
+    ax.axvline(x=peak_alpha_freq_range[-1], color='gray', linestyle='--', linewidth=2)
+    ax.fill_betweenx([ymin, ymax], peak_alpha_freq_range[0], peak_alpha_freq_range[-1],
+                     color='lightgray', alpha=0.5)
+    ax.text(freqs[-5], ymin + 0.1, f'PAF = {peak_alpha_freq:.2f} Hz', color='black',
+            ha='right', va='bottom')
+    ax.set_xlabel('Frequency (Hz)')
+    ax.set_ylabel('Power')
+    ax.set_title(f'{cond_label} Group Grand Average PSD and PAF')
+    plt.grid(True)
+    plt.tight_layout()
+    report.add_figure(fig=fig, title=f'{cond_label} Group Grand Average Peak Alpha Frequency',
+                      caption='Power spectrum with peak alpha frequency range highlighted',
+                      tags=('PAF', 'group'), section='PAF')
+    plt.show()
+    return peak_alpha_freq_range, report
+
+def group_MI_calculation_overtime_plot(peak_alpha_freq_range, grand_avg_right, grand_avg_left, occipital_channels, report, cond_label):
+    """
+    Computes the modulation index (MI) over time using the grand average TFRs cropped to the peak alpha 
+    frequency range. The MI is defined as (right - left) / (right + left) over the selected channels.
+    Plots the MI time series and adds it to the report.
+
+    Parameters
+    ----------
+    peak_alpha_freq_range : ndarray
+        Array of frequencies corresponding to the peak alpha range.
+    grand_avg_right : AverageTFR
+        Grand average TFR for cue right.
+    grand_avg_left : AverageTFR
+        Grand average TFR for cue left.
+    occipital_channels : list of str
+        Channels to include in the analysis.
+    report : mne.Report
+        MNE Report object.
+    cond_label : str
+        Condition label ('stim' or 'no_stim').
+
+    Returns
+    -------
+    tfr_MI : ndarray
+        Array of MI values over time.
+    report : mne.Report
+        Updated report with MI plot.
+    """
+    # Crop the TFRs to the PAF range and post-stimulus time window
+    tfr_right_peak = grand_avg_right.copy().crop(fmin=peak_alpha_freq_range[0], fmax=peak_alpha_freq_range[-1], tmin=0.3, tmax=0.8).pick(occipital_channels)
+    tfr_left_peak = grand_avg_left.copy().crop(fmin=peak_alpha_freq_range[0], fmax=peak_alpha_freq_range[-1], tmin=0.3, tmax=0.8).pick(occipital_channels)
+    
+    # Compute MI: (right - left) / (right + left) for each time point, averaging over channels and frequencies
+    MI_data = (tfr_right_peak.data - tfr_left_peak.data) / (tfr_right_peak.data + tfr_left_peak.data)
+    mi_over_time = np.mean(MI_data, axis=(0,1))
+    
+    fig, ax = plt.subplots(figsize=(12, 6))
+    ax.plot(tfr_right_peak.times, mi_over_time, label='Average MI', color='red')
+    ax.set_title(f'{cond_label} Group Grand Average MI over Time (PAF)')
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('MI')
+    ax.legend()
+    plt.tight_layout()
+    report.add_figure(fig=fig, title=f'{cond_label} Group MI over Time',
+                      caption='Modulation Index (MI) over time computed from grand average TFRs in the peak alpha range',
+                      tags=('MI', 'group'), section='MI')
+    plt.show()
+    return mi_over_time, report
+
+# ---------------------------
+# Main processing script
+# ---------------------------
+
+# BIDS and file settings (customize these for your study)
+subject_list = ['110', '112', '103']  # list of subjects
+session = '01'
+task = 'SpAtt'
+run = '01'
+eeg_suffix = 'eeg'
+extension = '.fif'
+stim_suffix = 'stim'
+no_stim_suffix = 'no-stim'
+input_suffix = 'epo'  # epoch file suffix
+deriv_suffix = 'tfr'
+    
+# Directories (customize paths as needed)
+platform = 'mac'  # 'bluebear', 'mac', or 'windows'
+if platform == 'bluebear':
+    rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
+elif platform == 'mac':
+    rds_dir = '/Volumes/jenseno-avtemporal-attention'
+bids_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD', 'data', 'BIDS')
+deriv_folder_group = op.join(bids_root, 'derivatives', 'group')
+deriv_group_basename = 'sub-group_ses-01_task-SpAtt_run-01_eeg'
+
+report_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD', 'derivatives', 'reports')
+report_folder = op.join(report_root, 'group')
+report_fname = op.join(report_folder, 'group_report.hdf5')
+html_report_fname = op.join(report_folder, 'group_report.html')
+
+# Create an MNE Report
+report = mne.Report(title='Group TFR and PAC Report')
+
+# Initialize dictionary to collect subject TFRs by condition
+grand_tfrs = {'stim': {'both': [], 'right': [], 'left': []},
+              'no_stim': {'both': [], 'right': [], 'left': []}}
+
+# Loop over subjects, epoching conditions, and stim conditions
+for subject in subject_list:
+    for epoching in ['cue']:  # if you have multiple epoching types, add them here
+        input_suffix = 'epo-' + epoching
+        # Define subject-specific derivative folder
+        deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)
+        # Create a BIDSPath for the subject
+        bids_path = BIDSPath(subject=subject, session=session, task=task, run=run,
+                             root=bids_root, datatype='eeg', suffix=eeg_suffix)
+        # Loop over stim segments (True for stim, False for no-stim)
+        for stim in [True, False]:
+            print(f'Subject {subject}, epoching {epoching}, stim {stim}')
+            epochs, tfr_both, tfr_right, tfr_left, report = tfr_calculation_first_plot(stim, report)
+            # Append to the appropriate dictionary key
+            cond_key = 'stim' if stim else 'no_stim'
+            grand_tfrs[cond_key]['both'].append(tfr_both)
+            grand_tfrs[cond_key]['right'].append(tfr_right)
+            grand_tfrs[cond_key]['left'].append(tfr_left)
+
+# Compute grand averages for each condition
+group_grand_avg = calculate_grand_average_group(grand_tfrs, deriv_folder_group,
+                                                deriv_group_basename, stim_suffix,
+                                                no_stim_suffix, deriv_suffix, extension)
+
+# For each condition (stim, no_stim), produce group-level plots
+for cond in ['stim', 'no_stim']:
+    cond_label = cond
+    # Use grand average TFRs from the group
+    grand_avg_right = group_grand_avg[cond]['right']
+    grand_avg_left = group_grand_avg[cond]['left']
+    
+    # Plot representative sensor TFRs on occipital channels
+    report = representative_sensors_second_plot(grand_avg_right, grand_avg_left, report, cond_label)
+    
+    # Define occipital channels (for PAF and MI computations)
+    occipital_channels = ['PO4', 'POz', 'PO3']
+    
+    # Compute peak alpha frequency and plot PSD for group grand average
+    peak_alpha_freq_range, report = group_peak_alpha_calculation_plot(occipital_channels,
+                                                                      grand_avg_right, grand_avg_left,
+                                                                      report, cond_label)
+    # Compute MI over time using the peak alpha frequency range
+    mi_over_time, report = group_MI_calculation_overtime_plot(peak_alpha_freq_range,
+                                                              grand_avg_right, grand_avg_left,
+                                                              occipital_channels, report, cond_label)
+
+# Save the final report
+report.save(report_fname, overwrite=True)
+report.save(html_report_fname, overwrite=True, open_browser=True)

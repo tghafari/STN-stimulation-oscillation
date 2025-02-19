@@ -440,8 +440,8 @@ all_subs_tfr_slow_cue_left_ls = []
 
 for subject in subject_list: 
     for epoching in epoching_list:
-        input_suffix = 'epo-' + epoching
-        deriv_suffix = 'tfr-' + epoching
+        input_suffix = epoching + '-epo'
+        deriv_suffix = epoching + '-tfr'
         evoked_list = []
 
         for stim in stim_segments_ls:
