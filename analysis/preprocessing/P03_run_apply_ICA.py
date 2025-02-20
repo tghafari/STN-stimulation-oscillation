@@ -51,11 +51,12 @@ elif platform == 'mac':
     rds_dir = '/Volumes/jenseno-avtemporal-attention'
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
-project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
-bids_root = op.join(project_root, 'data', 'BIDS')
+# project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
+# bids_root = op.join(project_root, 'data', 'BIDS')
 
 # for bear outage
-# bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
+project_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD'  # only for bear outage time
+bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
 
 # Specify specific file names
 bids_path = BIDSPath(subject=subject, session=session,
@@ -88,7 +89,8 @@ raw_filtered.compute_psd(n_fft=n_fft,  # default method is welch here (multitape
 """Channels marked bad in this stage:
  {'sub-110': 'Fp1 FCz',
  'sub-107':'C2 FC1 F3 AF7'
- 'sub-102': ['Fp1', 'F7', 'Fp2', 'F8', 'F5', 'FT7', 'AF7', 'F6', 'AF8', 'PO7', 'TP7', 'TP8', 'PO8', 'FT8']}"""
+ 'sub-102': 'FT7 F3'
+}"""
 
 ## 2. Mark bad channels before ICA
 original_bads = deepcopy(raw.info["bads"]) 
@@ -138,7 +140,7 @@ raw.plot_sensors(show_names=True)
 ica.plot_components()
 
 # Take another look at bad channels and remove
-raw.plot() # Mark bad channels from ICA here on raw.plot()
+raw.plot() # Mark bad channels from ICA here on raw.plot() 'CP6 P1 C2 P6
 
 """
 list bad channels for all participants:
@@ -153,8 +155,8 @@ BIDS/sub-107_ses-01_run-01: ["AFz", "C6", "AF4", "P3", "Pz", "F1"],
 BIDS/sub-108_ses-01_run-01: ["FT9", "T8", "T7"],
 BIDS/sub-110_ses-01_run-01: ['TP9', 'TP10', 'Fp1', 'FCz', 
                             'AF4', 'Pz', 'F6', 'FT7'],
-BIDS/sub-102_ses-01_run-01: ['Fp1', 'F7', 'Fp2', 'F8', 'F5', 'FT7', 'AF7', 'F6', 'AF8', 'PO7', 'TP7',
-                             'TP8', 'PO8', 'FT8'],
+BIDS/sub-102_ses-01_run-01: ['TP9', 'TP10', 'Fp1', 'F7', 'Fp2', 'F8', 'TP7', 'PO7', 'F6', 'F5', 
+                            'FC6', 'AF7', 'AF3', 'FT7', 'F3', 'C5'],
 BIDS/sub-103_ses-01_run-01: ['TP9', 'TP10', 'P5', 'PO7', 'AF4', 'TP8', 'FC1',
                              'AFz','F6', 'P1', 'P6', 'F4, 'AF3']
 BIDS/sub-101_ses-01_run-01: ['TP9', 'TP10', 'CP5', 'P7', 'TP7', 'P5', 'C5', 'P6', 'PO8', 'PO7', 'P8', 'F3', 
@@ -226,20 +228,18 @@ fig_ica = ica.plot_components(picks=artifact_ICs, title='removed components')
 # Filter data for the report
 if summary_rprt:
     report_root = op.join(project_root, 'derivatives/reports')  # RDS folder for reports
-    # for bear outage
-    # report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/derivatives/reports' # only for bear outage time
-   
+
     if not op.exists(op.join(report_root , 'sub-' + subject)):
         os.makedirs(op.join(report_root , 'sub-' + subject))
     report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 
-                        f'sub-{subject}_180225.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub-{subject}_180225.html')
+                        f'sub-{subject}_200225.hdf5')    # it is in .hdf5 for later adding images
+    html_report_fname = op.join(report_folder, f'sub-{subject}_200225.html')
     
     report = mne.open_report(report_fname)
     report.add_figure(fig_ica, 
-                      title="removed ICA components (filtered:0.1-40)",
+                      title="removed ICA components (filtered:0.5-40)",
                       caption="removed ICA components: eye movement(?)",
                       tags=('ica'), 
                       image_format="PNG")

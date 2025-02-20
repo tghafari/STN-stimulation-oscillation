@@ -39,7 +39,7 @@ import matplotlib.pyplot as plt
 
 
 # BIDS settings: fill these out 
-subject = '107'
+subject = '102'
 session = '01'
 task = 'SpAtt'
 run = '01'  # change this for subjects with two stim or two no-stim segments
@@ -62,14 +62,12 @@ elif platform == 'mac':
     rds_dir = '/Volumes/jenseno-avtemporal-attention'
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
-project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
-
-# Specify specific file names
-ROI_dir = op.join(project_root, 'results/lateralisation-indices')
-bids_root = op.join(project_root, 'data', 'BIDS')
+# project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
+# bids_root = op.join(project_root, 'data', 'BIDS')
 
 # for bear outage
-# bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
+project_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD'  # only for bear outage time
+bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
 
 bids_path = BIDSPath(subject=subject, session=session,
                      task=task, run=run, root=bids_root, 
@@ -93,7 +91,7 @@ stimulation_cropped_time = {"sub-107_no-stim": [15, 974],
                             "sub-110_no-stim": [905, 1711],
                             "sub-110_stim": [0, 840],
                             "sub-102_no-stim": [0, 965],
-                            "sub-102_stim": [1497, 2244],
+                            "sub-102_stim": [1490, 2230],
                             "sub-101_no-stim": [0, 360, 515, 865],
                             "sub-101_stim": [1144, 1900],
                             "sub-112_no-stim": [878, 1289, 1870, 2280],
@@ -134,14 +132,12 @@ stim_segment.save(stim_fname, overwrite=True)
 
 if summary_rprt:
     report_root = op.join(project_root, 'derivatives/reports')  
-   # for bear outage
-    # report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/derivatives/reports' # only for bear outage time
 
     report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 
-                        f'sub-{subject}_070225.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub-{subject}_070225.html')
+                        f'sub-{subject}_200225.hdf5')    # it is in .hdf5 for later adding images
+    html_report_fname = op.join(report_folder, f'sub-{subject}_200225.html')
     
     report = mne.open_report(report_fname)
     report.add_figure(fig=fig_no_stim_psd, title='no stimulation psd',

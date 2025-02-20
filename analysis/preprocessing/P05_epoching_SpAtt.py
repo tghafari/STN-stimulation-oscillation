@@ -128,7 +128,7 @@ def cleaning_and_saving_epochs(stim, epochs, autoreject=False):
     return fig_psd, fig_bads
 
 # BIDS settings: fill these out 
-subject = '107'
+subject = '102'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -157,21 +157,19 @@ elif platform == 'mac':
     rds_dir = '/Volumes/jenseno-avtemporal-attention'
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
-project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
-bids_root = op.join(project_root, 'data', 'BIDS')
+# project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
+# bids_root = op.join(project_root, 'data', 'BIDS')
+
 # for bear outage
-# bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
+project_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD'  # only for bear outage time
+bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
 
 # Epoch stim segments and add to report
 report_root = op.join(project_root, 'derivatives/reports')  
-# for bear outage
-# report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/derivatives/reports' # only for bear outage time
-
 report_folder = op.join(report_root , 'sub-' + subject)
-
 report_fname = op.join(report_folder, 
-                    f'sub-{subject}_070225.hdf5')    # it is in .hdf5 for later adding images
-html_report_fname = op.join(report_folder, f'sub-{subject}_070225.html')
+                    f'sub-{subject}_200225.hdf5')    # it is in .hdf5 for later adding images
+html_report_fname = op.join(report_folder, f'sub-{subject}_200225.html')
 
 report = mne.open_report(report_fname)
 
@@ -275,29 +273,30 @@ report.save(html_report_fname, overwrite=True, open_browser=True)  # to check ho
 
 ####################################### sub-102 #################################################
 #cue, stim off
-# Dropped 21 epochs: 5, 6, 9, 25, 42, 55, 57, 58, 63, 64, 80, 91, 93, 100, 104, 115, 116, 120, 144, 145, 146
+# Dropped 47 epochs: 1, 6, 9, 11, 14, 19, 23, 25, 27, 28, 42, 55, 57, 58, 61, 62, 64, 74, 75, 77, 79, 80, 81, 83, 84, 85, 88, 91, 93, 96, 99, 100, 103, 104, 110, 111, 115, 120, 129, 130, 137, 139, 143, 145, 148, 152, 153
 # The following epochs were marked as bad and are dropped:
-# [27, 32, 45, 120, 209, 272, 281, 286, 308, 312, 583, 639, 649, 686, 707, 760, 764, 799, 916, 921, 926]
+# [6, 26, 39, 49, 62, 84, 102, 110, 119, 123, 188, 250, 259, 263, 275, 280, 289, 337, 342, 352, 360, 367, 372, 381, 386, 391, 406, 421, 431, 445, 460, 465, 480, 485, 513, 518, 538, 564, 606, 611, 646, 656, 674, 684, 699, 719, 722]
 # Channels marked as bad:
-# ['TP9', 'TP10', 'F7', 'TP7', 'PO7', 'F6', 'FT8', 'Fp1', 'F8', 'FT7', 'FC6', 'F5', 'Fp2', 'C5']
+# ['TP9', 'TP10', 'Fp1', 'F7', 'Fp2', 'F8', 'TP7', 'PO7', 'F6', 'F5', 'FC6', 'AF7', 'AF3', 'FT7', 'F3', 'C5']
 # stim, stim off
-# Dropped 31 epochs: 0, 7, 21, 22, 30, 32, 35, 50, 54, 71, 73, 74, 75, 76, 85, 87, 89, 94, 96, 100, 108, 117, 124, 125, 129, 130, 131, 132, 134, 135, 143
+# Dropped 45 epochs: 0, 7, 8, 11, 16, 21, 22, 24, 32, 35, 44, 50, 51, 52, 54, 55, 70, 71, 73, 74, 76, 89, 90, 93, 94, 99, 101, 107, 108, 116, 119, 121, 122, 124, 125, 129, 130, 131, 133, 134, 135, 136, 140, 141, 142
 # The following epochs were marked as bad and are dropped:
-# [7, 46, 115, 121, 162, 176, 190, 268, 292, 388, 590, 599, 604, 609, 659, 669, 681, 708, 718, 741, 801, 849, 884, 889, 912, 917, 922, 927, 937, 942, 989]
+# [3, 40, 45, 63, 85, 107, 111, 120, 160, 173, 218, 246, 255, 260, 269, 276, 353, 361, 373, 382, 392, 461, 466, 481, 486, 514, 524, 558, 565, 607, 622, 632, 637, 647, 652, 675, 680, 685, 695, 700, 705, 710, 736, 741, 746]
 # Channels marked as bad:
-# ['TP9', 'TP10', 'F7', 'TP7', 'PO7', 'F6', 'FT8', 'Fp1', 'F8', 'FT7', 'FC6', 'F5', 'Fp2', 'C5']
+# ['TP9', 'TP10', 'Fp1', 'F7', 'Fp2', 'F8', 'TP7', 'PO7', 'F6', 'F5', 'FC6', 'AF7', 'AF3', 'FT7', 'F3', 'C5']
 # cue, stim on
-# Dropped 32 epochs: 0, 9, 15, 27, 29, 32, 33, 34, 35, 37, 39, 40, 41, 47, 48, 49, 50, 63, 64, 66, 78, 80, 81, 85, 86, 120, 121, 123, 124, 126, 145, 148
+# Dropped 36 epochs: 0, 9, 13, 19, 24, 25, 27, 28, 29, 35, 36, 37, 40, 41, 47, 48, 50, 54, 56, 58, 63, 64, 69, 78, 80, 85, 86, 98, 121, 123, 126, 131, 137, 143, 145, 148
 # The following epochs were marked as bad and are dropped:
-# [2, 46, 75, 136, 146, 161, 166, 171, 176, 185, 193, 213, 219, 249, 253, 258, 265, 329, 333, 343, 406, 438, 445, 464, 470, 651, 655, 665, 670, 682, 772, 787]
+# [2, 43, 63, 91, 116, 121, 131, 136, 141, 171, 176, 180, 195, 199, 227, 231, 239, 257, 267, 277, 301, 305, 330, 375, 387, 409, 414, 474, 583, 591, 606, 631, 659, 687, 695, 710]
 # Channels marked as bad:
-# ['TP9', 'TP10', 'F7', 'TP7', 'PO7', 'F6', 'FT8', 'Fp1', 'F8', 'FT7', 'FC6', 'F5', 'Fp2', 'C5']
+# ['TP9', 'TP10', 'Fp1', 'F7', 'Fp2', 'F8', 'TP7', 'PO7', 'F6', 'F5', 'FC6', 'AF7', 'AF3', 'FT7', 'F3', 'C5']
 # stim, stim on
-# Dropped 26 epochs: 0, 12, 25, 26, 28, 33, 36, 37, 38, 41, 42, 43, 45, 50, 51, 72, 80, 83, 85, 91, 100, 108, 112, 118, 124, 129
+# Dropped 27 epochs: 0, 3, 12, 20, 25, 26, 28, 33, 35, 36, 41, 42, 43, 44, 45, 51, 58, 61, 70, 71, 72, 80, 91, 108, 111, 129, 132
 # The following epochs were marked as bad and are dropped:
-# [5, 68, 137, 142, 152, 177, 215, 224, 230, 245, 250, 254, 267, 296, 301, 441, 487, 502, 513, 543, 593, 656, 677, 708, 736, 768]
+# [3, 19, 64, 107, 132, 137, 147, 172, 189, 196, 224, 228, 232, 236, 240, 273, 316, 331, 376, 381, 388, 430, 485, 584, 597, 691, 706]
 # Channels marked as bad:
-# ['TP9', 'TP10', 'F7', 'TP7', 'PO7', 'F6', 'FT8', 'Fp1', 'F8', 'FT7', 'FC6', 'F5', 'Fp2', 'C5']
+# ['TP9', 'TP10', 'Fp1', 'F7', 'Fp2', 'F8', 'TP7', 'PO7', 'F6', 'F5', 'FC6', 'AF7', 'AF3', 'FT7', 'F3', 'C5']
+
 
 ####################################### sub-101 #################################################
 #cue, stim off

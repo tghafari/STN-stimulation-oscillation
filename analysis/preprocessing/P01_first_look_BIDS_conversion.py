@@ -71,10 +71,10 @@ if platform == 'bluebear':
 elif platform == 'mac':
     rds_dir = '/Volumes/jenseno-avtemporal-attention'
 
-project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
-# '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD'  # only for bear outage time
-data_root = op.join(project_root, 'data/data-organised')
-# '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/data-organised'  # only for bear outage time
+project_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD'  # only for bear outage time
+#op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
+data_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/data-organised'  # only for bear outage time
+# op.join(project_root, 'data/data-organised')
 
 base_fpath = op.join(data_root, f'sub-{subject}', f'ses-{session}', f'{modality}')  
 base_fname = f'sub-{subject}_ses-{session}_task-{task}_run-{run}_{modality}'
@@ -254,8 +254,8 @@ if summary_rprt:
     report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 
-                        f'sub-{subject}_180225.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub-{subject}_180225.html')
+                        f'sub-{subject}_200225.hdf5')    # it is in .hdf5 for later adding images
+    html_report_fname = op.join(report_folder, f'sub-{subject}_200225.html')
     
     report = mne.Report(title=f'Subject {subject}')
     report.add_image(beh_fig_fname,

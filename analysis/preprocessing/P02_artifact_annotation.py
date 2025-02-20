@@ -47,11 +47,11 @@ elif platform == 'mac':
     rds_dir = '/Volumes/jenseno-avtemporal-attention'
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
-project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
-bids_root = op.join(project_root, 'data', 'BIDS')
+# project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
+# bids_root = op.join(project_root, 'data', 'BIDS')
 
 # for bear outage
-# bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
+bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
 
 # Specify specific file names
 bids_path = BIDSPath(subject=subject, session=session,
@@ -69,7 +69,7 @@ raw = read_raw_bids(bids_path=bids_path, verbose=False,
 # Here crop any extra segments at the beginning or end of the recording 
 """this helps better detecting blinks"""
 # raw.plot() 
-raw.crop(tmin=198)  
+raw.crop(tmin=205)  
 
 # Annotate break sections and plot
 break_annots = mne.preprocessing.annotate_break(
@@ -80,11 +80,16 @@ break_annots = mne.preprocessing.annotate_break(
     ignore=('blink'),
 )
 
+# set annotations to reject during blink detection
+annotations_event = raw.annotations 
+raw.set_annotations(raw.annotations + break_annots)
+
 # Identifying and annotating eye blinks using vEOG
-"""sub-101 had to add thresh=6e-4. about 1300 blinks detected (I scrolled most of the data)"""
-eog_events = find_eog_events(raw, thresh=7e-5)
-"""{'sub-107':'thresh=1e-4',
-'sub-102': 'thresh=7e-5',
+eog_events = find_eog_events(raw, thresh=6e-5, ch_name=['vEOG1','vEOG2'],reject_by_annotation=True)
+# thresh=7e-5)
+"""{'sub-101':'thresh=6e-4',
+'sub-107':'thresh=1e-4',
+'sub-102': 'thresh=6e-5',
 }"""
 onset = eog_events[:,0] / raw.info['sfreq'] -.25 #'from flux pipline and mne tutorial but why?'
 n_blinks = len(eog_events)  # length of the event file is the number of blinks in total
@@ -116,7 +121,6 @@ if muscle_reject:
 # Include annotations in dataset and inspect
 """make sure to add event annotations here again, 
 because set_annotations overwrites all annotations"""
-annotations_event = raw.annotations 
 raw.set_annotations(raw.annotations + break_annots + annotation_blink)  # add to existing
 raw.plot()
 

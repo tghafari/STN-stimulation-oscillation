@@ -94,7 +94,7 @@ def fig_compare_chs_plot_topos(occipital_channels, evoked_list_chs, evoked_list_
             
 # BIDS settings: fill these out 
 subject_list = ['102', '107', '110', '112', '103', 'concat'] # all subjects
-subject_list_event_id = ['102', '107', '110', '112', '103'] # these are those with wrong event_ids from ica 
+subject_list_event_id = ['110', '112', '103'] # these are those with wrong event_ids from ica 
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -122,20 +122,21 @@ elif platform == 'mac':
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
 bids_root = op.join(project_root, 'data', 'BIDS')
+
 # for bear outage
+# project_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD'  # only for bear outage time
 # bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
+
 deriv_folder_group = op.join(bids_root, 'derivatives', 'group') 
 deriv_group_basename = 'sub-group_ses-01_task-SpAtt_run-01_eeg'
 
 # Epoch stim segments and add to report
 report_root = op.join(project_root, 'derivatives/reports')  
-# for bear outage
-# report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/derivatives/reports' # only for bear outage time
 
 report_folder = op.join(report_root , 'group')
-report_fname = op.join(report_folder, 'subs_101-102-107-108-110-112-103_170225.hdf5')
-html_report_fname = op.join(report_folder, 'subs_101-102-107-108-110-112-103_170225.html')
-report = mne.Report(title='subs_101-102-107-108-110-112-103')
+report_fname = op.join(report_folder, 'subs_102-107-110-112-103_200225.hdf5')
+html_report_fname = op.join(report_folder, 'subs_102-107-110-112-103_200225.html')
+report = mne.Report(title='subs_102-107-110-112-103')
 
 # Concatenate subjects together based on conditions
 for epoching in epoching_list:

@@ -46,7 +46,7 @@ def reading_epochs_evoking(stim):
 
 
 # BIDS settings: fill these out 
-subject = '107'
+subject = '102'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -72,21 +72,19 @@ elif platform == 'mac':
     rds_dir = '/Volumes/jenseno-avtemporal-attention'
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
-project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
-bids_root = op.join(project_root, 'data', 'BIDS')
+# project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
+# bids_root = op.join(project_root, 'data', 'BIDS')
+
 # for bear outage
-# bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
+project_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD'  # only for bear outage time
+bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
 
 # Epoch stim segments and add to report
 report_root = op.join(project_root, 'derivatives/reports')  
-# for bear outage
-# report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/derivatives/reports' # only for bear outage time
-
 report_folder = op.join(report_root , 'sub-' + subject)
-
 report_fname = op.join(report_folder, 
-                    f'sub-{subject}_070225.hdf5')    # it is in .hdf5 for later adding images
-html_report_fname = op.join(report_folder, f'sub-{subject}_070225.html')
+                    f'sub-{subject}_200225.hdf5')    # it is in .hdf5 for later adding images
+html_report_fname = op.join(report_folder, f'sub-{subject}_200225.html')
 
 report = mne.open_report(report_fname)
 
