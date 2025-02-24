@@ -368,7 +368,7 @@ def plot_group_MI(paf_range, grand_avg_right, grand_avg_left, occipital, cond_la
 # ---------------------------
 
 # Settings (customize these paths and lists for your study)
-subject_list = ['107', '110', '112', '103']   # List of subjects
+subject_list = ['102', '107', '110', '112', '103']  
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -387,8 +387,8 @@ group_base = 'sub-group_ses-01_task-SpAtt_run-01_eeg'
 
 report_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD', 'derivatives', 'reports')
 report_folder = op.join(report_root, 'group')
-report_fname = op.join(report_folder, 'group_report-190225.hdf5')
-html_report_fname = op.join(report_folder, 'group_report-190225.html')
+report_fname = op.join(report_folder, 'group_report-210225.hdf5')
+html_report_fname = op.join(report_folder, 'group_report-210225.html')
 
 # Create a report
 report = mne.Report(title='Group TFR and PAC Report')
