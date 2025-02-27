@@ -15,8 +15,7 @@ This script:
      and plots the MI time series.
   7. Saves all figures in a single MNE Report.
 
-Author: [Your Name]
-Date: [Current Date]
+Author: tara.ghafari@psych.ox.ac.uk
 """
 
 import os
@@ -30,21 +29,23 @@ import matplotlib.pyplot as plt
 # Global Parameters
 # ---------------------------
 # Frequency analysis parameters
-FREQS = np.arange(2, 32, 1)  # 2 to 31 Hz inclusive
+FREQS = np.arange(2, 32, 0.5)  # 2 to 31 Hz inclusive
 N_CYCLES = FREQS / 2.0       # adaptive cycles
 TIME_BANDWIDTH = 2.0
 BASELINE = [-0.3, -0.1]
+
 TFR_PARAMS = dict(
     method='multitaper',
     freqs=FREQS,
-    n_cycles=N_CYCLES,
-    time_bandwidth=TIME_BANDWIDTH,
-    use_fft=True,
     return_itc=False,
     average=True,
     decim=2,
     n_jobs=4,
-    verbose=True
+    verbose=True,
+    n_cycles=N_CYCLES,
+    time_bandwidth=TIME_BANDWIDTH,
+    use_fft=True,
+    zero_mean=True,
 )
 
 # ---------------------------
@@ -104,30 +105,30 @@ def process_subject_tfr(stim_flag, deriv_folder, bids_path, input_suffix, deriv_
     tfr_left = epochs['cue_onset_left'].compute_tfr(**TFR_PARAMS)
     
     # Save TFR files
-    tfr_both.save(fname_both, overwrite=True)
-    tfr_right.save(fname_right, overwrite=True)
-    tfr_left.save(fname_left, overwrite=True)
+    # tfr_both.save(fname_both, overwrite=True)
+    # tfr_right.save(fname_right, overwrite=True)
+    # tfr_left.save(fname_left, overwrite=True)
     
-    # Plot topographies with white background and add figures to report
-    figs = {
-        'cue both': tfr_both.plot_topo(tmin=-0.5, tmax=1.5, baseline=BASELINE, mode='percent',
-                                       title=f'{cond}: TFR (cue both)', show=False,
-                                       vmin=-0.75, vmax=0.75,
-                                       fig_facecolor='w', font_color='k'),
-        'cue right': tfr_right.plot_topo(tmin=-0.5, tmax=1.5, baseline=BASELINE, mode='percent',
-                                         title=f'{cond}: TFR (cue right)', show=False,
-                                         vmin=-0.75, vmax=0.75,
-                                         fig_facecolor='w', font_color='k'),
-        'cue left': tfr_left.plot_topo(tmin=-0.5, tmax=1.5, baseline=BASELINE, mode='percent',
-                                        title=f'{cond}: TFR (cue left)', show=False,
-                                        vmin=-0.75, vmax=0.75,
-                                        fig_facecolor='w', font_color='k')
-    }
+    # # Plot topographies with white background and add figures to report
+    # figs = {
+    #     'cue both': tfr_both.plot_topo(tmin=-0.5, tmax=1.5, baseline=BASELINE, mode='percent',
+    #                                    title=f'{cond}: TFR (cue both)', show=False,
+    #                                    vmin=-0.75, vmax=0.75,
+    #                                    fig_facecolor='w', font_color='k'),
+    #     'cue right': tfr_right.plot_topo(tmin=-0.5, tmax=1.5, baseline=BASELINE, mode='percent',
+    #                                      title=f'{cond}: TFR (cue right)', show=False,
+    #                                      vmin=-0.75, vmax=0.75,
+    #                                      fig_facecolor='w', font_color='k'),
+    #     'cue left': tfr_left.plot_topo(tmin=-0.5, tmax=1.5, baseline=BASELINE, mode='percent',
+    #                                     title=f'{cond}: TFR (cue left)', show=False,
+    #                                     vmin=-0.75, vmax=0.75,
+    #                                     fig_facecolor='w', font_color='k')
+    # }
 
-    for key, fig in figs.items():
-        report.add_figure(fig=fig, title=f'{cond} TFR {key}- {subj}',
-                          caption=f'TFR (2-31 Hz) for {key} (baseline: {BASELINE})',
-                          tags=('tfr',), section='TFR')
+    # for key, fig in figs.items():
+    #     report.add_figure(fig=fig, title=f'{cond} TFR {key}- {subj}',
+    #                       caption=f'TFR (2-31 Hz) for {key} (baseline: {BASELINE})',
+    #                       tags=('tfr',), section='TFR')
     
     tfr_dict = {'both': tfr_both, 'right': tfr_right, 'left': tfr_left}
     return epochs, tfr_dict, report
@@ -206,7 +207,7 @@ def plot_group_representative_channel(grand_avg_right, grand_avg_left, cond_labe
     report : mne.Report
     """
     occipital = ['O1', 'PO3', 'O2', 'PO4', 'Oz', 'POz']
-    fig, axes = plt.subplots(len(occipital), 2, figsize=(40, 20))
+    fig, axes = plt.subplots(len(occipital), 2, figsize=(50, 20))
     for i, ch in enumerate(occipital):
         grand_avg_left.plot(picks=ch, baseline=BASELINE, mode='percent',
                             tmin=-0.5, tmax=1.5, vmin=-0.75, vmax=0.75,
@@ -227,7 +228,7 @@ def plot_group_sensor_stim_nostim(group_avg, report):
     """Plot grand average TFR on representative occipital sensors."""
 
     occipital = ['O1', 'PO3', 'O2', 'PO4', 'Oz', 'POz']
-    fig, axes = plt.subplots(len(occipital), 2, figsize=(40, 20))
+    fig, axes = plt.subplots(len(occipital), 2, figsize=(50, 20))
     for i, ch in enumerate(occipital):
         group_avg['stim']['both'].plot(picks=ch, baseline=BASELINE, mode='percent',
                             tmin=-0.5, tmax=1.5, vmin=-0.75, vmax=0.75,
@@ -247,6 +248,8 @@ def plot_group_sensor_stim_nostim(group_avg, report):
 def plot_group_peak_alpha(grand_avg_both, grand_avg_right, grand_avg_left, occipital, cond_label, report):
     """
     Compute and plot the peak alpha frequency (PAF) from grand average TFRs.
+    I decided to use the grand average to calculate PAF instead of the average of
+    right and left attention.
     
     Parameters
     ----------
@@ -266,21 +269,26 @@ def plot_group_peak_alpha(grand_avg_both, grand_avg_right, grand_avg_left, occip
     report : mne.Report
     """
     # Crop to alpha band (8-14 Hz) in post-stimulus window (0.3 to 0.8 s)
+    """right and left aren't being used now"""
     tfr_right_crop = grand_avg_right.copy().crop(tmin=0.3, tmax=0.8, fmin=8, fmax=14).pick(occipital)
     tfr_left_crop = grand_avg_left.copy().crop(tmin=0.3, tmax=0.8, fmin=8, fmax=14).pick(occipital)
-    
+    tfr_both_crop = grand_avg_both.copy().crop(tmin=0.3, tmax=0.8, fmin=8, fmax=14).pick(occipital)
+
     # Find peak frequency index by averaging power over channels and time
     peak_idx_right = np.argmax(np.mean(np.abs(tfr_right_crop.data), axis=(0, 2)))
     peak_idx_left  = np.argmax(np.mean(np.abs(tfr_left_crop.data), axis=(0, 2)))
-        
+    peak_idx_both  = np.argmax(np.mean(np.abs(tfr_both_crop.data), axis=(0, 2)))
+
     # Get the corresponding frequencies
-    peak_freq = np.mean([tfr_right_crop.freqs[peak_idx_right], tfr_left_crop.freqs[peak_idx_left]])
+    peak_freq_not_both = np.mean([tfr_right_crop.freqs[peak_idx_right], tfr_left_crop.freqs[peak_idx_left]])
+    peak_freq = tfr_both_crop.freqs[peak_idx_both]
     paf_range = np.arange(peak_freq - 2, peak_freq + 3)  # ±2 Hz around the peak
     
-    # Plot group PSD (using right grand average)
-    avg_power = np.mean(grand_avg_both.data, axis=(0, 2))
+    # Plot group PSD (using both grand average on occipital channels)
+    grand_avg_both_occ = grand_avg_both.copy().pick(occipital)
+    avg_power = np.mean(grand_avg_both_occ.data, axis=(0, 2))
     fig, ax = plt.subplots(figsize=(10, 6))
-    ax.plot(grand_avg_both.freqs, avg_power, color='black')
+    ax.plot(grand_avg_both_occ.freqs, avg_power, color='black')
     ymin, ymax = ax.get_ylim()
     ax.axvline(x=paf_range[0], color='gray', linestyle='--', linewidth=2)
     ax.axvline(x=paf_range[-1], color='gray', linestyle='--', linewidth=2)
@@ -296,6 +304,76 @@ def plot_group_peak_alpha(grand_avg_both, grand_avg_right, grand_avg_left, occip
                       tags=('PAF', 'group'), section='PAF')
     
     return paf_range, report
+
+def compute_and_plot_stim_effects_all(grand_avg_stim_dict, grand_avg_no_stim_dict, report):
+    """
+    Compute and plot stimulation effects for each cue type ('both', 'right', 'left').
+
+    For each cue type:
+      1. Baseline-corrected difference:
+           (grand_avg_stim - grand_avg_no_stim)
+         Both TFRs are first baseline corrected using BASELINE and mode 'percent'.
+
+      2. Ratio effect (uncorrected):
+           (grand_avg_no_stim - grand_avg_stim) / (grand_avg_no_stim + grand_avg_stim)
+         This calculation is done on the uncorrected TFR data.
+
+    Both results are plotted using plot_topo and added to the MNE Report.
+
+    Parameters
+    ----------
+    grand_avg_stim_dict : dict
+         Dictionary with keys 'both', 'right', and 'left' for the stimulation condition.
+    grand_avg_no_stim_dict : dict
+         Dictionary with keys 'both', 'right', and 'left' for the no stimulation condition.
+    report : mne.Report
+         MNE Report to which the figures will be added.
+
+    Returns
+    -------
+    report : mne.Report
+         Updated MNE Report with the stimulation effect figures added.
+    """
+    cues = ['both', 'right', 'left']
+    eps = 0  # To avoid division by zero
+    for cue in cues:
+        # 1. Baseline-corrected difference:
+        stim_bc = grand_avg_stim_dict[cue].copy()
+        stim_bc.apply_baseline(baseline=BASELINE, mode='percent')
+        no_stim_bc = grand_avg_no_stim_dict[cue].copy()
+        no_stim_bc.apply_baseline(baseline=BASELINE, mode='percent')
+        
+        diff_bc = grand_avg_stim_dict[cue].copy()
+        diff_bc.data = no_stim_bc.data - stim_bc.data
+        
+        fig_diff = diff_bc.plot_topo(tmin=-0.5, tmax=1.5,
+                                      title=f'Baseline Corrected Difference ({cue}): no_stim - stim',
+                                      show=False,
+                                      fig_facecolor='w', font_color='k')
+        report.add_figure(fig=fig_diff,
+                          title=f'Baseline Corrected Stim Effect ({cue})',
+                          caption=f'Baseline corrected difference for cue {cue}: (no_stim - stim)',
+                          tags=('stim_effect', 'group'),
+                          section='TFR')
+        
+        # 2. Ratio effect (uncorrected):
+        ratio_effect = grand_avg_no_stim_dict[cue].copy()
+        numerator = grand_avg_no_stim_dict[cue].data - grand_avg_stim_dict[cue].data
+        denominator = grand_avg_no_stim_dict[cue].data + grand_avg_stim_dict[cue].data
+        ratio = numerator / (denominator + eps)
+        ratio_effect.data = ratio
+        
+        fig_ratio = ratio_effect.plot_topo(tmin=-0.5, tmax=1.5,
+                                            title=f'Stim Effect Ratio ({cue}): (no_stim - stim)/(no_stim + stim)',
+                                            show=False,
+                                            fig_facecolor='w', font_color='k')
+        report.add_figure(fig=fig_ratio,
+                          title=f'Stim Effect Ratio ({cue})',
+                          caption=f'Ratio effect for cue {cue} computed as (no_stim - stim)/(no_stim + stim) using uncorrected data',
+                          tags=('stim_effect', 'group'),
+                          section='TFR')
+    return report
+
 
 def plot_group_MI(paf_range, grand_avg_right, grand_avg_left, occipital, cond_label, report):
     """
@@ -381,17 +459,23 @@ deriv_suffix = 'tfr'
 
 platform = 'mac'  # 'bluebear', 'mac', or 'windows'
 rds_dir = '/Volumes/jenseno-avtemporal-attention' if platform == 'mac' else '/rds/projects/j/jenseno-avtemporal-attention'
-bids_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD', 'data', 'BIDS')
+
+# bids_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD', 'data', 'BIDS')
+# report_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD', 'derivatives', 'reports')
+
+# for bear outage:
+bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
+report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/derivatives/reports' # only for bear outage time
+
 deriv_folder_group = op.join(bids_root, 'derivatives', 'group')
 group_base = 'sub-group_ses-01_task-SpAtt_run-01_eeg'
 
-report_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD', 'derivatives', 'reports')
 report_folder = op.join(report_root, 'group')
-report_fname = op.join(report_folder, 'group_report-210225.hdf5')
-html_report_fname = op.join(report_folder, 'group_report-210225.html')
+report_fname = op.join(report_folder, 'group_report-260225-toOle.hdf5')
+html_report_fname = op.join(report_folder, 'group_report-260225-toOle.html')
 
 # Create a report
-report = mne.Report(title='Group TFR and PAC Report')
+report = mne.Report(title='Group TFR and PAF Report')
 
 # Initialize dictionary for subject TFRs (by condition and cue type)
 group_tfrs = {'stim': {'both': [], 'right': [], 'left': []},
@@ -434,6 +518,8 @@ for condition in ['stim', 'no_stim']:
     paf_range, report = plot_group_peak_alpha(avg_both, avg_right, avg_left, occipital_ch, label, report)
     mi_ts, report = plot_group_MI(paf_range, avg_right, avg_left, occipital_ch, label, report)
 
+# Compute stimulation effects for all cues using the group grand averages:
+report = compute_and_plot_stim_effects_all(group_avg['stim'], group_avg['no_stim'], report)
 
 # Save the final report in both HDF5 and HTML formats
 report.save(report_fname, overwrite=True)
