@@ -104,31 +104,31 @@ def process_subject_tfr(stim_flag, deriv_folder, bids_path, input_suffix, deriv_
     tfr_right = epochs['cue_onset_right'].compute_tfr(**TFR_PARAMS)
     tfr_left = epochs['cue_onset_left'].compute_tfr(**TFR_PARAMS)
     
-    # Save TFR files
+    # # Save TFR files
     # tfr_both.save(fname_both, overwrite=True)
     # tfr_right.save(fname_right, overwrite=True)
     # tfr_left.save(fname_left, overwrite=True)
     
-    # # Plot topographies with white background and add figures to report
-    # figs = {
-    #     'cue both': tfr_both.plot_topo(tmin=-0.5, tmax=1.5, baseline=BASELINE, mode='percent',
-    #                                    title=f'{cond}: TFR (cue both)', show=False,
-    #                                    vmin=-0.75, vmax=0.75,
-    #                                    fig_facecolor='w', font_color='k'),
-    #     'cue right': tfr_right.plot_topo(tmin=-0.5, tmax=1.5, baseline=BASELINE, mode='percent',
-    #                                      title=f'{cond}: TFR (cue right)', show=False,
-    #                                      vmin=-0.75, vmax=0.75,
-    #                                      fig_facecolor='w', font_color='k'),
-    #     'cue left': tfr_left.plot_topo(tmin=-0.5, tmax=1.5, baseline=BASELINE, mode='percent',
-    #                                     title=f'{cond}: TFR (cue left)', show=False,
-    #                                     vmin=-0.75, vmax=0.75,
-    #                                     fig_facecolor='w', font_color='k')
-    # }
+    # Plot topographies with white background and add figures to report
+    figs = {
+        'cue both': tfr_both.plot_topo(tmin=-0.5, tmax=1.5, baseline=BASELINE, mode='percent',
+                                       title=f'{cond}: TFR (cue both)', show=False,
+                                       vmin=-0.75, vmax=0.75,
+                                       fig_facecolor='w', font_color='k'),
+        'cue right': tfr_right.plot_topo(tmin=-0.5, tmax=1.5, baseline=BASELINE, mode='percent',
+                                         title=f'{cond}: TFR (cue right)', show=False,
+                                         vmin=-0.75, vmax=0.75,
+                                         fig_facecolor='w', font_color='k'),
+        'cue left': tfr_left.plot_topo(tmin=-0.5, tmax=1.5, baseline=BASELINE, mode='percent',
+                                        title=f'{cond}: TFR (cue left)', show=False,
+                                        vmin=-0.75, vmax=0.75,
+                                        fig_facecolor='w', font_color='k')
+    }
 
-    # for key, fig in figs.items():
-    #     report.add_figure(fig=fig, title=f'{cond} TFR {key}- {subj}',
-    #                       caption=f'TFR (2-31 Hz) for {key} (baseline: {BASELINE})',
-    #                       tags=('tfr',), section='TFR')
+    for key, fig in figs.items():
+        report.add_figure(fig=fig, title=f'{cond} TFR {key}- {subj}',
+                          caption=f'TFR (2-31 Hz) for {key} (baseline: {BASELINE})',
+                          tags=('tfr',), section='TFR')
     
     tfr_dict = {'both': tfr_both, 'right': tfr_right, 'left': tfr_left}
     return epochs, tfr_dict, report
@@ -446,7 +446,7 @@ def plot_group_MI(paf_range, grand_avg_right, grand_avg_left, occipital, cond_la
 # ---------------------------
 
 # Settings (customize these paths and lists for your study)
-subject_list = ['102', '107', '110', '112', '103']  
+subject_list = ['102', '107', '110', '112', '103', '104']  
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -460,19 +460,19 @@ deriv_suffix = 'tfr'
 platform = 'mac'  # 'bluebear', 'mac', or 'windows'
 rds_dir = '/Volumes/jenseno-avtemporal-attention' if platform == 'mac' else '/rds/projects/j/jenseno-avtemporal-attention'
 
-# bids_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD', 'data', 'BIDS')
-# report_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD', 'derivatives', 'reports')
+bids_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD', 'data', 'BIDS')
+report_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD', 'derivatives', 'reports')
 
-# for bear outage:
-bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
-report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/derivatives/reports' # only for bear outage time
+# # for bear outage:
+# bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
+# report_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/derivatives/reports' # only for bear outage time
 
 deriv_folder_group = op.join(bids_root, 'derivatives', 'group')
 group_base = 'sub-group_ses-01_task-SpAtt_run-01_eeg'
 
 report_folder = op.join(report_root, 'group')
-report_fname = op.join(report_folder, 'group_report-260225-toOle.hdf5')
-html_report_fname = op.join(report_folder, 'group_report-260225-toOle.html')
+report_fname = op.join(report_folder, 'group_report-120325.hdf5')
+html_report_fname = op.join(report_folder, 'group_report-120325.html')
 
 # Create a report
 report = mne.Report(title='Group TFR and PAF Report')

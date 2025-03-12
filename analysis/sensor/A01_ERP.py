@@ -46,7 +46,7 @@ def reading_epochs_evoking(stim):
 
 
 # BIDS settings: fill these out 
-subject = '102'
+subject = '104'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -83,8 +83,8 @@ bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-Universit
 report_root = op.join(project_root, 'derivatives/reports')  
 report_folder = op.join(report_root , 'sub-' + subject)
 report_fname = op.join(report_folder, 
-                    f'sub-{subject}_200225.hdf5')    # it is in .hdf5 for later adding images
-html_report_fname = op.join(report_folder, f'sub-{subject}_200225.html')
+                    f'sub-{subject}_120325.hdf5')    # it is in .hdf5 for later adding images
+html_report_fname = op.join(report_folder, f'sub-{subject}_120325.html')
 
 report = mne.open_report(report_fname)
 

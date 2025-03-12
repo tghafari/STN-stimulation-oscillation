@@ -25,7 +25,7 @@ from mne_bids import BIDSPath, read_raw_bids
 
 
 # BIDS settings: fill these out 
-subject = '102'
+subject = '104'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -85,9 +85,12 @@ annotations_event = raw.annotations
 raw.set_annotations(raw.annotations + break_annots)
 
 # Identifying and annotating eye blinks using vEOG
-eog_events = find_eog_events(raw, thresh=6e-5, ch_name=['vEOG1','vEOG2'],reject_by_annotation=True)
-# thresh=7e-5)
-"""{'sub-101':'thresh=6e-4',
+eog_events = find_eog_events(raw, ch_name=['vEOG1','vEOG2'],reject_by_annotation=True)
+
+"""list of thresholds for
+those the automatic 
+didn't catch blinks:
+{'sub-101':'thresh=6e-4',
 'sub-107':'thresh=1e-4',
 'sub-102': 'thresh=6e-5',
 }"""

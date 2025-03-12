@@ -39,7 +39,7 @@ import matplotlib.pyplot as plt
 
 
 # BIDS settings: fill these out 
-subject = '102'
+subject = '104'
 session = '01'
 task = 'SpAtt'
 run = '01'  # change this for subjects with two stim or two no-stim segments
@@ -98,10 +98,12 @@ stimulation_cropped_time = {"sub-107_no-stim": [15, 974],
                             "sub-112_stim": [244, 650, 2708, 3117],
                             "sub-103_no-stim": [785, 1113, 1380, 1715],
                             "sub-103_stim": [72, 476, 1862, 2182],
+                            "sub-104_no-stim": [895, 1208, 1741, 2064],
+                            "sub-104_stim": [9, 568],
                             }
 
 # Crop and save segments separately
-if subject in ['101', '112', '103']:  # there is some stimulation in the break between two no-stim blocks
+if subject in ['101', '112', '103', '104']:  # there is some stimulation in the break between two no-stim blocks
     no_stim_fragements = [raw_ica.copy().crop(tmin=stimulation_cropped_time[f'sub-{subject}_no-stim'][0], 
                           tmax=stimulation_cropped_time[f'sub-{subject}_no-stim'][1]), 
                           raw_ica.copy().crop(tmin=stimulation_cropped_time[f'sub-{subject}_no-stim'][2], 
@@ -129,15 +131,14 @@ else:
 fig_stim_psd = stim_segment.compute_psd(fmin=0.1, fmax=200).plot() 
 stim_segment.save(stim_fname, overwrite=True)
 
-
 if summary_rprt:
     report_root = op.join(project_root, 'derivatives/reports')  
 
     report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 
-                        f'sub-{subject}_200225.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub-{subject}_200225.html')
+                        f'sub-{subject}_120325.hdf5')    # it is in .hdf5 for later adding images
+    html_report_fname = op.join(report_folder, f'sub-{subject}_120325.html')
     
     report = mne.open_report(report_fname)
     report.add_figure(fig=fig_no_stim_psd, title='no stimulation psd',

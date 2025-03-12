@@ -202,60 +202,45 @@ def peak_alpha_calculation_third_plot(occipital_channels, tfr_slow_cue_right, tf
     # ========================================= PEAK ALPHA FREQUENCY (PAF) AND THIRD PLOT ====================================
 
     # Crop post stim alpha
-    tfr_slow_cue_right_post_stim = tfr_slow_cue_right.copy().crop(tmin=.3,tmax=.8,fmin=8, fmax=14).pick(occipital_channels)
+    tfr_slow_cue_both_post_stim = tfr_slow_cue_both.copy().crop(tmin=.3,tmax=.8,fmin=6, fmax=14).pick(occipital_channels)
+    tfr_slow_cue_right_post_stim = tfr_slow_cue_right.copy().crop(tmin=.3,tmax=.8,fmin=6, fmax=14).pick(occipital_channels)
     tfr_slow_cue_left_post_stim = tfr_slow_cue_left.copy().crop(tmin=.3,tmax=.8,fmin=8, fmax=14).pick(occipital_channels)
 
     # Find the frequency with the highest power by averaging over sensors and time points (data)
+    freq_idx_both = np.argmax(np.mean(np.abs(tfr_slow_cue_both_post_stim.data), axis=(0,2)))
     freq_idx_right = np.argmax(np.mean(np.abs(tfr_slow_cue_right_post_stim.data), axis=(0,2)))
     freq_idx_left = np.argmax(np.mean(np.abs(tfr_slow_cue_left_post_stim.data), axis=(0,2)))
 
     # Get the corresponding frequencies
+    peak_freq_cue_both = tfr_slow_cue_both_post_stim.freqs[freq_idx_both]
     peak_freq_cue_right = tfr_slow_cue_right_post_stim.freqs[freq_idx_right]
     peak_freq_cue_left = tfr_slow_cue_left_post_stim.freqs[freq_idx_left]
+    print(peak_freq_cue_both)
 
-    peak_alpha_freq = np.average([peak_freq_cue_right, peak_freq_cue_left])
-    peak_alpha_freq_range = np.arange(peak_alpha_freq-2, peak_alpha_freq+3)  # for MI calculations
+    peak_alpha_freq_no_both = np.average([peak_freq_cue_right, peak_freq_cue_left])
+    peak_alpha_freq_range_no_both = np.arange(peak_alpha_freq_no_both-2, peak_alpha_freq_no_both+3)  # for MI calculations
+    peak_alpha_freq_range = np.arange(peak_freq_cue_both-2, peak_freq_cue_both+3)  # ±2 Hz around the peak
     # np.savez(peak_alpha_fname, **{'peak_alpha_freq':peak_alpha_freq, 'peak_alpha_freq_range':peak_alpha_freq_range})
-
+    
     # Plot psd and show the peak alpha frequency for this participant
-    n_fft = int((epochs.tmax - epochs.tmin)*1000)
-    psd_params = dict(picks=occipital_channels, method="welch", fmin=1, fmax=60, n_jobs=4, verbose=True, n_fft=n_fft, n_overlap=int(n_fft/2))
-    psd_slow_right_post_stim = epochs['cue_onset_right','cue_onset_left'].copy().compute_psd(**psd_params)
-
-    # Average across epochs and get data
-    psd_slow_right_post_stim_avg = psd_slow_right_post_stim.average()
-    psds, freqs = psd_slow_right_post_stim_avg.get_data(return_freqs=True)
-    psds_mean = psds.mean(axis=0)
-
-    # Plot
+    peak_alph_both_occ = tfr_slow_cue_both.copy().pick(occipital_channels)
+    avg_power = np.mean(peak_alph_both_occ.data, axis=(0, 2))
     fig, ax = plt.subplots(figsize=(10, 6))
-    ax.plot(freqs[0:int(len(freqs)/2)], psds_mean[0:int(len(freqs)/2)], color='black')  # remove frequencies higher than 30Hz for plotting
+    ax.plot(peak_alph_both_occ.freqs, avg_power, color='black')
     ymin, ymax = ax.get_ylim()
-    # Indicate peak_alpha_freq_range with a gray shadow
-    ax.axvline(x=peak_alpha_freq_range[0], 
-                color='gray', 
-                linestyle='--', 
-                linewidth=2)
-    ax.axvline(x=peak_alpha_freq_range[-1], 
-                color='gray', 
-                linestyle='--', 
-                linewidth=2)
-    ax.fill_betweenx([ymin, ymax],
-                    peak_alpha_freq_range[0], 
-                    peak_alpha_freq_range[-1], 
-                    color='lightgray', 
-                    alpha=0.5)
-    ax.text(np.max(freqs)-5, 
-            np.min(psds_mean)*3, 
-            f'PAF = {peak_alpha_freq} Hz', 
-            color='black', 
-            ha='right', 
-            va='bottom')
+    ax.axvline(x=peak_alpha_freq_range[0], color='gray', linestyle='--', linewidth=2)
+    ax.axvline(x=peak_alpha_freq_range[-1], color='gray', linestyle='--', linewidth=2)
+    ax.fill_betweenx([ymin, ymax], peak_alpha_freq_range[0], peak_alpha_freq_range[-1],
+                     color='lightgray', alpha=0.5)
+    ax.set_xlabel('Frequency (Hz)')
+    ax.set_ylabel('Power')
     plt.xlabel('Frequency (Hz)')
     plt.ylabel('Power (T/m)^2/Hz')
-    plt.title(f'{epoching} onset- PAF = {peak_alpha_freq} Hz- stim={stim}')
+    plt.title(f'{epoching} onset- PAF = {peak_freq_cue_both} Hz- stim={stim}')
+    plt.minorticks_on()
+    plt.grid(which='major', linestyle='-', linewidth='0.5', color='black')
+    plt.grid(which='minor', linestyle=':', linewidth='0.5', color='gray')
 
-    plt.grid(True)
     fig_peak_alpha = plt.gcf()
     plt.show()
 
@@ -409,7 +394,7 @@ def MI_overtime_sixth_plot(tfr_alpha_MI_occ_chans, report):
 
 # =================================================================================================================
 # BIDS settings: fill these out 
-subject = '102'
+subject = '104'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -454,8 +439,8 @@ tfr_params = dict(use_fft=True, return_itc=False, average=True, decim=2, n_jobs=
 report_root = op.join(project_root, 'derivatives/reports')  
 report_folder = op.join(report_root , 'sub-' + subject)
 report_fname = op.join(report_folder, 
-                    f'sub-{subject}_200225.hdf5')    # it is in .hdf5 for later adding images
-html_report_fname = op.join(report_folder, f'sub-{subject}_200225.html')
+                    f'sub-{subject}_120325_peak.hdf5')    # it is in .hdf5 for later adding images
+html_report_fname = op.join(report_folder, f'sub-{subject}_120325_peak.html')
 
 report = mne.open_report(report_fname)
 
@@ -494,7 +479,7 @@ for epoching in epoching_list:
                                                                 epochs, 
                                                                 occipital_channels,
                                                                 report)
-        # report = MI_overtime_sixth_plot(tfr_alpha_MI_occ_chans, report)  # Don't plot now, it looks terrible 
+        report = MI_overtime_sixth_plot(tfr_alpha_MI_occ_chans, report)  # Don't plot now, it looks terrible 
 
 report.save(report_fname, overwrite=True)
 report.save(html_report_fname, overwrite=True, open_browser=True)  # to check how the report looks

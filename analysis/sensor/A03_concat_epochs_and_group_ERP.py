@@ -93,7 +93,7 @@ def fig_compare_chs_plot_topos(occipital_channels, evoked_list_chs, evoked_list_
                                 )
             
 # BIDS settings: fill these out 
-subject_list = ['102', '107', '110', '112', '103', 'group'] # all subjects
+subject_list = ['102', '107', '110', '112', '103', '104', 'group'] # all subjects
 subject_list_event_id = ['111'] #['110', '112', '103'] # these are those with wrong event_ids from ica 
 session = '01'
 task = 'SpAtt'
@@ -135,9 +135,9 @@ deriv_group_basename = 'sub-group_ses-01_task-SpAtt_run-01_eeg'
 report_root = op.join(project_root, 'derivatives/reports')  
 
 report_folder = op.join(report_root , 'group')
-report_fname = op.join(report_folder, 'subs_102-107-110-112-103_210225.hdf5')
-html_report_fname = op.join(report_folder, 'subs_102-107-110-112-103_210225.html')
-report = mne.Report(title='subs_102-107-110-112-103')
+report_fname = op.join(report_folder, 'subs_102-107-110-112-103-104_120325.hdf5')
+html_report_fname = op.join(report_folder, 'subs_102-107-110-112-103-104_120325.html')
+report = mne.Report(title='subs_102-107-110-112-103-104')
 
 # Concatenate subjects together based on conditions
 for epoching in epoching_list:

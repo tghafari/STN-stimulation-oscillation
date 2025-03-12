@@ -50,10 +50,12 @@ stim_sequence = {'sub-01':["no_stim-left rec", "no_stim-right rec", "Right stim-
                  'sub-111': ["Left stim- no rec", "Right stim- no rec", "no_stim-right rec", "no_stim-left rec"],
                  'sub-112': ["Left stim- no rec", "no_stim-right rec", "no_stim-left rec", "Right stim- no rec"],
                  'sub-103': ["Right stim- no rec", "no_stim-left rec", "no_stim-right rec", "Left stim- no rec"],
+                 'sub-104': ["Right stim- no rec", "Left stim- no rec", "no_stim-left rec", "no_stim-right rec"],
+                 'sub-105': ["Left stim- no rec", "Right stim- no rec", "no_stim-left rec", "no_stim-right rec"],
                  } 
 # BIDS settings
-subject = '102'
-brainVision_basename = f'{subject[-2:]}_ao'  # might need modification per subject
+subject = '104'
+brainVision_basename = f'{subject}_AO'  # subject[-2:] might need modification per subject
 
 session = '01'
 task = 'SpAtt'
@@ -254,8 +256,8 @@ if summary_rprt:
     report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 
-                        f'sub-{subject}_200225.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub-{subject}_200225.html')
+                        f'sub-{subject}_120325.hdf5')    # it is in .hdf5 for later adding images
+    html_report_fname = op.join(report_folder, f'sub-{subject}_120325.html')
     
     report = mne.Report(title=f'Subject {subject}')
     report.add_image(beh_fig_fname,
