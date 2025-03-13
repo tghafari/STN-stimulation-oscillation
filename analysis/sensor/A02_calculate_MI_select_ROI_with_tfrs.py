@@ -439,8 +439,8 @@ tfr_params = dict(use_fft=True, return_itc=False, average=True, decim=2, n_jobs=
 report_root = op.join(project_root, 'derivatives/reports')  
 report_folder = op.join(report_root , 'sub-' + subject)
 report_fname = op.join(report_folder, 
-                    f'sub-{subject}_120325_peak.hdf5')    # it is in .hdf5 for later adding images
-html_report_fname = op.join(report_folder, f'sub-{subject}_120325_peak.html')
+                    f'sub-{subject}_130325.hdf5')    # it is in .hdf5 for later adding images
+html_report_fname = op.join(report_folder, f'sub-{subject}_130325.html')
 
 report = mne.open_report(report_fname)
 

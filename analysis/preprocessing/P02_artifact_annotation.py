@@ -69,7 +69,7 @@ raw = read_raw_bids(bids_path=bids_path, verbose=False,
 # Here crop any extra segments at the beginning or end of the recording 
 """this helps better detecting blinks"""
 # raw.plot() 
-raw.crop(tmin=205)  
+# raw.crop(tmin=205)  
 
 # Annotate break sections and plot
 break_annots = mne.preprocessing.annotate_break(

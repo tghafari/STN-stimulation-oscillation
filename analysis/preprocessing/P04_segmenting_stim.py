@@ -98,8 +98,8 @@ stimulation_cropped_time = {"sub-107_no-stim": [15, 974],
                             "sub-112_stim": [244, 650, 2708, 3117],
                             "sub-103_no-stim": [785, 1113, 1380, 1715],
                             "sub-103_stim": [72, 476, 1862, 2182],
-                            "sub-104_no-stim": [895, 1208, 1741, 2064],
-                            "sub-104_stim": [9, 568],
+                            "sub-104_no-stim": [1100, 1412, 1946, 2269],
+                            "sub-104_stim": [9, 772],
                             }
 
 # Crop and save segments separately
@@ -137,8 +137,8 @@ if summary_rprt:
     report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 
-                        f'sub-{subject}_120325.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub-{subject}_120325.html')
+                        f'sub-{subject}_130325.hdf5')    # it is in .hdf5 for later adding images
+    html_report_fname = op.join(report_folder, f'sub-{subject}_130325.html')
     
     report = mne.open_report(report_fname)
     report.add_figure(fig=fig_no_stim_psd, title='no stimulation psd',

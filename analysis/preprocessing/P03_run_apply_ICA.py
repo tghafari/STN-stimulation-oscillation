@@ -90,7 +90,7 @@ raw_filtered.compute_psd(n_fft=n_fft,  # default method is welch here (multitape
  {'sub-110': 'Fp1 FCz',
  'sub-107':'C2 FC1 F3 AF7',
  'sub-102': 'FT7 F3',
- 'sub-104': 'F2 FC2 F4 F3 AF3 AF7 F8 C4',
+ 'sub-104': 'F2 F4 F3 AF7 C4 FC2 AF3 F8',  I didn't remove these!
 
 }"""
 
@@ -166,9 +166,9 @@ BIDS/sub-101_ses-01_run-01: ['TP9', 'TP10', 'CP5', 'P7', 'TP7', 'P5', 'C5', 'P6'
 BIDS/sub-112_ses-01_run-01: ['TP10', 'Fp1', 'CP6', 'FC5', 'AF8', 'Fp2', 'F5', 
                             'AF7', 'F8', 'AF3', 'FC4', 'F6', 'F3', 'Cz', 'CPz', 
                             'Pz', 'P1', 'FC6', 'FC1']
-BIDS/sub-104_ses-01_run-01: ['TP9', 'TP10', 'Fp1', 'F7', 'FC5', 'CP5', 'CP6', 'Fp2', 'TP7', 'PO7', 
-                             'F2', 'FC2', 'F4', 'F3', 'AF3', 'AF7', 'F8', 'C4', 'C5',
-                            'C6', 'F6']
+BIDS/sub-104_ses-01_run-01: ['TP9', 'TP10', 'Fp1', 'F7', 'CP6', 'FC5', 'CP5', 'FT7', 'F5', 'TP7',
+                             'C5', 'C6', 'AF8', 'F6', 'Fp2', 'P7', 'PO7', 'F8',
+                             'FC1' 'C3']
 
 } """
 
@@ -189,7 +189,7 @@ ica.fit(raw_resmpld, reject_by_annotation=True, verbose=True)
 ica.plot_sources(raw_resmpld, title='ICA')
 ica.plot_components()
 
-ICA_rej_dic = {f'sub-{subject}_ses-{session}':[0, 3]} # manually selected bad ICs or from sub config file 
+ICA_rej_dic = {f'sub-{subject}_ses-{session}':[0, 4]} # manually selected bad ICs or from sub config file 
 artifact_ICs = ICA_rej_dic[f'sub-{subject}_ses-{session}']
 """
 list bad ICA components for all participants:
@@ -206,7 +206,7 @@ list bad ICA components for all participants:
 'BIDS/sub-103_ses-01_run-01': [0, 1], # 0:blink, 4:saccades  
 'BIDS/sub-101_ses-01_run-01': [0, 1, 3, 4, 5], # 0:saccade, 1,3,4,5:blink  !this participant has blinked too many times!
 'BIDS/sub-112_ses-01_run-01': [0, 3, 4, 15, 19, 28, 29], # 0:blink, 4:saccades
-'BIDS/sub-104_ses-01_run-01': [0, 3], # 0:blink, 4:saccades  
+'BIDS/sub-104_ses-01_run-01': [0, 4], # 0:blink, 4:saccades  
 
 
 } """
@@ -241,8 +241,8 @@ if summary_rprt:
     report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 
-                        f'sub-{subject}_120325.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub-{subject}_120325.html')
+                        f'sub-{subject}_130325.hdf5')    # it is in .hdf5 for later adding images
+    html_report_fname = op.join(report_folder, f'sub-{subject}_130325.html')
     
     report = mne.open_report(report_fname)
     report.add_figure(fig_ica, 
