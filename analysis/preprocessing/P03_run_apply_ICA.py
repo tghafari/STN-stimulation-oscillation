@@ -169,6 +169,9 @@ BIDS/sub-112_ses-01_run-01: ['TP10', 'Fp1', 'CP6', 'FC5', 'AF8', 'Fp2', 'F5',
 BIDS/sub-104_ses-01_run-01: ['TP9', 'TP10', 'Fp1', 'F7', 'CP6', 'FC5', 'CP5', 'FT7', 'F5', 'TP7',
                              'C5', 'C6', 'AF8', 'F6', 'Fp2', 'P7', 'PO7', 'F8',
                              'FC1' 'C3']
+ BIDS/sub-105_ses-01_run-01: ['TP9', 'TP10', 'Fp1', 'P7', 'AF7', 'TP7', 'F8', 'FC6', 'FT8', 
+                             'PO8', 'AF4', 'AFz', 'C5',
+                             'AF3']                            
 
 } """
 
@@ -189,8 +192,8 @@ ica.fit(raw_resmpld, reject_by_annotation=True, verbose=True)
 ica.plot_sources(raw_resmpld, title='ICA')
 ica.plot_components()
 
-ICA_rej_dic = {f'sub-{subject}_ses-{session}':[0, 4]} # manually selected bad ICs or from sub config file 
-artifact_ICs = ICA_rej_dic[f'sub-{subject}_ses-{session}']
+ICA_rej_dic = {f'sub-{subject}_ses-{session}':[3, 6]} # manually selected bad ICs or from sub config file 
+artifact_ICs = ICA_rej_dic[f'sub-{subject}_ses-{session}'] #6
 """
 list bad ICA components for all participants:
 {
@@ -207,6 +210,7 @@ list bad ICA components for all participants:
 'BIDS/sub-101_ses-01_run-01': [0, 1, 3, 4, 5], # 0:saccade, 1,3,4,5:blink  !this participant has blinked too many times!
 'BIDS/sub-112_ses-01_run-01': [0, 3, 4, 15, 19, 28, 29], # 0:blink, 4:saccades
 'BIDS/sub-104_ses-01_run-01': [0, 4], # 0:blink, 4:saccades  
+'BIDS/sub-104_ses-01_run-01': [3, 6], # 3,6: based on overlay plot, couldn't find blinks/saccades 
 
 
 } """

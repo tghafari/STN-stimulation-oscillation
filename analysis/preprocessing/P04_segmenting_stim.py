@@ -39,7 +39,7 @@ import matplotlib.pyplot as plt
 
 
 # BIDS settings: fill these out 
-subject = '104'
+subject = '105'
 session = '01'
 task = 'SpAtt'
 run = '01'  # change this for subjects with two stim or two no-stim segments
@@ -100,6 +100,8 @@ stimulation_cropped_time = {"sub-107_no-stim": [15, 974],
                             "sub-103_stim": [72, 476, 1862, 2182],
                             "sub-104_no-stim": [1100, 1412, 1946, 2269],
                             "sub-104_stim": [9, 772],
+                            "sub-105_no-stim": [4326, 5103],
+                            "sub-105_stim": [112, 597, 850, 1327],                            
                             }
 
 # Crop and save segments separately
@@ -117,7 +119,7 @@ else:
 fig_no_stim_psd = no_stim_segment.compute_psd(fmin=0.1, fmax=200).plot()  # double check and save if ok
 no_stim_segment.save(no_stim_fname, overwrite=True)
 
-if subject in ['112', '103']:  # there is some stimulation in the break between two stim blocks
+if subject in ['112', '103', '105']:  # there is some stimulation in the break between two stim blocks
     stim_fragements = [raw_ica.copy().crop(tmin=stimulation_cropped_time[f'sub-{subject}_stim'][0], 
                           tmax=stimulation_cropped_time[f'sub-{subject}_stim'][1]), 
                           raw_ica.copy().crop(tmin=stimulation_cropped_time[f'sub-{subject}_stim'][2], 

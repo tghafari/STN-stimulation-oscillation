@@ -135,9 +135,9 @@ deriv_group_basename = 'sub-group_ses-01_task-SpAtt_run-01_eeg'
 report_root = op.join(project_root, 'derivatives/reports')  
 
 report_folder = op.join(report_root , 'group')
-report_fname = op.join(report_folder, 'subs_102-107-110-112-103-104_120325.hdf5')
-html_report_fname = op.join(report_folder, 'subs_102-107-110-112-103-104_120325.html')
-report = mne.Report(title='subs_102-107-110-112-103-104')
+report_fname = op.join(report_folder, 'subs_102-107-110-112-103-104-105_120325.hdf5')
+html_report_fname = op.join(report_folder, 'subs_102-107-110-112-103-104-105_120325.html')
+report = mne.Report(title='subs_102-107-110-112-103-104-105')
 
 # Concatenate subjects together based on conditions
 for epoching in epoching_list:

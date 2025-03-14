@@ -46,7 +46,7 @@ def reading_epochs_evoking(stim):
 
 
 # BIDS settings: fill these out 
-subject = '104'
+subject = '105'
 session = '01'
 task = 'SpAtt'
 run = '01'
