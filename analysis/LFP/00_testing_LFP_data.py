@@ -35,7 +35,7 @@ import matplotlib.pyplot as plt
 
 
 # fill these out
-subject = '103'  # subject code assigned to by Benchi's group
+subject = '101'  # subject code assigned to by Benchi's group
 session = '01'  # name of the folder containing the lfp data
 modality = 'lfp'
 side = 'lfp left'  # 'lfp right'

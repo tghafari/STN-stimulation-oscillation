@@ -232,8 +232,8 @@ def peak_alpha_calculation_third_plot(occipital_channels, tfr_slow_cue_right, tf
     ax.axvline(x=peak_alpha_freq_range[-1], color='gray', linestyle='--', linewidth=2)
     ax.fill_betweenx([ymin, ymax], peak_alpha_freq_range[0], peak_alpha_freq_range[-1],
                      color='lightgray', alpha=0.5)
-    ax.set_xlabel('Frequency (Hz)')
-    ax.set_ylabel('Power')
+    # ax.set_xlabel('Frequency (Hz)')
+    # ax.set_ylabel('Power')
     plt.xlabel('Frequency (Hz)')
     plt.ylabel('Power (T/m)^2/Hz')
     plt.title(f'{epoching} onset- PAF = {peak_freq_cue_both} Hz- stim={stim}')

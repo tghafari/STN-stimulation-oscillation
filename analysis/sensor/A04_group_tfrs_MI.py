@@ -104,10 +104,10 @@ def process_subject_tfr(stim_flag, deriv_folder, bids_path, input_suffix, deriv_
     tfr_right = epochs['cue_onset_right'].compute_tfr(**TFR_PARAMS)
     tfr_left = epochs['cue_onset_left'].compute_tfr(**TFR_PARAMS)
     
-    # # Save TFR files
-    # tfr_both.save(fname_both, overwrite=True)
-    # tfr_right.save(fname_right, overwrite=True)
-    # tfr_left.save(fname_left, overwrite=True)
+    # Save TFR files
+    tfr_both.save(fname_both, overwrite=True)
+    tfr_right.save(fname_right, overwrite=True)
+    tfr_left.save(fname_left, overwrite=True)
     
     # Plot topographies with white background and add figures to report
     figs = {
@@ -180,7 +180,8 @@ def compute_group_grand_avg(tfr_collection, deriv_folder_group, base_name, suffi
                             title=f'{suffix}: Grand Average TFR ({key})', show=False,
                             vmin=-0.75, vmax=0.75,
                             fig_facecolor='w', font_color='k')
-        # Add figure to the report
+        plt.show()
+
         report.add_figure(fig=fig,
                           title=f'{suffix} Grand Average TFR ({key})',
                           caption=f'Grand Average TFR (2-31 Hz) for {key} (baseline: {BASELINE})',
@@ -206,7 +207,7 @@ def plot_group_representative_channel(grand_avg_right, grand_avg_left, cond_labe
     -------
     report : mne.Report
     """
-    occipital = ['O1', 'PO3', 'O2', 'PO4', 'Oz', 'POz']
+    occipital = ['PO3', 'PO4', 'POz']
     fig, axes = plt.subplots(len(occipital), 2, figsize=(50, 20))
     for i, ch in enumerate(occipital):
         grand_avg_left.plot(picks=ch, baseline=BASELINE, mode='percent',
@@ -218,6 +219,7 @@ def plot_group_representative_channel(grand_avg_right, grand_avg_left, cond_labe
                              axes=axes[i, 1], show=False)
         axes[i, 1].set_title(f'{cond_label} cue right - {ch}')    
     fig.tight_layout()
+    plt.show()
 
     report.add_figure(fig=fig, title=f'{cond_label} Group TFR (Occipital Sensors)',
                       caption='Group TFR plots on selected occipital channels',
@@ -227,7 +229,7 @@ def plot_group_representative_channel(grand_avg_right, grand_avg_left, cond_labe
 def plot_group_sensor_stim_nostim(group_avg, report):
     """Plot grand average TFR on representative occipital sensors."""
 
-    occipital = ['O1', 'PO3', 'O2', 'PO4', 'Oz', 'POz']
+    occipital = ['PO3', 'PO4', 'POz']
     fig, axes = plt.subplots(len(occipital), 2, figsize=(50, 20))
     for i, ch in enumerate(occipital):
         group_avg['stim']['both'].plot(picks=ch, baseline=BASELINE, mode='percent',
@@ -239,6 +241,7 @@ def plot_group_sensor_stim_nostim(group_avg, report):
                              axes=axes[i, 1], show=False)
         axes[i, 1].set_title(f'no stim- cue both - {ch}')    
     fig.tight_layout()
+    plt.show()
 
     report.add_figure(fig=fig, title=f'Group TFR (Occipital Sensors)-stim vs no stim',
                       caption='Group TFR plots on selected occipital channels',
@@ -294,11 +297,17 @@ def plot_group_peak_alpha(grand_avg_both, grand_avg_right, grand_avg_left, occip
     ax.axvline(x=paf_range[-1], color='gray', linestyle='--', linewidth=2)
     ax.fill_betweenx([ymin, ymax], paf_range[0], paf_range[-1],
                      color='lightgray', alpha=0.5)
-    ax.set_xlabel('Frequency (Hz)')
-    ax.set_ylabel('Power')
-    ax.set_title(f'{cond_label} Group Peak Alpha Frequency ({peak_freq:.2f} Hz)')
-    ax.grid(True)
+
+    plt.title(f'{cond_label} Group Peak Alpha Frequency ({peak_freq:.2f} Hz)')
+    plt.xlabel('Frequency (Hz)')
+    plt.ylabel('Power (T/m)^2/Hz')
+    plt.minorticks_on()
+    plt.grid(which='major', linestyle='-', linewidth='0.5', color='black')
+    plt.grid(which='minor', linestyle=':', linewidth='0.5', color='gray')
+
     fig.tight_layout()
+    plt.show()
+
     report.add_figure(fig=fig, title=f'{cond_label} Group Peak Alpha Frequency',
                       caption='PSD with peak alpha frequency range highlighted',
                       tags=('PAF', 'group'), section='PAF')
@@ -374,6 +383,87 @@ def compute_and_plot_stim_effects_all(grand_avg_stim_dict, grand_avg_no_stim_dic
                           section='TFR')
     return report
 
+def compute_and_plot_stim_effects_occipital(grand_avg_stim_dict, grand_avg_no_stim_dict, report):
+    """
+    Compute and plot stimulation effects for each cue type ('both', 'right', 'left') 
+    on occipital sensors (PO3, PO4, POz).
+
+    For each cue type:
+      1. Baseline-corrected difference:
+           (grand_avg_no_stim - grand_avg_stim)
+         Both TFRs are first baseline corrected using BASELINE and mode 'percent'.
+
+      2. Ratio effect (uncorrected):
+           (grand_avg_no_stim - grand_avg_stim) / (grand_avg_no_stim + grand_avg_stim)
+
+    Plots are generated for selected occipital sensors and added to the MNE Report.
+
+    Parameters
+    ----------
+    grand_avg_stim_dict : dict
+         Dictionary with keys 'both', 'right', and 'left' for the stimulation condition.
+    grand_avg_no_stim_dict : dict
+         Dictionary with keys 'both', 'right', and 'left' for the no stimulation condition.
+    report : mne.Report
+         MNE Report to which the figures will be added.
+
+    Returns
+    -------
+    report : mne.Report
+         Updated MNE Report with the stimulation effect figures added.
+    """
+    occipital = ['PO3', 'PO4', 'POz']
+    cues = ['both', 'right', 'left']
+    eps = 1e-10  # Small constant to avoid division by zero
+
+    for cue in cues:
+        fig_diff, axes_diff = plt.subplots(len(occipital), 1, figsize=(10, 15))
+        fig_ratio, axes_ratio = plt.subplots(len(occipital), 1, figsize=(10, 15))
+        
+        # 1. Baseline-corrected difference:
+        stim_bc = grand_avg_stim_dict[cue].copy()
+        stim_bc.apply_baseline(baseline=BASELINE, mode='percent')
+        no_stim_bc = grand_avg_no_stim_dict[cue].copy()
+        no_stim_bc.apply_baseline(baseline=BASELINE, mode='percent')
+
+        diff_bc = grand_avg_stim_dict[cue].copy()
+        diff_bc.data = no_stim_bc.data - stim_bc.data
+
+        # 2. Ratio effect (uncorrected):
+        ratio_effect = grand_avg_no_stim_dict[cue].copy()
+        numerator = grand_avg_no_stim_dict[cue].data - grand_avg_stim_dict[cue].data
+        denominator = grand_avg_no_stim_dict[cue].data + grand_avg_stim_dict[cue].data
+        ratio = numerator / (denominator + eps)
+        ratio_effect.data = ratio
+
+        # Plot for each occipital channel
+        for i, ch in enumerate(occipital):
+            diff_bc.plot(picks=ch, baseline=None, tmin=-0.5, tmax=1.5, vmin=-0.75, vmax=0.75,
+                         axes=axes_diff[i], show=False)
+            axes_diff[i].set_title(f'{cue} - Baseline Corrected Diff (no_stim - stim) - {ch}')
+
+            ratio_effect.plot(picks=ch, baseline=None, tmin=-0.5, tmax=1.5, vmin=-0.75, vmax=0.75,
+                              axes=axes_ratio[i], show=False)
+            axes_ratio[i].set_title(f'{cue} - Ratio Effect (no_stim - stim)/(no_stim + stim) - {ch}')
+        
+        fig_diff.tight_layout()
+        plt.show(fig_diff)
+        fig_ratio.tight_layout()
+        plt.show(fig_ratio)
+
+        report.add_figure(fig=fig_diff,
+                          title=f'Baseline Corrected Stim Effect ({cue}) - Occipital',
+                          caption=f'Baseline corrected difference for cue {cue} on occipital sensors',
+                          tags=('stim_effect', 'group'),
+                          section='TFR')
+
+        report.add_figure(fig=fig_ratio,
+                          title=f'Stim Effect Ratio ({cue}) - Occipital',
+                          caption=f'Ratio effect for cue {cue} computed as (no_stim - stim)/(no_stim + stim) on occipital sensors',
+                          tags=('stim_effect', 'group'),
+                          section='TFR')
+
+    return report
 
 def plot_group_MI(paf_range, grand_avg_right, grand_avg_left, occipital, cond_label, report):
     """
@@ -446,7 +536,7 @@ def plot_group_MI(paf_range, grand_avg_right, grand_avg_left, occipital, cond_la
 # ---------------------------
 
 # Settings (customize these paths and lists for your study)
-subject_list = ['102', '107', '110', '112', '103', '104']  
+subject_list = ['102', '107', '110', '112', '103', '104', '105']  
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -471,8 +561,8 @@ deriv_folder_group = op.join(bids_root, 'derivatives', 'group')
 group_base = 'sub-group_ses-01_task-SpAtt_run-01_eeg'
 
 report_folder = op.join(report_root, 'group')
-report_fname = op.join(report_folder, 'group_report-120325.hdf5')
-html_report_fname = op.join(report_folder, 'group_report-120325.html')
+report_fname = op.join(report_folder, 'group_report-130325.hdf5')
+html_report_fname = op.join(report_folder, 'group_report-130325.html')
 
 # Create a report
 report = mne.Report(title='Group TFR and PAF Report')
@@ -520,6 +610,7 @@ for condition in ['stim', 'no_stim']:
 
 # Compute stimulation effects for all cues using the group grand averages:
 report = compute_and_plot_stim_effects_all(group_avg['stim'], group_avg['no_stim'], report)
+report = compute_and_plot_stim_effects_occipital(group_avg['stim'], group_avg['no_stim'], report)
 
 # Save the final report in both HDF5 and HTML formats
 report.save(report_fname, overwrite=True)
