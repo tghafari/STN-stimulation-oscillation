@@ -28,7 +28,7 @@ import mne
 from mne_bids import BIDSPath
 
 
-def reading_epochs_evoking(stim, deriv_folder, basename, save=False):
+def reading_epochs_evoking(stim, deriv_folder, basename, save=True):
     if stim:
         input_fname = op.join(deriv_folder, basename
                                + '_' + stim_suffix + '_' + input_suffix + extension)
@@ -210,38 +210,38 @@ for epoching in epoching_list:
         grand_average_evokeds = mne.grand_average(evokeds_all_subs_ls)  # this will create a grand average and hence is more generaliseable
         grand_average_evokeds.save(deriv_evoked_stim_fname, overwrite=True)
 
-for subject in subject_list:  
-    for epoching in epoching_list:
-        print(f'Working on {epoching}')
-        input_suffix = 'epo-' + epoching
-        deriv_suffix = epoching + '-ave'
-        evoked_list_cropped = []  #  -0.1 to 0.5
-        evoked_list = []  # -0.1 to 1
+# for subject in subject_list:  
+#     for epoching in epoching_list:
+#         print(f'Working on {epoching}')
+#         input_suffix = 'epo-' + epoching
+#         deriv_suffix = epoching + '-ave'
+#         evoked_list_cropped = []  #  -0.1 to 0.5
+#         evoked_list = []  # -0.1 to 1
 
-        for stim in stim_segments_ls:
-            print(f'Stimulation = {stim}')            
-            if subject == subject_list[-1]:
-                if stim:
-                    deriv_evoked_stim_fname = op.join(deriv_folder_group, deriv_group_basename 
-                                            + '_' + stim_suffix + '_' + deriv_suffix + extension)
-                else:
-                    deriv_evoked_stim_fname = op.join(deriv_folder_group, deriv_group_basename 
-                                            + '_' + no_stim_suffix + '_' + deriv_suffix + extension)
-                evoked = mne.read_evokeds(deriv_evoked_stim_fname, condition=0)  # condition=0 is the only condition in the evokeds, has to be here for the grand average to output one grand averaged evoked
-            else:
-                bids_path = BIDSPath(subject=subject, session=session,
-                                    task=task, run=run, root=bids_root, 
-                                    datatype ='eeg', suffix=eeg_suffix)
-                deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
-                _, evoked = reading_epochs_evoking(stim, deriv_folder, bids_path.basename)
+#         for stim in stim_segments_ls:
+#             print(f'Stimulation = {stim}')            
+#             if subject == subject_list[-1]:
+#                 if stim:
+#                     deriv_evoked_stim_fname = op.join(deriv_folder_group, deriv_group_basename 
+#                                             + '_' + stim_suffix + '_' + deriv_suffix + extension)
+#                 else:
+#                     deriv_evoked_stim_fname = op.join(deriv_folder_group, deriv_group_basename 
+#                                             + '_' + no_stim_suffix + '_' + deriv_suffix + extension)
+#                 evoked = mne.read_evokeds(deriv_evoked_stim_fname, condition=0)  # condition=0 is the only condition in the evokeds, has to be here for the grand average to output one grand averaged evoked
+#             else:
+#                 bids_path = BIDSPath(subject=subject, session=session,
+#                                     task=task, run=run, root=bids_root, 
+#                                     datatype ='eeg', suffix=eeg_suffix)
+#                 deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
+#                 _, evoked = reading_epochs_evoking(stim, deriv_folder, bids_path.basename)
 
-            evoked.comment = f'stim:{stim_segments_ls[stim]}, {epoching} onset'
-            evoked_list_cropped.append(evoked.copy().crop(-0.1, 0.5))
-            evoked_list.append(evoked)  # append evokeds for later comparison
+#             evoked.comment = f'stim:{stim_segments_ls[stim]}, {epoching} onset'
+#             evoked_list_cropped.append(evoked.copy().crop(-0.1, 0.5))
+#             evoked_list.append(evoked)  # append evokeds for later comparison
 
-            del evoked
-        if subject == subject_list[-1]:
-            fig_compare_chs_plot_topos(occipital_channels, evoked_list_cropped, evoked_list, epoching, subject)
+#             del evoked
+#         if subject == subject_list[-1]:
+#             fig_compare_chs_plot_topos(occipital_channels, evoked_list_cropped, evoked_list, epoching, subject)
 
-report.save(report_fname, overwrite=True)
-report.save(html_report_fname, overwrite=True, open_browser=True)  # to check how the report looks
+# report.save(report_fname, overwrite=True)
+# report.save(html_report_fname, overwrite=True, open_browser=True)  # to check how the report looks
