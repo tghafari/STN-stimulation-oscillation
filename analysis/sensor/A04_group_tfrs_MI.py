@@ -414,7 +414,7 @@ def compute_and_plot_stim_effects_occipital(grand_avg_stim_dict, grand_avg_no_st
     """
     occipital = ['PO3', 'PO4', 'POz']
     cues = ['both', 'right', 'left']
-    eps = 1e-10  # Small constant to avoid division by zero
+    eps = 0 #1e-10  # Small constant to avoid division by zero
 
     for cue in cues:
         fig_diff, axes_diff = plt.subplots(len(occipital), 1, figsize=(10, 15))
@@ -442,14 +442,13 @@ def compute_and_plot_stim_effects_occipital(grand_avg_stim_dict, grand_avg_no_st
                          axes=axes_diff[i], show=False)
             axes_diff[i].set_title(f'{cue} - Baseline Corrected Diff (no_stim - stim) - {ch}')
 
-            ratio_effect.plot(picks=ch, baseline=None, tmin=-0.5, tmax=1.5, vmin=-0.75, vmax=0.75,
+            ratio_effect.plot(picks=ch, baseline=None, tmin=-0.5, tmax=1.5, vmin=-0.25, vmax=0.25,
                               axes=axes_ratio[i], show=False)
             axes_ratio[i].set_title(f'{cue} - Ratio Effect (no_stim - stim)/(no_stim + stim) - {ch}')
         
         fig_diff.tight_layout()
-        plt.show(fig_diff)
         fig_ratio.tight_layout()
-        plt.show(fig_ratio)
+        plt.show()
 
         report.add_figure(fig=fig_diff,
                           title=f'Baseline Corrected Stim Effect ({cue}) - Occipital',
@@ -561,8 +560,8 @@ deriv_folder_group = op.join(bids_root, 'derivatives', 'group')
 group_base = 'sub-group_ses-01_task-SpAtt_run-01_eeg'
 
 report_folder = op.join(report_root, 'group')
-report_fname = op.join(report_folder, 'group_report-130325.hdf5')
-html_report_fname = op.join(report_folder, 'group_report-130325.html')
+report_fname = op.join(report_folder, 'group_report-170325.hdf5')
+html_report_fname = op.join(report_folder, 'group_report-170325.html')
 
 # Create a report
 report = mne.Report(title='Group TFR and PAF Report')
