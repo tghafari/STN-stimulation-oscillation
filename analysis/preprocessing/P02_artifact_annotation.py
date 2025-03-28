@@ -25,7 +25,7 @@ from mne_bids import BIDSPath, read_raw_bids
 
 
 # BIDS settings: fill these out 
-subject = '105'
+subject = '102'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -47,11 +47,11 @@ elif platform == 'mac':
     rds_dir = '/Volumes/jenseno-avtemporal-attention'
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
-# project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
-# bids_root = op.join(project_root, 'data', 'BIDS')
+project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
+bids_root = op.join(project_root, 'data', 'BIDS')
 
 # for bear outage
-bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
+# bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
 
 # Specify specific file names
 bids_path = BIDSPath(subject=subject, session=session,

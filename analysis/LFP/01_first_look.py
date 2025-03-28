@@ -22,9 +22,6 @@ t.ghafari@bham.ac.uk
 ==============================================  
 
 ToDos:
-- avg RT is very long
-- number of button presses = right dot, as if 
-they only responded to right dot not left.
 """
 
 # Import relevant Python modules
@@ -54,14 +51,16 @@ stim_sequence = {'sub-01':["no_stim-left rec", "no_stim-right rec", "Right stim-
                  'sub-111': ["Left stim- no rec", "Right stim- no rec", "no_stim-right rec", "no_stim-left rec"],
                  'sub-112': ["Left stim- no rec", "no_stim-right rec", "no_stim-left rec", "Right stim- no rec"],
                  'sub-103': ["Right stim- no rec", "no_stim-left rec", "no_stim-right rec", "Left stim- no rec"],
+                 'sub-104': ["Right stim- no rec", "Left stim- no rec", "no_stim-left rec", "no_stim-right rec"],
+                 'sub-105': ["Left stim- no rec", "Right stim- no rec", "no_stim-left rec", "no_stim-right rec"],
                  } 
 # BIDS settings
-subject = '103'
+subject = '102'
 session = '01'
 task = 'SpAtt'
 run = '01'
 modality = 'lfp'
-side = 'lfp left'
+side = 'left'
 
 # BIDS events
 events_suffix = 'events'  
@@ -69,6 +68,7 @@ events_extension = '.tsv'
 
 platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
 pilot = False  # is it pilot data or real data?
+correct_sfreq = False  # do you want to correct sfreq?
 sanity_test = False
 eve_rprt = True
 summary_rprt = True
@@ -76,7 +76,7 @@ summary_rprt = True
 if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
 elif platform == 'mac':
-    rds_dir = '/Volumes/jenseno-avtemporal-attention-2'
+    rds_dir = '/Volumes/jenseno-avtemporal-attention'
 
 project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
 # '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD'  # only for bear outage time
@@ -84,8 +84,8 @@ data_root = op.join(project_root, 'data/data-organised')
 # '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/data-organised'  # only for bear outage time
 
 bids_root = op.join(project_root, 'data', 'BIDS')
-base_fpath = op.join(data_root, f'sub-{subject}', f'ses-{session}', f'{modality}', f'{side}')  
-base_fname = '1010P24295_2025_01_15_09_57_47_uv'
+base_fpath = op.join(data_root, f'sub-{subject}', f'ses-{session}', f'{modality}')  
+base_fname = f'sub-{subject}_ses-{session}_task-{task}_run-{run}_{modality}_{side}'
 
 lfp_fname = op.join(base_fpath, base_fname + '.edf') 
 events_fname = op.join(base_fpath, base_fname + '-eve.fif')
@@ -95,29 +95,51 @@ annotated_raw_fname = op.join(base_fpath, base_fname + '_ann.fif')
 raw = mne.io.read_raw_edf(lfp_fname, preload=True)
 raw.plot()  # first thing first
 
-correct_sfreq = 1250  # note that the file headers incorrectly mention 1000 whereas the correct sfreq is 1250Hz
 
-# Create a new Info object with the updated sampling frequency.
-# Here we assume all channels are EEG channels. Adjust ch_types if needed.
-new_info = mne.create_info(ch_names=raw.info['ch_names'], 
-                           sfreq=correct_sfreq, 
-                           ch_types='eeg')
+# Correcting sampling frequency and creating new raw object
+"""In the original file, sampling frequency =1000 even though the correct value is 1250Hz 
+(based on the 50Hz peak). 
+However, the issue is that when creating a new raw object using the old data, it treats time points
+as data points and when increasing sfreq, we'll end up with reduced number of time points.
+before we have a solution, I will use the original raw data, 
+knowing the sfreq=1250 but in the file it is mistakenly 1000Hz """
 
-# Create a new RawArray with the same data and the new info
-new_raw = mne.io.RawArray(raw.get_data(), new_info)
-# Copy annotations and set orig_time to None
-new_annotations = raw.annotations.copy()
-new_annotations.orig_time = None     # this doesn't work
+if correct_sfreq:
+    correct_sfreq = 1250  
 
-# Set the annotations on the new raw object
-new_raw.set_annotations(new_annotations)
+    # Create a new Info object with the updated sampling frequency.
+    # Here we assume all channels are EEG channels. Adjust ch_types if needed.
+    new_info = mne.create_info(ch_names=raw.info['ch_names'], 
+                            sfreq=correct_sfreq, 
+                            ch_types='eeg')
 
-# Remove the first few seconds while the LFP is warming up.
-cropped_raw = new_raw.copy().crop(tmin=119, tmax=491)
+    # Create a new RawArray with the same data and the new info
+    new_raw = mne.io.RawArray(raw.get_data(), new_info)
+
+    # Copy annotations and set meas_date to orig_time to avoid errors
+    new_annotations = raw.annotations
+    # new_raw.set_meas_date(new_annotations.orig_time)
+
+    new_annotations = mne.Annotations(
+        onset=new_annotations.onset,
+        duration=new_annotations.duration,
+        description=new_annotations.description,
+        orig_time=None
+    )
+
+    # Set the annotations on the new raw object
+    new_raw.set_annotations(new_annotations)
+
+# Remove the first few seconds while the LFP is warming up
+"""choose tmin and tmax from the plot."""
+if correct_sfreq:
+    cropped_raw = new_raw.copy().crop(tmin=280, tmax=675)
+else:
+    cropped_raw = raw.copy().crop(tmin=280, tmax=675)
+
 cropped_raw.plot()
 
 cropped_raw.info["line_freq"] = 50  # specify power line frequency as required by BIDS
-# cropped_raw.info['sfreq'] = 1250
 
 # Read events from raw object
 """Note that events_from_annotations messes up the 
@@ -126,10 +148,8 @@ there's no other way to retrieve events from the
 raw object as there are no stim channels."""
 events_messed_up, _ = mne.events_from_annotations(cropped_raw, event_id='auto')
 
-events_messed_up_unique = np.unique(events_messed_up[:,2])  # just to check how many unique events are in the raw- should be equal to the next line
-events_messed_up_unique_len = len(events_messed_up)
-annotations_unique = cropped_raw.annotations.count()  # both should have 10 unique events
-annotations_unique_len = cropped_raw.annotations
+events_messed_up_unique = len(np.unique(events_messed_up[:,2]))  # just to check how many unique events are in the raw- should be equal to the next line
+annotations_unique = len(cropped_raw.annotations.count()) # both should have 10 unique events
 
 # Create Annotation object with correct labels
 """use values in events variable. events_from_annotations assigns values from 1 to 
@@ -150,30 +170,43 @@ them in the mapping dictionary below."""
 #            3:'block_end',         
 #         }  % maybe for 108? or old subjects
 
-mapping_103 = {1:'cue_onset_left',
-           2:'cue_onset_right',
-           3:'trial_onset',
+# mapping_103 = {1:'cue_onset_left',
+#            2:'cue_onset_right',
+#            3:'trial_onset',
+#            4:'stim_onset',
+#            5:'catch_onset',
+#            7:'dot_onset_right',
+#            6:'dot_onset_left',
+#            8:'response_press_onset',
+#            15:'block_onset',
+#            14:'block_end',         
+#         }  # right and left dot/cue might be the other way around
+
+mapping_102 = {1:'cue_onset_right',
+            2:'cue_onset_left',
+            3:'trial_onset',           
            4:'stim_onset',
            5:'catch_onset',
-           7:'dot_onset_right',
-           6:'dot_onset_left',
+            6:'dot_onset_right',
+           7:'dot_onset_left',
            8:'response_press_onset',
-           15:'block_onset',
-           14:'block_end',         
-        }  # right and left dot/cue might be the other way around
+           14:'block_onset',  
+           15:'block_end',
+        } 
+
 #annotations_from_events with mapping decreases events 217->170 and messes up the ids
 annotations_from_events = mne.annotations_from_events(events=events_messed_up,
-                                                    event_desc=mapping_103,
+                                                    event_desc=mapping_102,
                                                     sfreq=cropped_raw.info["sfreq"],
                                                     orig_time=cropped_raw.info["meas_date"],
                                                     )
 cropped_raw.set_annotations(annotations_from_events)
 
 # Plot to test
-cropped_raw.plot(title="raw") 
+cropped_raw.plot(title=f'lfp_{side}')  # annotations and their order are correct but 14 and 15 are missing!
 n_fft = int(cropped_raw.info['sfreq']*2)  # to ensure window size = 2
 psd_fig = cropped_raw.copy().compute_psd(method='welch',
-                                         n_fft=n_fft,  # default method is welch here (multitaper for epoch)
+                                         n_fft=1250,  # default method is welch here (multitaper for epoch)
                                          n_overlap=int(n_fft/2),
                                          fmax=100).plot()  
                                                                                       
