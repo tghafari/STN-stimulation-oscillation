@@ -95,6 +95,38 @@ annotated_raw_fname = op.join(base_fpath, base_fname + '_ann.fif')
 raw = mne.io.read_raw_edf(lfp_fname, preload=True)
 raw.plot()  # first thing first
 
+#============================== codes for checking the lfp signal===================#
+# Checking if the line noise is at 40Hz
+from scipy.signal import welch, spectrogram
+cropped_raw = raw.copy().crop(tmin=280, tmax=675)  # for sub 102
+
+plt.figure(figsize=(10,4))
+plt.plot(cropped_raw.times[:2000], cropped_raw.get_data()[0][:2000])  # First 2 seconds
+plt.xlabel("Time (ms)")
+plt.ylabel("Amplitude")
+plt.title("LFP Signal in Time Domain")
+plt.grid('minor')
+plt.show()
+
+
+f, Pxx = welch(cropped_raw.get_data()[0], fs=1000, nperseg=4096)
+plt.semilogy(f, Pxx)
+plt.xlabel("Frequency (Hz)")
+plt.ylabel("Power Spectral Density")
+plt.title("Power Spectrum of LFP")
+plt.xlim(0, 200)
+plt.show()
+
+f, t, Sxx = spectrogram(cropped_raw.get_data()[0], fs=1000, nperseg=1000)
+plt.pcolormesh(t, f, np.log(Sxx), shading='gouraud')
+plt.xlabel("Time (s)")
+plt.ylabel("Frequency (Hz)")
+plt.title("Spectrogram of LFP")
+plt.colorbar(label="Power (log-scale)")
+plt.ylim(0, 100)  # Focus on relevant frequency range
+plt.show()
+#============================================================================#
+
 
 # Correcting sampling frequency and creating new raw object
 """In the original file, sampling frequency =1000 even though the correct value is 1250Hz 
