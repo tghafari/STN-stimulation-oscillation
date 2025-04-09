@@ -40,7 +40,8 @@ from mne_bids.stats import count_events
 # Stimulation sequence
 """copy the stim sequence for each participant from here: 
 https://github.com/tghafari/STN-stimulation-oscillation/wiki/Stimulation-table"""
-stim_sequence = {'sub-01':["no_stim-left rec", "no_stim-right rec", "Right stim- no rec", "Left stim- no rec"],  # stimulation on STN
+stim_sequence = {'sub-01':["no_stim-left rec", "no_stim-right rec", "Right stim- no rec",
+                 "Left stim- no rec"],  # stimulation on STN
                  'sub-02':["no_stim-left rec", "no_stim-right rec", "Left stim- no rec", "Right stim- no rec"],  # stimulation on STN
                  'sub-05':["Left stim- no rec", "Right stim- no rec", "no_stim-left rec", "no_stim-right rec"],  # stimulation on STN
                  'sub-107':["no_stim-right rec", "no_stim-left rec", "Right stim- no rec", "Left stim- no rec"],  # stimulation on STN
@@ -94,39 +95,6 @@ annotated_raw_fname = op.join(base_fpath, base_fname + '_ann.fif')
 # Read raw file in BrainVision (.vhdr, .vmrk, .eeg) format
 raw = mne.io.read_raw_edf(lfp_fname, preload=True)
 raw.plot()  # first thing first
-
-#============================== codes for checking the lfp signal===================#
-# Checking if the line noise is at 40Hz
-from scipy.signal import welch, spectrogram
-cropped_raw = raw.copy().crop(tmin=280, tmax=675)  # for sub 102
-
-plt.figure(figsize=(10,4))
-plt.plot(cropped_raw.times[:2000], cropped_raw.get_data()[0][:2000])  # First 2 seconds
-plt.xlabel("Time (ms)")
-plt.ylabel("Amplitude")
-plt.title("LFP Signal in Time Domain")
-plt.grid('minor')
-plt.show()
-
-
-f, Pxx = welch(cropped_raw.get_data()[0], fs=1000, nperseg=4096)
-plt.semilogy(f, Pxx)
-plt.xlabel("Frequency (Hz)")
-plt.ylabel("Power Spectral Density")
-plt.title("Power Spectrum of LFP")
-plt.xlim(0, 200)
-plt.show()
-
-f, t, Sxx = spectrogram(cropped_raw.get_data()[0], fs=1000, nperseg=1000)
-plt.pcolormesh(t, f, np.log(Sxx), shading='gouraud')
-plt.xlabel("Time (s)")
-plt.ylabel("Frequency (Hz)")
-plt.title("Spectrogram of LFP")
-plt.colorbar(label="Power (log-scale)")
-plt.ylim(0, 100)  # Focus on relevant frequency range
-plt.show()
-#============================================================================#
-
 
 # Correcting sampling frequency and creating new raw object
 """In the original file, sampling frequency =1000 even though the correct value is 1250Hz 
@@ -226,7 +194,6 @@ mapping_102 = {1:'cue_onset_right',
            15:'block_end',
         } 
 
-#annotations_from_events with mapping decreases events 217->170 and messes up the ids
 annotations_from_events = mne.annotations_from_events(events=events_messed_up,
                                                     event_desc=mapping_102,
                                                     sfreq=cropped_raw.info["sfreq"],
@@ -337,6 +304,8 @@ if sanity_test:
     plt.ylabel('number of events')
     plt.show()
 
+# Try to add an eeg raw channel to the lfp channel to check the triggers if possible
+# raw.add_channels(listofchannels, force_update=)
 
 if summary_rprt:
     report_root = op.join(project_root, 'derivatives/reports')  # RDS folder for reports
