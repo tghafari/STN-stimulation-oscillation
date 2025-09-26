@@ -30,7 +30,7 @@ from copy import deepcopy
 from mne_bids import BIDSPath, read_raw_bids
 
 # BIDS settings: fill these out 
-subject = '105'
+subject = '113'
 session = '01'
 task = 'SpAtt'
 run = '01'

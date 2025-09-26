@@ -52,10 +52,12 @@ stim_sequence = {'sub-01':["no_stim-left rec", "no_stim-right rec", "Right stim-
                  'sub-103': ["Right stim- no rec", "no_stim-left rec", "no_stim-right rec", "Left stim- no rec"],
                  'sub-104': ["Right stim- no rec", "Left stim- no rec", "no_stim-left rec", "no_stim-right rec"],
                  'sub-105': ["Left stim- no rec", "Right stim- no rec", "no_stim-left rec", "no_stim-right rec"],
+                 'sub-113': ["no_stim-left rec", "no_stim-right rec", "Right stim- no rec", "Left stim- no rec"],
+                 'sub-114': ["no_stim-left rec", "no_stim-right rec", "Left stim- no rec", "Right stim- no rec"],
                  } 
 # BIDS settings
-subject = '102'
-brainVision_basename = f'{subject[1:]}_ao'  # subject[-2:] might need modification per subject
+subject = '113'
+brainVision_basename = 'sun113' #f'{subject[1:]}_ao'  # subject[-2:] might need modification per subject
 
 session = '01'
 task = 'SpAtt'
@@ -73,10 +75,10 @@ if platform == 'bluebear':
 elif platform == 'mac':
     rds_dir = '/Volumes/jenseno-avtemporal-attention'
 
-# project_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD'  # only for bear outage time
-project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
-# data_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/data-organised'  # only for bear outage time
-data_root = op.join(project_root, 'data/data-organised')
+project_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD'  # only for bear outage time
+# project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
+data_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/data-organised'  # only for bear outage time
+# data_root = op.join(project_root, 'data/data-organised')
 
 base_fpath = op.join(data_root, f'sub-{subject}', f'ses-{session}', f'{modality}')  
 base_fname = f'sub-{subject}_ses-{session}_task-{task}_run-{run}_{modality}'
@@ -105,7 +107,7 @@ else:
     raw = mne.io.read_raw_brainvision(vhdr_fname, eog=('HEOGL', 'HEOGR', 'VEOGb'), preload=True)
 
 # first thing first- find if you must crop useless data
-# raw.plot()  # get an idea about the data, confirm stimulation order and annotate break spans with BAD
+raw.plot()  # get an idea about the data, confirm stimulation order and annotate break spans with BAD
 
 # Rename channels according to function
 """T8 and FT10 = vertical electro-oculogram (EOG), 
@@ -171,10 +173,10 @@ event_dict = {'cue_onset_right':1,
            'response_press_onset':8,
            'block_onset':20,
            'block_end':21,
-        #    'experiment_end':30,  #sub02 does not have this
+           'experiment_end':30,  #sub02 does not have this
            #'abort':31,  # participant 04_wmf has abort
-           'new_stim_segment_maybe':255,  # sub102 has an extra trigger
-        #    'new_stim_segment':99999, 
+        #    'new_stim_segment_maybe':255,  # sub102 has an extra trigger
+           'new_stim_segment':99999, 
         }
 _, events_id = mne.events_from_annotations(raw, event_id=event_dict)
 

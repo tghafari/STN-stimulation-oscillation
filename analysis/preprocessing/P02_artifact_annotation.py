@@ -25,7 +25,7 @@ from mne_bids import BIDSPath, read_raw_bids
 
 
 # BIDS settings: fill these out 
-subject = '102'
+subject = '113'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -40,9 +40,6 @@ muscle_reject = False  # rejecting muscle artefact?
 if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
     camcan_dir = '/rds/projects/q/quinna-camcan/dataman/data_information'
-elif platform == 'windows':
-    rds_dir = 'Z:'
-    camcan_dir = 'X:/dataman/data_information'
 elif platform == 'mac':
     rds_dir = '/Volumes/jenseno-avtemporal-attention'
     camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
@@ -51,7 +48,7 @@ project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
 bids_root = op.join(project_root, 'data', 'BIDS')
 
 # for bear outage
-# bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
+bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
 
 # Specify specific file names
 bids_path = BIDSPath(subject=subject, session=session,
@@ -85,7 +82,7 @@ annotations_event = raw.annotations
 raw.set_annotations(raw.annotations + break_annots)
 
 # Identifying and annotating eye blinks using vEOG
-eog_events = find_eog_events(raw, ch_name=['vEOG1','vEOG2'],reject_by_annotation=True)
+eog_events = find_eog_events(raw, ch_name=['vEOG1','vEOG2'], thresh=2e-4, reject_by_annotation=True)
 
 """list of thresholds for
 those the automatic 
@@ -93,6 +90,7 @@ didn't catch blinks:
 {'sub-101':'thresh=6e-4',
 'sub-107':'thresh=1e-4',
 'sub-102': 'thresh=6e-5',
+'sub-113': 'thresh=2e-4',
 }"""
 onset = eog_events[:,0] / raw.info['sfreq'] -.25 #'from flux pipline and mne tutorial but why?'
 n_blinks = len(eog_events)  # length of the event file is the number of blinks in total

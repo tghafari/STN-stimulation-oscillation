@@ -6,20 +6,20 @@
 % On the same plot we display performance (%correct).
 
 % Load the behavioural data
-subject = '103';
+subject = '114';
 session = '01';
 task = 'spatt';
 run = '01';
-platform = 'mac';  % are you using mac or bluebear outage
+platform = 'bear';  % are you using mac or bluebear outage
 
 if contains(platform, "mac")
-    BIDS_folder =  '/Volumes/jenseno-avtemporal-attention/Projects/subcortical-structures/STN-in-PD/data/BIDS';
+    data_folder =  '/Volumes/jenseno-avtemporal-attention/Projects/subcortical-structures/STN-in-PD/data/data-organised';
 else
-    BIDS_folder = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/data-organised';  % only for bear outage time
+    data_folder = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/data-organised';  % only for bear outage time
 end
 
-beh = load([BIDS_folder filesep 'sub-' subject filesep 'ses-' session filesep ...
-    'beh' filesep 'sub-S' subject '_ses-' session '_task-' task '_run-' run '_logfile.mat']);
+beh = load([data_folder filesep 'sub-' subject filesep 'ses-' session filesep ...
+    'beh' filesep 'sub-' subject '_ses-' session '_task-' task '_run-' run '_logfile.mat']);
 
 % Extract reaction times
 RT_KbQueue = beh.cfgOutput.RT_KbQueue;  % RT from keyboard
@@ -42,8 +42,8 @@ subplot(2,1,2)
 histogram(RT_trig, 25);
 title('RT from triggers')
 text(min(xlim)+0.05, max(ylim)-5, sprintf('True Negative Rate = %0.2f%s ', TNR*100, '%'), 'Horiz','left', 'Vert','top')
-text(min(xlim)+0.05, max(ylim)-10, sprintf('False Negative Rate = %0.2f%s ', FNR*100, '%'), 'Horiz','left', 'Vert','top')
-text(min(xlim)+0.05, max(ylim)-15, sprintf('True Positive Rate = %0.2f%s ', TPR*100, '%'), 'Horiz','left', 'Vert','top')
-text(min(xlim)+0.05, max(ylim)-20, sprintf('False Positive Rate = %0.2f%s ', FPR*100, '%'), 'Horiz','left', 'Vert','top')
+text(min(xlim)+0.05, max(ylim)-20, sprintf('False Negative Rate = %0.2f%s ', FNR*100, '%'), 'Horiz','left', 'Vert','top')
+text(min(xlim)+0.05, max(ylim)-35, sprintf('True Positive Rate = %0.2f%s ', TPR*100, '%'), 'Horiz','left', 'Vert','top')
+text(min(xlim)+0.05, max(ylim)-50, sprintf('False Positive Rate = %0.2f%s ', FPR*100, '%'), 'Horiz','left', 'Vert','top')
 
 
