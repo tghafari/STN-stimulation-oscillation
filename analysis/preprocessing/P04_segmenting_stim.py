@@ -39,7 +39,7 @@ import matplotlib.pyplot as plt
 
 
 # BIDS settings: fill these out 
-subject = '105'
+subject = '113'
 session = '01'
 task = 'SpAtt'
 run = '01'  # change this for subjects with two stim or two no-stim segments
@@ -101,7 +101,9 @@ stimulation_cropped_time = {"sub-107_no-stim": [15, 974],
                             "sub-104_no-stim": [1100, 1412, 1946, 2269],
                             "sub-104_stim": [9, 772],
                             "sub-105_no-stim": [4326, 5103],
-                            "sub-105_stim": [112, 597, 850, 1327],                            
+                            "sub-105_stim": [112, 597, 850, 1327],    
+                            "sub-113_no-stim": [144, 507, 883, 1233],
+                            "sub-113_stim": [1895, 2255, 2306, 2668],    
                             }
 
 # Crop and save segments separately
