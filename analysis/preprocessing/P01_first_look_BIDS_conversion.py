@@ -54,10 +54,21 @@ stim_sequence = {'sub-01':["no_stim-left rec", "no_stim-right rec", "Right stim-
                  'sub-105': ["Left stim- no rec", "Right stim- no rec", "no_stim-left rec", "no_stim-right rec"],
                  'sub-113': ["no_stim-left rec", "no_stim-right rec", "Right stim- no rec", "Left stim- no rec"],
                  'sub-114': ["no_stim-left rec", "no_stim-right rec", "Left stim- no rec", "Right stim- no rec"],
-                 } 
+                 'sub-115': ["Right stim- no rec", "no_stim-left rec", "no_stim-right rec", "Left stim- no rec"],
+                 'sub-116': ["Right stim- no rec", "Left stim- no rec", "no_stim-left rec", "no_stim-right rec"],
+                 'sub-117': ["Left stim- no rec", "Right stim- no rec", "no_stim-left rec", "no_stim-right rec"],
+                 'sub-118': ["Left stim- no rec", "no_stim-left rec", "no_stim-right rec", "Right stim- no rec"],
+                 }
+
+
+
+
+# sub-119	no_stim-right rec	no_stim-left rec	Right stim- no rec	Left stim- no rec
+# sub-120	no_stim-right rec	no_stim-left rec	Left stim- no rec	Right stim- no rec
+
 # BIDS settings
-subject = '114'
-brainVision_basename = f'AO_S{subject}'  # subject[-2:] might need modification per subject
+subject = '115'
+brainVision_basename = f'AO{subject[1:]}'  # needs modification per subject
 
 session = '01'
 task = 'SpAtt'
@@ -65,7 +76,7 @@ run = '01'
 modality = 'eeg'
 extension = '.fif'
 
-platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
+platform = 'mac'  # are you using 'bluebear', 'mac'
 sanity_test = False
 eve_rprt = True
 summary_rprt = True
@@ -75,10 +86,11 @@ if platform == 'bluebear':
 elif platform == 'mac':
     rds_dir = '/Volumes/jenseno-avtemporal-attention'
 
-project_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD'  # only for bear outage time
+project_root = '/Users/taraghafari/Desktop/BEAR_outage/STN-in-PD'  # local folder
 # project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
-data_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/data-organised'  # only for bear outage time
+data_root = '/Users/taraghafari/Desktop/BEAR_outage/STN-in-PD/data/data-organised'  # local folder
 # data_root = op.join(project_root, 'data/data-organised')
+
 
 base_fpath = op.join(data_root, f'sub-{subject}', f'ses-{session}', f'{modality}')  
 base_fname = f'sub-{subject}_ses-{session}_task-{task}_run-{run}_{modality}'
