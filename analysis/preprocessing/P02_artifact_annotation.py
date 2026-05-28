@@ -30,7 +30,7 @@ from mne_bids import BIDSPath, read_raw_bids
 
 
 # BIDS settings: fill these out 
-subject = '117'
+subject = '123'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -82,7 +82,7 @@ annotations_event = raw.annotations
 raw.set_annotations(raw.annotations + break_annots)
 
 # Identifying and annotating eye blinks using vEOG
-eog_events = find_eog_events(raw, ch_name=['vEOG1','vEOG2'], reject_by_annotation=True)
+eog_events = find_eog_events(raw, ch_name=['vEOG1','vEOG2'], thresh=8e-3, reject_by_annotation=True)
 
 """list of thresholds for
 those the automatic 
@@ -93,6 +93,8 @@ didn't catch blinks:
 'sub-113': 'thresh=2e-4',
 'sub-114': 'thresh=6e-4',
 'sub-115': 'thresh=6e-4',
+'sub-119': 'thresh=2e-4',
+'sub-121': 'thresh=6e-4',
 }"""
 onset = eog_events[:,0] / raw.info['sfreq'] -.25 #'from flux pipline and mne tutorial but why?'
 n_blinks = len(eog_events)  # length of the event file is the number of blinks in total
