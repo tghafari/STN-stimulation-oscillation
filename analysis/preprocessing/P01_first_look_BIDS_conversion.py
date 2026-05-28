@@ -18,6 +18,11 @@
     one .fif in the original folder and one .fif 
     bids in the bids folder.
 
+issues: 
+    - 115-123 do not have behavioural results and 
+    their reports do not include the figures
+    generated in this script.
+
 written by Tara Ghafari
 t.ghafari@bham.ac.uk
 ==============================================  
@@ -67,7 +72,7 @@ stim_sequence = {'sub-01':["no_stim-left rec", "no_stim-right rec", "Right stim-
 
 
 # BIDS settings
-subject = '123'
+subject = '115'
 brainVision_basename = f'AO{subject[1:]}'  # needs modification per subject
 
 session = '01'
@@ -270,14 +275,14 @@ if summary_rprt:
     report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 
-                        f'sub-{subject}_130325.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub-{subject}_130325.html')
+                        f'sub-{subject}_28052026.hdf5')    # it is in .hdf5 for later adding images
+    html_report_fname = op.join(report_folder, f'sub-{subject}_28052026.html')
     
     report = mne.Report(title=f'Subject {subject}')
-    report.add_image(beh_fig_fname,
-                    title='RT and performance',
-                    caption='reaction time and behavioural performance',
-                    tags=('beh'))
+    # report.add_image(beh_fig_fname,
+    #                 title='RT and performance',
+    #                 caption='reaction time and behavioural performance',
+    #                 tags=('beh'))
     report.add_events(events=events, 
                     event_id=events_id, 
                     tags=('eve'),
