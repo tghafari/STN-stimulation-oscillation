@@ -6,6 +6,12 @@
 This code will identify artifacts and then annotate
 them for later use (eg., to reject).
 
+In this code we do not annotate muscle artifacts,
+as they will be rejected later in the pipeline.
+Also, bear in mind that blinks are not reliable
+either. ICA will be done next to remove blinks
+and saccades.
+
 
 written by Tara Ghafari
 adapted from flux pipeline
@@ -24,7 +30,7 @@ from mne_bids import BIDSPath, read_raw_bids
 
 
 # BIDS settings: fill these out 
-subject = '116'
+subject = '117'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -76,7 +82,7 @@ annotations_event = raw.annotations
 raw.set_annotations(raw.annotations + break_annots)
 
 # Identifying and annotating eye blinks using vEOG
-eog_events = find_eog_events(raw, ch_name=['vEOG1','vEOG2'], thresh=6e-4, reject_by_annotation=True)
+eog_events = find_eog_events(raw, ch_name=['vEOG1','vEOG2'], reject_by_annotation=True)
 
 """list of thresholds for
 those the automatic 
