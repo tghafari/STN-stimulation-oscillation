@@ -11,7 +11,6 @@ written by Tara Ghafari
 adapted from flux pipeline
 ==============================================
 Issues:
-
 """
 
 import os.path as op
@@ -25,7 +24,7 @@ from mne_bids import BIDSPath, read_raw_bids
 
 
 # BIDS settings: fill these out 
-subject = '114'
+subject = '116'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -48,7 +47,7 @@ project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
 bids_root = op.join(project_root, 'data', 'BIDS')
 
 # for bear outage
-bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
+bids_root = '/Users/taraghafari/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
 
 # Specify specific file names
 bids_path = BIDSPath(subject=subject, session=session,
@@ -62,11 +61,6 @@ deriv_fname = op.join(deriv_folder, bids_path.basename + '_' + deriv_suffix + ex
 # Read raw data 
 raw = read_raw_bids(bids_path=bids_path, verbose=False, 
                      extra_params={'preload':True})
-
-# Here crop any extra segments at the beginning or end of the recording 
-"""this helps better detecting blinks"""
-# raw.plot() 
-# raw.crop(tmin=205)  
 
 # Annotate break sections and plot
 break_annots = mne.preprocessing.annotate_break(
@@ -82,7 +76,7 @@ annotations_event = raw.annotations
 raw.set_annotations(raw.annotations + break_annots)
 
 # Identifying and annotating eye blinks using vEOG
-eog_events = find_eog_events(raw, ch_name=['vEOG1','vEOG2'], thresh=6e-4, reject_by_annotation=True)
+eog_events = find_eog_events(raw, ch_name=['vEOG1','vEOG2'], reject_by_annotation=True)
 
 """list of thresholds for
 those the automatic 

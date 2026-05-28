@@ -17,7 +17,7 @@ This code will:
     6. save the cropped data.
 
     Cropped data will then be loaded into
-    08_epoching_SpAtt.py for further analyses.
+    P05_epoching_SpAtt.py for further analyses.
 
 
 written by Tara Ghafari

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 ===============================================
-08. Epoching raw data based on conditions
+05. Epoching raw data based on conditions
 
 This code will epoch continuous EEG based
 on conditions that are annotated in the
@@ -11,6 +11,9 @@ best cleaning outcome: do not autoreject,
 remove bad channels and clean only by manual 
 inspection. remove any epoch with slightest 
 uncleannes.
+
+This is the script in which you should manually
+reject back epochs.
 
 
 written by Tara Ghafari
