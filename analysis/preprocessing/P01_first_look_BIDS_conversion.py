@@ -279,10 +279,10 @@ if summary_rprt:
     html_report_fname = op.join(report_folder, f'sub-{subject}_28052026.html')
     
     report = mne.Report(title=f'Subject {subject}')
-    # report.add_image(beh_fig_fname,
-    #                 title='RT and performance',
-    #                 caption='reaction time and behavioural performance',
-    #                 tags=('beh'))
+    report.add_image(beh_fig_fname,
+                    title='RT and performance',
+                    caption='reaction time and behavioural performance',
+                    tags=('beh'))
     report.add_events(events=events, 
                     event_id=events_id, 
                     tags=('eve'),

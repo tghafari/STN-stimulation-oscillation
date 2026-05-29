@@ -6,13 +6,15 @@
 This code will run ICA to find occular and cardiac
 artifacts: 
 
-    1. resampling and running ICA
-    2. finding single channels that are associated
+    1. filter and reject bad channels manually
+    2. Reject more bad channels based on psd
+    3. resampling and running ICA
+    4. finding single channels that are associated
     with bad components
-    3. reject those channels
-    4. apply common reference again
-    5. run ICA again
-    6. project bad components out
+    5. reject those channels
+    6. apply common reference again
+    7. run ICA again
+    8. project bad components out
 
 written by Tara Ghafari
 adapted from flux pipeline
@@ -77,7 +79,7 @@ raw = mne.io.read_raw_fif(input_fname, verbose=True, preload=True)
 
 ## 1. Scroll and psd to remove any other bad channels after filtering
 """Mark bad channels on the plots"""
-raw_filtered = raw.copy().filter(l_freq=1, h_freq=100)  # filter only for plotting now 
+raw_filtered = raw.copy().filter(l_freq=1, h_freq=50)  # filter only for plotting now 
 raw_filtered.plot()  # mark bad channels after filtering stimulation frequency
 raw.info["bads"] = raw_filtered.info["bads"]  # add marked bad channels to raw
 
@@ -249,10 +251,14 @@ if summary_rprt:
     report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 
-                        f'sub-{subject}_130325.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub-{subject}_130325.html')
+                        f'sub-{subject}_280526.hdf5')    # it is in .hdf5 for later adding images
+    html_report_fname = op.join(report_folder, f'sub-{subject}_280526.html')
     
-    report = mne.open_report(report_fname)
+    if not op.exists(report_fname):
+        report = mne.Report(title=f'Subject {subject}')
+    else:
+        report = mne.open_report(report_fname)
+
     report.add_figure(fig_ica, 
                       title="removed ICA components (filtered:0.5-40)",
                       caption="removed ICA components: eye movement(?)",
