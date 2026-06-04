@@ -30,7 +30,7 @@ from mne_bids import BIDSPath, read_raw_bids
 
 
 # BIDS settings: fill these out 
-subject = '123'
+subject = '115'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -56,17 +56,22 @@ bids_root = op.join(project_root, 'data', 'BIDS')
 bids_root = '/Users/taraghafari/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
 
 # Specify specific file names
-bids_path = BIDSPath(subject=subject, session=session,
-                     task=task, run=run, root=bids_root, 
-                     datatype ='eeg', suffix=eeg_suffix)
+bids_path = BIDSPath(subject=subject, 
+                     session=session,
+                     task=task, 
+                     run=run, 
+                     root=bids_root, 
+                     datatype ='eeg', 
+                     suffix=eeg_suffix)
 deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
 if not op.exists(deriv_folder):
     os.makedirs(deriv_folder)
 deriv_fname = op.join(deriv_folder, bids_path.basename + '_' + deriv_suffix + extension)  # prone to change if annotation worked for eeg brainvision
 
 # Read raw data 
-raw = read_raw_bids(bids_path=bids_path, verbose=False, 
-                     extra_params={'preload':True})
+raw = read_raw_bids(bids_path=bids_path, 
+                    verbose=False, 
+                    extra_params={'preload':True})
 
 # Annotate break sections and plot
 break_annots = mne.preprocessing.annotate_break(

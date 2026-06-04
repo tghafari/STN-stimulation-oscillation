@@ -18,11 +18,6 @@
     one .fif in the original folder and one .fif 
     bids in the bids folder.
 
-issues: 
-    - 115-123 do not have behavioural results and 
-    their reports do not include the figures
-    generated in this script.
-
 written by Tara Ghafari
 t.ghafari@bham.ac.uk
 ==============================================  
@@ -124,7 +119,7 @@ else:
     raw = mne.io.read_raw_brainvision(vhdr_fname, eog=('HEOGL', 'HEOGR', 'VEOGb'), preload=True)
 
 # first thing first- find if you must crop useless data
-raw.plot()  # get an idea about the data, confirm stimulation order and annotate break spans with BAD
+# raw.plot()  # get an idea about the data, confirm stimulation order and annotate break spans with BAD
 
 # Rename channels according to function
 """T8 and FT10 = vertical electro-oculogram (EOG), 
