@@ -94,6 +94,7 @@ raw_filtered.compute_psd(n_fft=n_fft,  # default method is welch here (multitape
  'sub-102': 'FT7 F3',
  'sub-104': 'F2 F4 F3 AF7 C4 FC2 AF3 F8',  I didn't remove these!
  'sub-113': 'F7'
+ 'sub-114': 'CP5 O1 P7 P3 P5 PO7 PO8 P6'
 }"""
 
 ## 2. Mark bad channels before ICA
@@ -171,12 +172,13 @@ BIDS/sub-112_ses-01_run-01: ['TP10', 'Fp1', 'CP6', 'FC5', 'AF8', 'Fp2', 'F5',
 BIDS/sub-104_ses-01_run-01: ['TP9', 'TP10', 'Fp1', 'F7', 'CP6', 'FC5', 'CP5', 'FT7', 'F5', 'TP7',
                              'C5', 'C6', 'AF8', 'F6', 'Fp2', 'P7', 'PO7', 'F8',
                              'FC1' 'C3']
- BIDS/sub-105_ses-01_run-01: ['TP9', 'TP10', 'Fp1', 'P7', 'AF7', 'TP7', 'F8', 'FC6', 'FT8', 
+BIDS/sub-105_ses-01_run-01: ['TP9', 'TP10', 'Fp1', 'P7', 'AF7', 'TP7', 'F8', 'FC6', 'FT8', 
                              'PO8', 'AF4', 'AFz', 'C5',
                              'AF3'] 
-
 BIDS/sub-113_ses-01_run-01: ['TP9', 'TP10', 'FC6', 'TP8', 'P6', 'F5', 'FT7', 'AF7', 'C5',
                              'AF4']
+ BIDS/sub-115_ses-01_run-01:['CP5', 'O1', 'P7', 'P3', 'P5', 'PO7', 'PO8', 'P6',
+                             'AF3']
 
 } """
 
@@ -197,7 +199,7 @@ ica.fit(raw_resmpld, reject_by_annotation=True, verbose=True)
 ica.plot_sources(raw_resmpld, title='ICA')
 ica.plot_components()
 
-ICA_rej_dic = {f'sub-{subject}_ses-{session}':[0, 1, 5, 8]} # manually selected bad ICs or from sub config file 
+ICA_rej_dic = {f'sub-{subject}_ses-{session}':[0]} # manually selected bad ICs or from sub config file 
 artifact_ICs = ICA_rej_dic[f'sub-{subject}_ses-{session}'] 
 """
 list bad ICA components for all participants:
@@ -217,7 +219,7 @@ list bad ICA components for all participants:
 'BIDS/sub-104_ses-01_run-01': [0, 4], # 0:blink, 4:saccades  
 'BIDS/sub-105_ses-01_run-01': [3, 6], # 3,6: based on overlay plot, couldn't find blinks/saccades 
 'BIDS/sub-113_ses-01_run-01': [0, 1, 5, 8], # 1 blinks, 5 saccades, 8 made it slightly less noisy
-
+'BIDS/sub-113_ses-01_run-01': [0] # 0 eye movement
 
 } """
 
@@ -251,8 +253,8 @@ if summary_rprt:
     report_folder = op.join(report_root , 'sub-' + subject)
 
     report_fname = op.join(report_folder, 
-                        f'sub-{subject}_280526.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub-{subject}_280526.html')
+                        f'sub-{subject}_28052026.hdf5')    # it is in .hdf5 for later adding images
+    html_report_fname = op.join(report_folder, f'sub-{subject}_28052026.html')
     
     if not op.exists(report_fname):
         report = mne.Report(title=f'Subject {subject}')

@@ -30,7 +30,7 @@ from mne_bids import BIDSPath, read_raw_bids
 
 
 # BIDS settings: fill these out 
-subject = '115'
+subject = '123'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -87,7 +87,7 @@ annotations_event = raw.annotations
 raw.set_annotations(raw.annotations + break_annots)
 
 # Identifying and annotating eye blinks using vEOG
-eog_events = find_eog_events(raw, ch_name=['vEOG1','vEOG2'], thresh=8e-3, reject_by_annotation=True)
+eog_events = find_eog_events(raw, ch_name=['vEOG1','vEOG2'], reject_by_annotation=True)
 
 """list of thresholds for
 those the automatic 
@@ -132,7 +132,7 @@ if muscle_reject:
 """make sure to add event annotations here again, 
 because set_annotations overwrites all annotations"""
 raw.set_annotations(raw.annotations + break_annots + annotation_blink)  # add to existing
-raw.plot()
+# raw.plot()
 
 # Save the artifact annotated file
 raw.save(deriv_fname, overwrite=True)
