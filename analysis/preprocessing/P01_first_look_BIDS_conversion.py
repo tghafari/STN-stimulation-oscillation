@@ -3,8 +3,8 @@
 01_first_look_and_BIDS_conversion
     1. this code opens .eeg file
     and plot raw eeg data.
-    2. the user then rejects bad channels from
-    raw.plot() and the psd plots
+    2. the user then crops large breaks in data
+     (more cropping comes in segmenting the data later on)
     3. reads the events from annotations of
     brainvision data.
     4. corrects the annotation and event_ids
@@ -32,6 +32,7 @@ tara.ghafari@gmail.com
 
 import os.path as op
 import os
+import sys
 import pandas as pd
 
 import mne
@@ -99,12 +100,11 @@ if platform == 'bluebear':
 elif platform == 'mac':
     rds_dir = '/Volumes/jenseno-avtemporal-attention'
 
-project_root = '/Users/taraghafari/Desktop/BEAR_outage/STN-in-PD'  # local folder
+project_root = '/Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/BEAR_outage/STN-in-PD'  # local folder
 # project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
-data_root = '/Users/taraghafari/Desktop/BEAR_outage/STN-in-PD/data/data-organised'  # local folder
+data_root = '/Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/BEAR_outage/STN-in-PD/data/data-organised'  # local folder
 # data_root = op.join(project_root, 'data/data-organised')
 bids_root = op.join(project_root, 'data', 'BIDS')
-
 
 base_fpath = op.join(data_root, f'sub-{subject}', f'ses-{session}', f'{modality}')  
 base_fname = f'sub-{subject}_ses-{session}_task-{task}_run-{run}_{modality}'
@@ -263,10 +263,9 @@ eve_fig, ax = plt.subplots()
 bars = ax.bar(range(len(numbers_dict)), list(numbers_dict.values()))
 plt.xticks(range(len(numbers_dict)), list(numbers_dict.keys()), rotation=45)
 ax.bar_label(bars)
-counts = events_file['trial_type'].value_counts().sort_index()
 plt.show()
 report.add_figure(eve_fig, op.join(fig_folder, 'P01_event_counts.png'),
-                  'Number of events', counts.to_string(), 'Quality control')
+                  'Number of events', 'Total number of events', 'Quality control')
 if sanity_test:
     # Check duration of cue presentation  
     events_dict['stim_to_dot_duration'] = events_dict['dot_onset'] - events_dict['stim_onset']
@@ -292,6 +291,6 @@ else:
 
 report.add_text('BIDS conversion',
                 f'BIDS data written to: {bids_path}\nSampling frequency: {raw.info["sfreq"]} Hz\n'
-                f'Channels marked bad at conversion: {raw.info["bads"]}',
+                f'Channels marked bad (mastoid): {raw.info["bads"]}',
                 'Quality control')
 print(f'Updated PDF: {report.pdf_fname}')
