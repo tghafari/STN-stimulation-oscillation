@@ -5,21 +5,28 @@
     and plot raw eeg data.
     2. the user then rejects bad channels from
     raw.plot() and the psd plots
-    3. reads the events from annotations of 
+    3. reads the events from annotations of
     brainvision data.
-    4. corrects the annotation and event_ids 
-    5. adds annotations to the raw 
-    7. saves as .fif
-    8. then converts the raw data to bids
-    9. It also plots triggers and RT to quality
-    check the data.
+    4. corrects the annotation and event_ids
+    5. adds annotations to the raw
+    6. saves the raw with annotations as .fif
+    7. converts the raw data to bids
+    8. adds channel impedances from the BrainVision
+    .vhdr header to the PDF report
+    9. plots triggers / events and checks event counts
+   10. adds the behaviour figure from the separate
+    folder to the same PDF report
 
     note that this code will save two eeg files,
-    one .fif in the original folder and one .fif 
+    one .fif in the original folder and one .fif
     bids in the bids folder.
 
+    note also that the comments about annotations
+    are kept in the code so that it is easier to
+    follow the trigger correction steps later on.
+
 written by Tara Ghafari
-t.ghafari@bham.ac.uk
+tara.ghafari@gmail.com
 ==============================================  
 """
 
@@ -31,6 +38,16 @@ import mne
 from mne_bids import (BIDSPath, write_raw_bids, read_raw_bids)
 import matplotlib.pyplot as plt
 from copy import deepcopy
+
+GITHUB_ROOT = r'/Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/BEAR_outage/GitHub/STN-minimal-pdf-edits-v6'
+UTILS_DIR = os.path.join(GITHUB_ROOT, 'analysis', 'utils')
+
+if GITHUB_ROOT not in sys.path:
+    sys.path.insert(0, GITHUB_ROOT)
+if UTILS_DIR not in sys.path:
+    sys.path.insert(0, UTILS_DIR)
+
+from pdf_report import ParticipantPDF, impedance_text
 
 # # Fill these out - for older subjects- before 105
 # subj_code = 'sub05'  # subject code assigned to by Benchi's group- only for subjects before 5 (inc)
@@ -67,19 +84,15 @@ stim_sequence = {'sub-01':["no_stim-left rec", "no_stim-right rec", "Right stim-
 
 
 # BIDS settings
-subject = '123'
+subject = '115'
 brainVision_basename = f'AO{subject[1:]}'  # needs modification per subject
 
 session = '01'
 task = 'SpAtt'
 run = '01'
 modality = 'eeg'
-extension = '.fif'
-
 platform = 'mac'  # are you using 'bluebear', 'mac'
-sanity_test = False
-eve_rprt = True
-summary_rprt = True
+sanity_test = False  # set to True to check event durations and plot histograms
 
 if platform == 'bluebear':
     rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
@@ -90,33 +103,32 @@ project_root = '/Users/taraghafari/Desktop/BEAR_outage/STN-in-PD'  # local folde
 # project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
 data_root = '/Users/taraghafari/Desktop/BEAR_outage/STN-in-PD/data/data-organised'  # local folder
 # data_root = op.join(project_root, 'data/data-organised')
+bids_root = op.join(project_root, 'data', 'BIDS')
 
 
 base_fpath = op.join(data_root, f'sub-{subject}', f'ses-{session}', f'{modality}')  
 base_fname = f'sub-{subject}_ses-{session}_task-{task}_run-{run}_{modality}'
-eeg_fname = op.join(base_fpath, brainVision_basename + '.eeg')  
-vhdr_fname = op.join(base_fpath, brainVision_basename + '.vhdr')
 events_fname = op.join(base_fpath, base_fname + '-eve.fif')
-annotated_raw_fname = op.join(base_fpath, base_fname + extension)
+annotated_raw_fname = op.join(base_fpath, base_fname + '.fif')
+fig_folder = op.join(project_root, 'derivatives', 'figures', f'sub-{subject}')
+report_folder = op.join(project_root, 'derivatives', 'reports', f'sub-{subject}')
+os.makedirs(fig_folder, exist_ok=True)
+report = ParticipantPDF(report_folder, subject)
 beh_fig_fname = op.join(project_root, 'derivatives/figures', f'sub-{subject}-beh-performance.png')  # where you save the matlab output of behavioural performance plots
-
-# BIDS events
-events_suffix = 'events'  
-events_extension = '.tsv'
-bids_root = op.join(project_root, 'data', 'BIDS')
 
 # Read raw file in BrainVision (.vhdr, .vmrk, .eeg) format
 if subject == '110':
-    raw_fnames = [op.join(base_fpath, brainVision_basename + '_blocks1-2.vhdr'), 
+    vhdr_fnames = [op.join(base_fpath, brainVision_basename + '_blocks1-2.vhdr'), 
                   op.join(base_fpath, brainVision_basename + '_blocks3-8.vhdr')]
-    raw = mne.concatenate_raws([mne.io.read_raw_brainvision(f, preload=True) for f in raw_fnames])
+    raw = mne.concatenate_raws([mne.io.read_raw_brainvision(f, preload=True) for f in vhdr_fnames])
 elif subject == '111':
-        raw_fnames = [op.join(base_fpath, brainVision_basename + '_stimright.vhdr'), 
+        vhdr_fnames = [op.join(base_fpath, brainVision_basename + '_stimright.vhdr'), 
                   op.join(base_fpath, brainVision_basename + '_nostimright.vhdr'),
                   op.join(base_fpath, brainVision_basename + '_nostimleft.vhdr')]
-        raw = mne.concatenate_raws([mne.io.read_raw_brainvision(f, preload=True) for f in raw_fnames])
+        raw = mne.concatenate_raws([mne.io.read_raw_brainvision(f, preload=True) for f in vhdr_fnames])
 else:
-    raw = mne.io.read_raw_brainvision(vhdr_fname, eog=('HEOGL', 'HEOGR', 'VEOGb'), preload=True)
+    vhdr_fnames = [op.join(base_fpath, brainVision_basename + '.vhdr')]
+    raw = mne.io.read_raw_brainvision(vhdr_fnames[0], eog=('HEOGL', 'HEOGR', 'VEOGb'), preload=True)
 
 # first thing first- find if you must crop useless data
 # raw.plot()  # get an idea about the data, confirm stimulation order and annotate break spans with BAD
@@ -211,14 +223,18 @@ write_raw_bids(raw,
                format='BrainVision')
 
 # Plot all events
-fig = mne.viz.plot_events(events, 
+fig_events = mne.viz.plot_events(events, 
                           sfreq=raw.info["sfreq"], 
                           first_samp=raw.first_samp, 
-                          event_id=events_id)
+                          event_id=events_id,
+                          show=False)
+report.add_figure(fig_events, op.join(fig_folder, 'P01_events_timeline.png'),
+                  'Events timeline', 'Events read from BrainVision and written to BIDS.',
+                  'Quality control')
 
 # Plot triggers from bids .tsv file
-events_bids_path = bids_path.copy().update(suffix=events_suffix,
-                                            extension=events_extension)
+events_bids_path = bids_path.copy().update(suffix='events',
+                                            extension='.tsv')
 events_file = pd.read_csv(events_bids_path, sep='\t')
 event_onsets = events_file[['onset', 'value', 'trial_type']]        
 
@@ -247,8 +263,10 @@ eve_fig, ax = plt.subplots()
 bars = ax.bar(range(len(numbers_dict)), list(numbers_dict.values()))
 plt.xticks(range(len(numbers_dict)), list(numbers_dict.keys()), rotation=45)
 ax.bar_label(bars)
+counts = events_file['trial_type'].value_counts().sort_index()
 plt.show()
-
+report.add_figure(eve_fig, op.join(fig_folder, 'P01_event_counts.png'),
+                  'Number of events', counts.to_string(), 'Quality control')
 if sanity_test:
     # Check duration of cue presentation  
     events_dict['stim_to_dot_duration'] = events_dict['dot_onset'] - events_dict['stim_onset']
@@ -260,36 +278,20 @@ if sanity_test:
     plt.xlabel('time in sec')
     plt.ylabel('number of events')
     plt.show()
-
-
-if summary_rprt:
-    report_root = op.join(project_root, 'derivatives/reports')  # RDS folder for reports
-   
-    if not op.exists(op.join(report_root , 'sub-' + subject)):
-        os.makedirs(op.join(report_root , 'sub-' + subject))
-    report_folder = op.join(report_root , 'sub-' + subject)
-
-    report_fname = op.join(report_folder, 
-                        f'sub-{subject}_28052026.hdf5')    # it is in .hdf5 for later adding images
-    html_report_fname = op.join(report_folder, f'sub-{subject}_28052026.html')
     
-    report = mne.Report(title=f'Subject {subject}')
-    report.add_image(beh_fig_fname,
-                    title='RT and performance',
-                    caption='reaction time and behavioural performance',
-                    tags=('beh'))
-    report.add_events(events=events, 
-                    event_id=events_id, 
-                    tags=('eve'),
-                    title='events from "events"', 
-                    sfreq=raw.info['sfreq'])
-    report.add_figure(eve_fig,
-                        title='Number of events',
-                        caption='number of events in total',
-                        tags=('eve'))
-    report.add_raw(raw=raw.filter(0.1, 100), title='raw not referenced with bad channels', 
-                   psd=True, 
-                   butterfly=False, 
-                   tags=('raw'))
-    report.save(report_fname, overwrite=True)
-    report.save(html_report_fname, overwrite=True, open_browser=True)  # to check how the report looks
+# Impedance is available only when stored in the BrainVision header.
+report.add_text('Channel impedances', impedance_text(raw=raw, vhdr_path=vhdr_fnames), 'Quality control')
+
+# Add existing behaviour figure without changing behaviour code.
+if op.exists(beh_fig_fname):
+    report.add_image(beh_fig_fname, 'Reaction time and behavioural performance',
+                     'Behaviour figure generated separately.', 'Quality control')
+else:
+    report.add_text('Behaviour figure',
+                    f'Figure not found yet: {beh_fig_fname}', 'Quality control')
+
+report.add_text('BIDS conversion',
+                f'BIDS data written to: {bids_path}\nSampling frequency: {raw.info["sfreq"]} Hz\n'
+                f'Channels marked bad at conversion: {raw.info["bads"]}',
+                'Quality control')
+print(f'Updated PDF: {report.pdf_fname}')
