@@ -173,7 +173,7 @@ for label in ['no-stim', 'stim']:
 
     report.add_text(
         f'{label}: bad-channel reasons',
-        f'Epochs -0.5 to 1.6 s; bad channels: {bad_text}\nReasons: {reason_text}',
+        f'Epochs -0.5 to 1.6 s; \nReasons: {reason_text}',
         'Epoching and channel quality'
     )
 
@@ -212,7 +212,7 @@ for label in ['no-stim', 'stim']:
         fig_psd,
         op.join(fig_folder, f'P05_{label}_epoch_PSD.png'),
         f'{label}: PSD of cue epochs',
-        f'Epochs -0.5 to 1.6 s; bad channels: {bad_text}',
+        f'Epochs -0.5 to 1.6 s, cue onset = 0s',
         'Epoching and channel quality'
     )
 
@@ -223,7 +223,7 @@ for label in ['no-stim', 'stim']:
     n_before = len(epochs)
     epochs.plot(
         picks=posterior_channels,
-        n_channels=3,
+        n_channels=len(posterior_channels),
         block=True,
         title=f'{label}: manually reject trials using only {posterior_channels}'
     )
