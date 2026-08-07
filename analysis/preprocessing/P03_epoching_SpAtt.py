@@ -11,7 +11,7 @@
     5. finds bad channels using pyprep and
     writes the reasons into the PDF report
     6. opens a plot that shows only three posterior
-    channels (PO7, Oz, PO8) so the user can manually 
+    channels ('PO3', 'PO4', 'POz') so the user can manually 
     reject bad trials
     7. saves the cleaned epochs for later analysis
 
@@ -57,7 +57,7 @@ eeg_suffix = 'eeg'
 extension = '.fif'
 project_root = '/Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/BEAR_outage/STN-in-PD'  # local folder
 bids_root = op.join(project_root, 'data', 'BIDS')
-posterior_channels = ['PO7', 'Oz', 'PO8']  # These are the ones we agreed with Ole
+posterior_channels = ['PO3', 'PO4', 'POz']  # These are the ones we agreed with Ole
 
 event_dict = {'cue_onset_right': 1, 'cue_onset_left': 2, 'trial_onset': 3,
               'stim_onset': 4, 'catch_onset': 5, 'dot_onset_right': 6,
@@ -84,7 +84,9 @@ def get_bad_channel_reasons(raw):
         ('deviation', noisy.find_bad_by_deviation),
         ('high-frequency noise', noisy.find_bad_by_hfnoise),
         ('correlation', noisy.find_bad_by_correlation),
-        ('RANSAC', noisy.find_bad_by_ransac),
+        ('RANSAC', noisy.find_bad_by_ransac),  # Random sample consensus, or RANSAC works by identifying the outliers 
+                                               # in a data set and estimating the desired model using data that does not 
+                                               # contain outliers
     ]
     reasons = {}
     for reason, detector in detectors:
@@ -126,11 +128,10 @@ for label in ['no-stim', 'stim']:
     print(f'PyPREP suggested bad channels for {label}: {suggested}')
     print(json.dumps(reasons, indent=2))
 
+    raw.compute_psd(fmin=0.1, fmax=150).plot()  # to look at all channels and remove obvious bad ones
     user = input(
         'Additional bad channels, separated by spaces, or press return: '
     ).strip().split()
-
-    raw.compute_psd().plot(fmax=150)  # to look at all channels and remove obvious bad ones
     manual_reason = input(
         'Optional manual reason for these additional channels: '
     ).strip()
