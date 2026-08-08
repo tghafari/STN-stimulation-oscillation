@@ -1,183 +1,182 @@
 # -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 ===============================================
-A01. Event related fields
+A01_ERP
+    1. this code reads the cleaned cue epochs
+    2. combines attention right and attention left
+    epochs together
+    3. makes evoked responses for stim on and stim off
+    separately
+    4. plots the comparison between stim on and stim
+    off in one figure with different colours
+    5. plots evoked responses for the posterior
+    channels separately
+    6. saves the evoked files and adds all figures to
+    the participant PDF report
 
-This code will generate ERFs in response to the
-visual input.
+    note that this script keeps the comparison focused
+    on the cue-locked epochs that survived manual
+    cleaning in the previous step.
 
 written by Tara Ghafari
-adapted from flux pipeline
+tara.ghafari@gmail.com
 ==============================================
-ToDos:    
-Questions:
 
 """
 
-import os.path as op
 import os
-import numpy as np
-
+import os.path as op
+import sys
 import matplotlib.pyplot as plt
 import mne
 from mne_bids import BIDSPath
 
+GITHUB_ROOT = r'/Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/BEAR_outage/GitHub/STN-minimal-pdf-edits-v6'
+UTILS_DIR = os.path.join(GITHUB_ROOT, 'analysis', 'utils')
 
-def reading_epochs_evoking(stim):
-    if stim:
-        input_fname = op.join(deriv_folder, bids_path.basename
-                               + '_' + stim_suffix + '_' + input_suffix + extension)
-        deriv_fname = op.join(deriv_folder, bids_path.basename 
-                               + '_' + stim_suffix + '_' + deriv_suffix + extension)  
-    else:
-        input_fname = op.join(deriv_folder, bids_path.basename
-                               + '_' + no_stim_suffix + '_' + input_suffix + extension)
-        deriv_fname = op.join(deriv_folder, bids_path.basename 
-                               + '_' + no_stim_suffix + '_' + deriv_suffix + extension)  
+if GITHUB_ROOT not in sys.path:
+    sys.path.insert(0, GITHUB_ROOT)
+if UTILS_DIR not in sys.path:
+    sys.path.insert(0, UTILS_DIR)
 
-    # Read epoched data and equalize right and left
-    epochs = mne.read_epochs(input_fname, verbose=True, preload=True)  # -.5 to 1.5sec
-    # Make evoked data for conditions of interest and save
-    evoked = epochs.copy().average(method='mean').filter(0.0,30).crop(-.1,1)
-    evoked = evoked.apply_baseline(baseline=(-.1,0), verbose=True) 
-    mne.write_evokeds(deriv_fname, evoked, verbose=True, overwrite=True)
+from pdf_report import ParticipantPDF, impedance_text
 
-    return epochs, evoked
-
-
-# BIDS settings: fill these out 
-subject = '105'
+subject = '115'
 session = '01'
 task = 'SpAtt'
 run = '01'
 eeg_suffix = 'eeg'
-eeg_extension = '.vhdr'
-stim_suffix = 'stim'
-no_stim_suffix = 'no-stim'
-extension = '.fif'
+project_root = '/Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/BEAR_outage/STN-in-PD'  # local folder
+bids_root = op.join(project_root, 'data', 'BIDS')
+posterior_channels = ['PO3', 'PO4', 'POz']
 
-stim_segments_ls = [False, True]
-epoching_list = ['cue', 'stim']  # epoching on cue onset or stimulus onset
+bids_path = BIDSPath(subject=subject, session=session, task=task, run=run,
+                     root=bids_root, datatype='eeg', suffix=eeg_suffix)
+deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)
+fig_folder = op.join(project_root, 'derivatives', 'figures', f'sub-{subject}')
+report_folder = op.join(project_root, 'derivatives', 'reports', f'sub-{subject}')
+os.makedirs(fig_folder, exist_ok=True)
+report = ParticipantPDF(report_folder, subject)
 
-platform = 'mac'  # are you using 'bluebear', 'mac', or 'windows'?
-test_plot = False
+evokeds = {'cue': {}, 'grating': {}}
 
-# Select ROI sensors for erp
-occipital_channels = ['O1', 'PO3', 'O2', 'PO4', 'Oz', 'POz']
+def make_evoked(epochs, tmin, tmax, baseline, shift=None):
+    evoked = epochs.average(method='mean').filter(l_freq=None, h_freq=30)
+    evoked = evoked.copy().crop(tmin=tmin, tmax=tmax)
+    evoked.apply_baseline(baseline)
+    if shift is not None:
+        evoked = evoked.copy().shift_time(shift, relative=True)
+    return evoked
 
-if platform == 'bluebear':
-    rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
-    camcan_dir = '/rds/projects/q/quinna-camcan/dataman/data_information'
-elif platform == 'mac':
-    rds_dir = '/Volumes/jenseno-avtemporal-attention'
-    camcan_dir = '/Volumes/quinna-camcan/dataman/data_information'
 
-# project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
-# bids_root = op.join(project_root, 'data', 'BIDS')
+def add_compare_fig(evoked_dict, fname, title, caption, picks, xlim):
+    fig = mne.viz.plot_compare_evokeds(
+        evoked_dict,
+        picks=picks,
+        combine='mean',
+        show=False,
+        ci=False,
+        truncate_xaxis=False,
+        truncate_yaxis=False,
+    )
+    if isinstance(fig, list):
+        fig = fig[0]
+    fig.axes[0].axvline(0, color='k', linestyle='--', linewidth=1)
+    fig.axes[0].set_xlim(*xlim)
+    report.add_figure(fig, fname, title, caption, 'Evoked responses')
 
-# for bear outage
-project_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD'  # only for bear outage time
-bids_root = '/Users/t.ghafari@bham.ac.uk/Library/CloudStorage/OneDrive-UniversityofBirmingham/Desktop/BEAR_outage/STN-in-PD/data/BIDS'
 
-# Epoch stim segments and add to report
-report_root = op.join(project_root, 'derivatives/reports')  
-report_folder = op.join(report_root , 'sub-' + subject)
-report_fname = op.join(report_folder, 
-                    f'sub-{subject}_130325.hdf5')    # it is in .hdf5 for later adding images
-html_report_fname = op.join(report_folder, f'sub-{subject}_130325.html')
+for label in ['no-stim', 'stim']:
+    input_fname = op.join(deriv_folder, bids_path.basename + f'_{label}_epo-cue.fif')
+    epochs = mne.read_epochs(input_fname, preload=True)
+    epochs = epochs[['cue_onset_right', 'cue_onset_left']]
 
-report = mne.open_report(report_fname)
+    evokeds['cue'][label] = make_evoked(
+        epochs, tmin=-0.1, tmax=0.5, baseline=(-0.1, 0)
+    )
+    evokeds['grating'][label] = make_evoked(
+        epochs, tmin=1.1, tmax=1.6, baseline=(1.1, 1.2), shift=-1.2
+    )
 
-for epoching in epoching_list:
-    print(f'Working on {epoching}')
-    input_suffix = 'epo-' + epoching
-    deriv_suffix = 'evo-' + epoching
-    evoked_list_cropped = []  #  -0.1 to 0.5
-    evoked_list = []  # -0.1 to 1
+    mne.write_evokeds(
+        op.join(deriv_folder, bids_path.basename + f'_{label}_evo-cue.fif'),
+        evokeds['cue'][label],
+        overwrite=True
+    )
+    mne.write_evokeds(
+        op.join(deriv_folder, bids_path.basename + f'_{label}_evo-grating.fif'),
+        evokeds['grating'][label],
+        overwrite=True
+    )
 
-    for stim in stim_segments_ls:
-        print(f'Working on stim = {stim}')
+# Cue comparison, averaged across the 3 posterior channels
+add_compare_fig(
+    {'no stimulation': evokeds['cue']['no-stim'], 'stimulation': evokeds['cue']['stim']},
+    op.join(fig_folder, 'A01_stim_no_stim_evoked_cue_comparison.png'),
+    'Cue-locked evoked comparison: stimulation vs no stimulation',
+    'Cue onset at 0 s; window -0.1 to 0.5 s; baseline -0.1 to 0 s; three posterior channels averaged.',
+    posterior_channels,
+    (-0.1, 0.5)
+)
 
-        bids_path = BIDSPath(subject=subject, session=session,
-                    task=task, run=run, root=bids_root, 
-                    datatype ='eeg', suffix=eeg_suffix)
-        deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)  # RDS folder for results
+# Grating comparison, averaged across the 3 posterior channels
+add_compare_fig(
+    {'no stimulation': evokeds['grating']['no-stim'], 'stimulation': evokeds['grating']['stim']},
+    op.join(fig_folder, 'A01_stim_no_stim_evoked_grating_comparison.png'),
+    'Grating-locked evoked comparison: stimulation vs no stimulation',
+    'Grating onset at 0 s; original window 1.1 to 1.6 s shifted by -1.2 s; baseline 1.1 to 1.2 s; three posterior channels averaged.',
+    posterior_channels,
+    (-0.1, 0.4)
+)
 
-        epochs, evoked = reading_epochs_evoking(stim)
-        evoked.comment = f'stim:{stim_segments_ls[stim]}, {epoching} onset'
-        evoked_list_cropped.append(evoked.copy().crop(-0.1,0.5))
-        evoked_list.append(evoked)  # append evokeds for later comparison
+# Cue comparison by channel
+fig_cue_channels, axes = plt.subplots(1, 3, figsize=(15, 4), constrained_layout=True)
+for ax, ch in zip(axes, posterior_channels):
+    mne.viz.plot_compare_evokeds(
+        {'no stimulation': evokeds['cue']['no-stim'], 'stimulation': evokeds['cue']['stim']},
+        picks=ch,
+        combine=None,
+        axes=ax,
+        show=False,
+        ci=False,
+        truncate_xaxis=False,
+        truncate_yaxis=False
+    )
+    ax.set_title(f'Cue-locked: {ch}')
+    ax.axvline(0, color='k', linestyle='--', linewidth=1)
+    ax.set_xlim(-0.1, 0.5)
 
-        # Plot ERPs for summary report
-        topos_times = np.arange(50, 450, 30)*0.001
-        fig_evo = evoked.copy().plot_joint(times=topos_times)
-    
-        report.add_figure(fig=fig_evo, title=f'stim:{stim}, evoked response',
-                            caption=f'evoked response for {epoching}- baseline=(-100,0), filter=(0,30) \
-                                    cue=200ms, ISI=1000, stim=1000-2000ms', 
-                            tags=('evo'),
-                            section='stim'
-                            )
-        # Plot epochs separately 
-        fig_epochs, axis = plt.subplots(6, 2, figsize=(24, 6))
-        for ax, ch in enumerate(occipital_channels):
-            epochs.plot_image(picks=ch,
-                                axes=axis[ax,:],
-                                colorbar=False,
-                                show=False)
-            axis[ax][0].title.set_text(f'{ch}')
+report.add_figure(
+    fig_cue_channels,
+    op.join(fig_folder, 'A01_stim_no_stim_evoked_cue_by_channel.png'),
+    'Cue-locked evoked responses by posterior channel',
+    'Cue onset at 0 s; window -0.1 to 0.5 s; baseline -0.1 to 0 s; stimulation and no stimulation compared separately for each channel.',
+    'Evoked responses'
+)
 
-        fig_epochs.suptitle(f"stim={stim}- epochs for {epoching}")
-        fig_epochs.set_tight_layout(True)
-        plt.show()
-        
-        report.add_figure(fig=fig_epochs, title=f'stim:{stim}, epochs separately',
-                            caption=f'epochs for {epoching}- baseline=(-100,0), filter=(0,30) \
-                                    cue=200ms, ISI=1000, stim=1000-2000ms', 
-                            tags=('epo'),
-                            section='stim'
-                            )
+# Grating comparison by channel
+fig_grating_channels, axes = plt.subplots(1, 3, figsize=(15, 4), constrained_layout=True)
+for ax, ch in zip(axes, posterior_channels):
+    mne.viz.plot_compare_evokeds(
+        {'no stimulation': evokeds['grating']['no-stim'], 'stimulation': evokeds['grating']['stim']},
+        picks=ch,
+        combine=None,
+        axes=ax,
+        show=False,
+        ci=False,
+        truncate_xaxis=False,
+        truncate_yaxis=False
+    )
+    ax.set_title(f'Grating-locked: {ch}')
+    ax.axvline(0, color='k', linestyle='--', linewidth=1)
+    ax.set_xlim(-0.1, 0.4)
 
-        del epochs, evoked
-
-    # Plot both stim and no stim evoked in one plot
-    fig_comp_chs, axis = plt.subplots(3, 2, figsize=(24, 12)) 
-    axis = axis.flatten()  # flatten the axes for easier iteration (3x2 grid)
-
-    # Plot for each occipital channel
-    for ax_idx, ch in enumerate(occipital_channels):
-        mne.viz.plot_compare_evokeds(
-            evoked_list_cropped,
-            picks=ch,
-            colors=['blue', 'orange'],  # Specify colors for comparison
-            combine="mean",
-            axes=axis[ax_idx],  # Use correct axis
-            show_sensors=True,  
-            invert_y=False,
-            truncate_xaxis=False,
-            truncate_yaxis=False,
-            show=False
-        )
-        axis[ax_idx].set_title(f'{ch}')
-        axis[ax_idx].set_xlim(-0.1, 0.5)
-    plt.show()
-        
-    fig_comp_plot_topo = mne.viz.plot_evoked_topo(evoked_list,
-                                          color=['blue','orange'], 
-                                          vline=(0.0))
-
-    report.add_figure(fig=fig_comp_chs, title=f'compare evoked responses',
-                                caption=f'evoked response for {epoching} \
-                                    cue=200ms, ISI=1000, stim=1000-2000ms', 
-                                tags=('evo'),
-                                section='evoked'
-                                )
-    report.add_figure(fig=fig_comp_plot_topo, title=f'compare evoked responses',
-                                caption=f'evoked response for {epoching} \
-                                    cue=200ms, ISI=1000, stim=1000-2000ms', 
-                                tags=('evo'),
-                                section='evoked'
-                                )
-
-report.save(report_fname, overwrite=True)
-report.save(html_report_fname, overwrite=True, open_browser=True)  # to check how the report looks
+report.add_figure(
+    fig_grating_channels,
+    op.join(fig_folder, 'A01_stim_no_stim_evoked_grating_by_channel.png'),
+    'Grating-locked evoked responses by posterior channel',
+    'Grating onset at 0 s; original window 1.1 to 1.6 s shifted by -1.2 s; baseline 1.1 to 1.2 s; stimulation and no stimulation compared separately for each channel.',
+    'Evoked responses'
+)
+print(f'Updated PDF: {report.pdf_fname}')
