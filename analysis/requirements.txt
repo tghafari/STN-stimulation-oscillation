@@ -1,0 +1,7 @@
+mne
+mne-bids
+numpy
+pandas
+matplotlib
+reportlab
+pyprep
