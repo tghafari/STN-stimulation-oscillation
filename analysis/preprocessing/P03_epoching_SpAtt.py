@@ -36,7 +36,7 @@ import mne
 import numpy as np
 from mne_bids import BIDSPath
 
-GITHUB_ROOT = r'/Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/BEAR_outage/GitHub/STN-minimal-pdf-edits-v6'
+GITHUB_ROOT = r'/Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/BEAR_outage/GitHub/STN-stimulation-oscillation'
 UTILS_DIR = os.path.join(GITHUB_ROOT, 'analysis', 'utils')
 
 if GITHUB_ROOT not in sys.path:
