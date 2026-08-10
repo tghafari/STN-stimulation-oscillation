@@ -128,13 +128,28 @@ for label in ['no-stim', 'stim']:
     print(f'PyPREP suggested bad channels for {label}: {suggested}')
     print(json.dumps(reasons, indent=2))
 
+
+    # Mark the PyPREP bad channels before plotting the PSD.
+    # This makes them visible as already-bad channels during inspection.
+    raw.info["bads"] = sorted(set(raw.info["bads"]) | set(suggested))
+
+    # Plot PSD with the PyPREP bad channels already flagged.
     raw.compute_psd(fmin=0.1, fmax=150).plot()  # to look at all channels and remove obvious bad ones
     user = input(
         'Additional bad channels, separated by spaces, or press return: '
     ).strip().split()
-    manual_reason = input(
-        'Optional manual reason for these additional channels: '
-    ).strip()
+
+    # Prevent the user from re-entering channels PyPREP already found.
+    user = [ch for ch in user if ch not in suggested]
+    
+    for ch in user:
+        manual_reason = input(
+            f"Reason for manually rejecting {ch}: "
+        ).strip()
+
+        reasons.setdefault(str(ch), []).append(
+            manual_reason or "manually identified during QC"
+        )
 
     for ch in user:
         reasons.setdefault(str(ch), []).append(

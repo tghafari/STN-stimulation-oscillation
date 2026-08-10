@@ -237,18 +237,38 @@ When it finishes, the runner moves to the next requested participant.
 
 Use the snippet below anytime, to add text to the subject's report:
 
+import os
+import os.path as op
+import sys
+
+import numpy as np
+import matplotlib.pyplot as plt
+import mne
+from mne_bids import BIDSPath
+
+GITHUB_ROOT = r'/Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/BEAR_outage/GitHub/STN-stimulation-oscillation'
+UTILS_DIR = os.path.join(GITHUB_ROOT, 'analysis', 'utils')
+
+if GITHUB_ROOT not in sys.path:
+    sys.path.insert(0, GITHUB_ROOT)
+if UTILS_DIR not in sys.path:
+    sys.path.insert(0, UTILS_DIR)
+
+from pdf_report import ParticipantPDF
 from pathlib import Path
 
+project_root = '/Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/BEAR_outage/STN-in-PD'  # local folder
 project_root = Path(project_root)
 
-report_folder = project_root / "derivatives" / "reports" / "sub-117"
-report = ParticipantPDF(str(report_folder), "117")
+report_folder = project_root / "derivatives" / "reports" / "sub-118"
+report = ParticipantPDF(str(report_folder), "118")
 
 report.add_text(
     "Subject notes",
-    """This participant only shows very noisy data, which I assumed was stim on only, but in the PSD there is no 130 Hz peak. I think this participant should be excluded. Sirui does not have much information either.""",
+    """YOUR NOTES.""",
     "Quality control",
 )
+Or maybe the stimulation frequency was 130Hz (there is a peak) but a source of noise is causing the 120Hz peak
 
 ## What happens if a subject fails?
 
