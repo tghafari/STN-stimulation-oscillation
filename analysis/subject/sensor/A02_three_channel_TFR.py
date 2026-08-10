@@ -24,6 +24,7 @@ tara.ghafari@gmail.com
 
 """
 
+import json
 import os
 import os.path as op
 import sys
@@ -50,7 +51,21 @@ run = '01'
 eeg_suffix = 'eeg'
 project_root = '/Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/BEAR_outage/STN-in-PD'  # local folder
 bids_root = op.join(project_root, 'data', 'BIDS')
-posterior_channels = ['PO3', 'PO4', 'POz']  # same three used for trial rejection
+posterior_file = op.join(
+    bids_root,
+    "derivatives",
+    f"sub-{subject}",
+    "qc",
+    f"sub-{subject}_posterior_channels.json",
+)
+
+if op.exists(posterior_file):
+    with open(posterior_file, "r", encoding="utf-8") as f:
+        posterior_channels = json.load(f)
+else:
+    posterior_channels = ['PO3', 'PO4', 'POz']
+
+
 baseline = (-0.3, -0.1)
 
 bids_path = BIDSPath(subject=subject, session=session, task=task, run=run,

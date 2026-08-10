@@ -27,6 +27,7 @@ tara.ghafari@gmail.com
 """
 
 import json
+import warnings
 import os
 import os.path as op
 import sys
@@ -231,17 +232,85 @@ for label in ['no-stim', 'stim']:
         'Epoching and channel quality'
     )
 
-    missing = [ch for ch in posterior_channels if ch not in epochs.ch_names]
-    if missing:
-        raise RuntimeError(f'Posterior QC channels missing: {missing}')
+    posterior_channels = ['PO3', 'PO4', 'POz']
 
-    n_before = len(epochs)
+    # channels that are going to be removed and are also part of the downstream
+    # posterior-channel analysis
+    rejected_posterior = [ch for ch in posterior_channels if ch in common_bads]
+
+    posterior_channels_for_analysis = posterior_channels.copy()
+
+    if rejected_posterior:
+        warnings.warn(
+            f"The following rejected channels are part of the posterior-channel "
+            f"analysis pipeline: {rejected_posterior}. "
+            f"Do you want to continue using only the remaining posterior channels?",
+            RuntimeWarning,
+        )
+        answer = input("Continue with remaining posterior channels only? [y/N]: ").strip().lower()
+
+        if answer not in {"y", "yes"}:
+            raise RuntimeError("Stopped because a posterior channel was rejected.")
+
+        posterior_channels_for_analysis = [
+            ch for ch in posterior_channels if ch not in rejected_posterior
+        ]
+
+        if not posterior_channels_for_analysis:
+            raise RuntimeError("All posterior channels were rejected; cannot continue.")
+
+        posterior_file = op.join(
+            bids_root,
+            "derivatives",
+            f"sub-{subject}",
+            "qc",
+            f"sub-{subject}_posterior_channels.json",
+        )
+        os.makedirs(op.dirname(posterior_file), exist_ok=True)
+        with open(posterior_file, "w", encoding="utf-8") as f:
+            json.dump(posterior_channels_for_analysis, f, indent=2)
+
+        report.add_text(
+            "⚠️ WARNING: Posterior analysis channel rejected",
+            f"""
+        One or more posterior channels used for the downstream ERP and TFR analyses
+        were rejected during EEG cleaning.
+
+        Rejected posterior channel(s):
+        {', '.join(rejected_posterior)}
+
+        The user chose to continue the analysis.
+
+        All subsequent analyses (manual epoch rejection, ERP and TFR) were performed
+        using only the remaining posterior channel(s):
+
+        {', '.join(posterior_channels_for_analysis)}
+
+        Interpret the results with caution because the predefined posterior ROI
+        was incomplete for this participant.
+        """,
+            "IMPORTANT WARNINGS",
+        )
+
+    # keep only the channels that remain
     epochs.plot(
-        picks=posterior_channels,
-        n_channels=len(posterior_channels),
+        picks=posterior_channels_for_analysis,
+        n_channels=len(posterior_channels_for_analysis),
         block=True,
-        title=f'{label}: manually reject trials using only {posterior_channels}'
+        title=f"{label}: manually reject trials using only {posterior_channels_for_analysis}",
     )
+
+    # missing = [ch for ch in posterior_channels if ch not in epochs.ch_names]
+    # if missing:
+    #     raise RuntimeError(f'Posterior QC channels missing: {missing}')
+
+    # n_before = len(epochs)
+    # epochs.plot(
+    #     picks=posterior_channels,
+    #     n_channels=len(posterior_channels),
+    #     block=True,
+    #     title=f'{label}: manually reject trials using only {posterior_channels}'
+    # )
     n_after = len(epochs)
 
     output_fname = op.join(deriv_folder, bids_path.basename + f'_{label}_epo-cue.fif')
