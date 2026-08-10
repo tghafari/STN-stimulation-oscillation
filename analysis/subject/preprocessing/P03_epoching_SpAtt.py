@@ -293,24 +293,13 @@ for label in ['no-stim', 'stim']:
         )
 
     # keep only the channels that remain
+    n_before = len(epochs)
     epochs.plot(
         picks=posterior_channels_for_analysis,
         n_channels=len(posterior_channels_for_analysis),
         block=True,
         title=f"{label}: manually reject trials using only {posterior_channels_for_analysis}",
     )
-
-    # missing = [ch for ch in posterior_channels if ch not in epochs.ch_names]
-    # if missing:
-    #     raise RuntimeError(f'Posterior QC channels missing: {missing}')
-
-    # n_before = len(epochs)
-    # epochs.plot(
-    #     picks=posterior_channels,
-    #     n_channels=len(posterior_channels),
-    #     block=True,
-    #     title=f'{label}: manually reject trials using only {posterior_channels}'
-    # )
     n_after = len(epochs)
 
     output_fname = op.join(deriv_folder, bids_path.basename + f'_{label}_epo-cue.fif')
