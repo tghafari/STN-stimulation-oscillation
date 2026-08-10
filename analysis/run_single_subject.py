@@ -134,6 +134,65 @@ def save_fig(fig, path: str) -> str:
     return path
 
 
+def crop_table_to_text(crop_table: Dict[str, List[float]]) -> str:
+    lines = []
+    for label in ["no-stim", "stim"]:
+        times = crop_table[label]
+        lines.append(f"{label}: {pretty_list(times)}")
+    return "\n".join(lines)
+
+
+def parse_crop_times(text_value: str) -> List[float]:
+    cleaned = text_value.replace(";", ",").replace(" ", ",")
+    parts = [p for p in cleaned.split(",") if p.strip()]
+    times = [float(p) for p in parts]
+    if len(times) not in (2, 4):
+        raise ValueError("Please enter either 2 numbers (one segment) or 4 numbers (two segments).")
+    if any(times[i] >= times[i + 1] for i in range(0, len(times), 2)):
+        raise ValueError("Each crop pair must satisfy start < end.")
+    return times
+
+
+def prompt_for_crop_table(subject: str, bids_path: BIDSPath, default_crop_table: Dict[str, List[float]], bids_root: str, report, fig_folder: str) -> Dict[str, List[float]]:
+    """Open the BIDS raw data and let the user update crop times interactively."""
+    raw = read_raw_bids(bids_path=bids_path, verbose=True, extra_params={"preload": True})
+    print("\nOpen the raw viewer now. Close it when you are done inspecting stim on / stim off periods.")
+    raw.plot()
+    input("After closing the raw viewer, press Enter to enter crop times...")
+
+    crop_table = {
+        "no-stim": list(default_crop_table["no-stim"]),
+        "stim": list(default_crop_table["stim"]),
+    }
+    print("\nCurrent crop table:")
+    print(crop_table_to_text(crop_table))
+
+    for label in ["no-stim", "stim"]:
+        current = crop_table[label]
+        response = input(
+            f"Enter new crop times for {label} (2 or 4 numbers, comma/space-separated)\n"
+            f"Press Enter to keep current [{pretty_list(current)}]: "
+        ).strip()
+        if response:
+            crop_table[label] = parse_crop_times(response)
+
+    print("\nUpdated crop table:")
+    print(crop_table_to_text(crop_table))
+
+    crop_dir = ensure_dir(op.join(bids_root, "derivatives", f"sub-{subject}", "qc"))
+    crop_json = op.join(crop_dir, f"sub-{subject}_crop_table.json")
+    with open(crop_json, "w", encoding="utf-8") as f:
+        json.dump(crop_table, f, indent=2)
+
+    add_report_text(
+        report,
+        "Updated crop table",
+        f"Crop times were reviewed interactively and saved to: {crop_json}\n{crop_table_to_text(crop_table)}",
+        "Stimulation segmentation",
+    )
+    return crop_table
+
+
 def get_stim_sequence(subject: str) -> List[str] | None:
     stim_sequence = {
         "sub-01": ["no_stim-left rec", "no_stim-right rec", "Right stim- no rec", "Left stim- no rec"],
@@ -379,16 +438,12 @@ def step_p02_segmenting_stim(
     bids_root: str,
     report,
     fig_folder: str,
+    crop_table: Dict[str, List[float]],
 ) -> Dict[str, str]:
-    raw = read_raw_bids(bids_path=bids_path, verbose=True, extra_params={"preload": True})
-
-    subject_key = f"sub-{subject}"
-    if subject_key not in STIMULATION_CROPPED_TIME:
-        raise KeyError(f"No stimulation crop table found for {subject_key}")
-
-    crop_table = STIMULATION_CROPPED_TIME[subject_key]
     deriv_folder = op.join(bids_root, "derivatives", f"sub-{subject}")
     ensure_dir(deriv_folder)
+
+    raw = read_raw_bids(bids_path=bids_path, verbose=True, extra_params={"preload": True})
 
     out_files = {}
     for label in ["no-stim", "stim"]:
@@ -788,6 +843,19 @@ def main() -> None:
         fig_folder=fig_folder,
     )
 
+    subject_key = f"sub-{args.subject}"
+    if subject_key not in STIMULATION_CROPPED_TIME:
+        raise KeyError(f"No stimulation crop table found for {subject_key}")
+
+    crop_table = prompt_for_crop_table(
+        subject=args.subject,
+        bids_path=bids_path,
+        default_crop_table=STIMULATION_CROPPED_TIME[subject_key],
+        bids_root=args.bids_root,
+        report=report,
+        fig_folder=fig_folder,
+    )
+
     segmented_files = step_p02_segmenting_stim(
         subject=args.subject,
         bids_path=bids_path,
@@ -795,6 +863,7 @@ def main() -> None:
         bids_root=args.bids_root,
         report=report,
         fig_folder=fig_folder,
+        crop_table=crop_table,
     )
 
     cleaned_epochs = step_p03_epoching(
