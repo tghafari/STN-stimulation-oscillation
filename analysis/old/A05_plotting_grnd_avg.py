@@ -19,8 +19,6 @@ This script performs the following analyses:
        on the same channels.
     6. Displays each plot so you can review them before further processing.
 
-Author: Your Name
-Date: YYYY-MM-DD
 """
 
 import os
