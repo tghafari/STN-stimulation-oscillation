@@ -39,6 +39,9 @@ STN-stimulation-oscillation/
             └── A02_three_channel_TFR.py
 ```
 
+note that un P01_first_look_BIDS_conversion.py you might need to change brainVision_basename 
+according to the subject's file name.
+
 ### 2. Use the same Python environment that already runs the five scripts
 
 The automated runner does not introduce a separate analysis environment. If you can run the five scripts individually, use that same environment.
@@ -90,6 +93,8 @@ python analysis/subject/run_subject_pipeline.py \
 ```
 
 For several specific participants:
+
+Note: not recommended, as brainvision basename for subjects might vary.
 
 ```bash
 python analysis/subject/run_subject_pipeline.py \

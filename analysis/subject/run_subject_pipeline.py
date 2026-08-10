@@ -15,7 +15,7 @@ compatible with the analysis code you already test line by line.
 
 Stimulation crop times are stored persistently in
 ``analysis/subject/stimulation_cropped_time.json``. If both stim and no-stim crop
-ranges already exist for a subject, the raw browser is skipped and the runner
+ranges already exist for a subject, the raw browser is skipped and the runnerAz
 prints the requested message. If they are missing, the BIDS raw data is opened,
 the user enters 2 or 4 crop times for each condition, and the table is saved
 before P02 is run.
