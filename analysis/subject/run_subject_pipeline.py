@@ -334,6 +334,7 @@ def _run_subject(subject: str, args: argparse.Namespace) -> None:
     _run_script(
         SCRIPT_ORDER[4], subject, project_root, args.session, args.task, args.run
     )
+
     print(f"\nFINISHED {key}")
 
 
@@ -365,6 +366,7 @@ def main() -> None:
         for subject, error in failures:
             print(f"  sub-{subject}: {error}")
         sys.exit(1)
+
 
     print("\nAll requested subjects completed successfully.")
 

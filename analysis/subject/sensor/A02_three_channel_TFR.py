@@ -151,4 +151,15 @@ report.add_figure(
     'Time-frequency analysis'
 )
 
+subject_notes = input(                                                  # to add any notes to the PDF report for this subject, e.g. about data quality, artifacts, etc.
+    f"\nFinal notes for sub-{subject} (press Enter to skip): "
+).strip()
+
+if subject_notes:
+    report.add_text(
+        "Subject notes",
+        subject_notes,
+        "Quality control",
+    )
+
 print(f'Updated PDF: {report.pdf_fname}')
