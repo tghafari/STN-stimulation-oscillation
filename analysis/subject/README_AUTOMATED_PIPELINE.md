@@ -233,6 +233,23 @@ sensor/A02_three_channel_TFR.py
 
 When it finishes, the runner moves to the next requested participant.
 
+### adding note to the report
+
+Use the snippet below anytime, to add text to the subject's report:
+
+from pathlib import Path
+
+project_root = Path(project_root)
+
+report_folder = project_root / "derivatives" / "reports" / "sub-117"
+report = ParticipantPDF(str(report_folder), "117")
+
+report.add_text(
+    "Subject notes",
+    """This participant only shows very noisy data, which I assumed was stim on only, but in the PSD there is no 130 Hz peak. I think this participant should be excluded. Sirui does not have much information either.""",
+    "Quality control",
+)
+
 ## What happens if a subject fails?
 
 By default, the pipeline stops immediately on the first exception. This is safer for analysis because a failed preprocessing step should not silently lead to later analyses based on missing or stale files.

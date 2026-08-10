@@ -39,7 +39,7 @@ if UTILS_DIR not in sys.path:
 
 from pdf_report import ParticipantPDF
 
-subject = '115'
+subject = '117'
 session = '01'
 task = 'SpAtt'
 run = '01'
