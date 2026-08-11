@@ -257,7 +257,6 @@ def plot_compare_evokeds_by_channel(evoked_dict: dict, channels: Sequence[str], 
         mne.viz.plot_compare_evokeds(
             evoked_dict,
             picks=ch,
-            combine="mean",
             axes=ax,
             show=False,
             ci=False,

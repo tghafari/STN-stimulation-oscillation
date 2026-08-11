@@ -138,11 +138,25 @@ def build_concat_epoch_report(subjects):
         channels=OCCIPITAL_CHANNELS,
         title=f"Concatenated epochs across subjects ({', '.join('sub-' + s for s in subjects)})",
     )
+
+    erp_fig_fname = op.join(
+        GROUP_REPORT_DIR,
+        "group_concatenated_epochs_ERP.png",
+    )
+
+    fig.savefig(
+        erp_fig_fname,
+        dpi=180,
+        bbox_inches="tight",
+    )
+
     report.add_figure(
         fig,
-        title="Concatenated epochs across subjects - ERP",
-        caption=f"ERP computed from concatenated epochs across subjects: {', '.join('sub-' + s for s in subjects)}",
-        section="ERP",
+        erp_fig_fname,
+        "Concatenated epochs across subjects - ERP",
+        f"ERP computed from concatenated epochs across subjects: "
+        f"{', '.join('sub-' + s for s in subjects)}",
+        "ERP",
     )
 
     # TFR from concatenated epochs
@@ -158,11 +172,23 @@ def build_concat_epoch_report(subjects):
         title=f"Concatenated epochs across subjects ({', '.join('sub-' + s for s in subjects)}) - no stimulation",
         show=False, fig_facecolor="w", font_color="k"
     )
+    tfr_no_fname = op.join(
+        GROUP_REPORT_DIR,
+        "group_concatenated_epochs_TFR_no_stim.png",
+    )
+
+    fig_tfr_no.savefig(
+        tfr_no_fname,
+        dpi=180,
+        bbox_inches="tight",
+    )
+
     report.add_figure(
         fig_tfr_no,
-        title="Concatenated epochs across subjects - no stimulation TFR",
-        caption="Grand TFR-style topo plot from concatenated no-stim epochs.",
-        section="TFR",
+        tfr_no_fname,
+        "Concatenated epochs across subjects - no stimulation TFR",
+        "TFR computed from concatenated no-stim epochs.",
+        "TFR",
     )
 
     fig_tfr_stim = tfr["stim"].plot_topo(
@@ -170,11 +196,21 @@ def build_concat_epoch_report(subjects):
         title=f"Concatenated epochs across subjects ({', '.join('sub-' + s for s in subjects)}) - stimulation",
         show=False, fig_facecolor="w", font_color="k"
     )
+    tfr_stim_fname = op.join(
+        GROUP_REPORT_DIR,
+        "group_concatenated_epochs_TFR_stim.png",
+    )
+    fig_tfr_stim.savefig(
+        tfr_stim_fname,
+        dpi=180,
+        bbox_inches="tight",
+    )
     report.add_figure(
         fig_tfr_stim,
-        title="Concatenated epochs across subjects - stimulation TFR",
-        caption="Grand TFR-style topo plot from concatenated stimulation epochs.",
-        section="TFR",
+        tfr_stim_fname,
+        "Concatenated epochs across subjects - stimulation TFR",
+        "TFR computed from concatenated stimulation epochs.",
+        "TFR",
     )
 
     diff = tfr["no-stim"].copy()
@@ -184,11 +220,23 @@ def build_concat_epoch_report(subjects):
         title=f"Concatenated epochs across subjects ({', '.join('sub-' + s for s in subjects)}) - difference",
         show=False, fig_facecolor="w", font_color="k"
     )
+    diff_fname = op.join(
+        GROUP_REPORT_DIR,
+        "group_concatenated_epochs_TFR_difference.png",
+    )
+
+    fig_diff.savefig(
+        diff_fname,
+        dpi=180,
+        bbox_inches="tight",
+    )
+
     report.add_figure(
         fig_diff,
-        title="Concatenated epochs across subjects - TFR difference",
-        caption="Difference = no-stim - stim from concatenated epochs.",
-        section="TFR",
+        diff_fname,
+        "Concatenated epochs across subjects - TFR difference",
+        "Difference = no-stim - stim from concatenated epochs.",
+        "TFR",
     )
 
     ratio = tfr["no-stim"].copy()
@@ -198,11 +246,21 @@ def build_concat_epoch_report(subjects):
         title=f"Concatenated epochs across subjects ({', '.join('sub-' + s for s in subjects)}) - ratio",
         show=False, fig_facecolor="w", font_color="k"
     )
+    ratio_fname = op.join(
+        GROUP_REPORT_DIR,
+        "group_concatenated_epochs_TFR_ratio.png",
+    )
+    fig_ratio.savefig(
+        ratio_fname,
+        dpi=180,
+        bbox_inches="tight",
+    )
     report.add_figure(
         fig_ratio,
-        title="Concatenated epochs across subjects - TFR ratio",
-        caption="Ratio = (no-stim - stim) / (no-stim + stim) from concatenated epochs.",
-        section="TFR",
+        ratio_fname,
+        "Concatenated epochs across subjects - TFR ratio",
+        "Ratio = (no-stim - stim) / (no-stim + stim) from concatenated epochs.",
+        "TFR",
     )
 
     add_analysis_notes_section(report, prompt_text="Analysis notes")
