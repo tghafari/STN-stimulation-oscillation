@@ -11,6 +11,16 @@ import mne
 import numpy as np
 from mne.time_frequency import read_tfrs
 
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+REPO_ROOT = HERE.parent.parent
+UTILS_DIR = REPO_ROOT / "analysis" / "utils"
+
+if str(UTILS_DIR) not in sys.path:
+    sys.path.insert(0, str(UTILS_DIR))
+
 
 def ensure_dir(path: str | Path) -> str:
     path = str(path)
