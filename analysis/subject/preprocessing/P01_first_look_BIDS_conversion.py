@@ -85,7 +85,7 @@ stim_sequence = {'sub-01':["no_stim-left rec", "no_stim-right rec", "Right stim-
 
 
 # BIDS settings
-subject = '118'
+subject = '120'
 brainVision_basename = f'AO{subject[1:]}'  # needs modification per subject
 
 session = '01'
