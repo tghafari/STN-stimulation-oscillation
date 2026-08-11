@@ -264,8 +264,15 @@ def build_concat_epoch_report(subjects):
     )
 
     add_analysis_notes_section(report, prompt_text="Analysis notes")
-    report.save(op.join(GROUP_REPORT_DIR, f"{REPORT_NAME}.hdf5"), overwrite=True)
-    report.save(op.join(GROUP_REPORT_DIR, f"{REPORT_NAME}.html"), overwrite=True, open_browser=True)
+    print(
+        f"\nGroup report completed:\n"
+        f"{report.pdf_fname}"
+    )
+
+    print(
+        f"Report manifest:\n"
+        f"{report.manifest_fname}"
+    )
 
 
 if __name__ == "__main__":
