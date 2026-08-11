@@ -108,7 +108,7 @@ def build_concat_epoch_report(subjects):
     group_epochs = {"no-stim": [], "stim": []}
 
     for subject in subjects:
-        subj_epochs = read_subject_epochs(BIDS_ROOT, subject, suffix="epo-cue")
+        subj_epochs = read_subject_epochs(BIDS_ROOT, subject)
         for stim_label in ["no-stim", "stim"]:
             epochs = subj_epochs[stim_label].copy()
             present = subset_present_channels(epochs.ch_names, OCCIPITAL_CHANNELS)
