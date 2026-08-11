@@ -39,7 +39,7 @@ if UTILS_DIR not in sys.path:
 
 from pdf_report import ParticipantPDF
 
-subject = '117'
+subject = '120'
 session = '01'
 task = 'SpAtt'
 run = '01'
@@ -73,7 +73,7 @@ stimulation_cropped_time = {
     'sub-105_no-stim': [4326, 5103], 'sub-105_stim': [112, 597, 850, 1327],
     'sub-113_no-stim': [144, 507, 883, 1233], 'sub-113_stim': [1895, 2255, 2306, 2668],
     'sub-115_no-stim': [1523, 1960, 2353, 2750], 'sub-115_stim': [30, 620, 768, 1235],
-}
+}  # full list is saved separately in stimulation_cropped_time_json
 # sub 115 stim sequence does not follow the stim sequence in the table on github. so I 
 # I can't know which no stim segment has right lfp rec and which has left lfp rec. but i can tell 
 # from the time series that first half is stim on second half is stim off.
