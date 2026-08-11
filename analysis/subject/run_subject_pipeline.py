@@ -338,30 +338,200 @@ def _run_script(
     exec(compile(source, str(script_path), "exec"), globals_dict, globals_dict)
 
 def _run_subject(subject: str, args: argparse.Namespace) -> None:
+    """Run the appropriate subject pipeline for the selected platform."""
+
     project_root = args.project_root
     data_root = args.data_root
     bids_root = args.bids_root
+
     key = f"sub-{subject}"
+
     print("\n" + "=" * 78)
     print(f"STARTING {key}")
     print("=" * 78)
 
-    # P01 must run first because missing crop times are read from the BIDS file
-    # produced/updated there.
-    p01 = SCRIPT_ORDER[0]
-    print(f"\n[{key}] 1/5 BIDS conversion: {p01.name}")
-    _run_script(p01, subject, project_root, data_root, bids_root, args.session, args.task, args.run)
+    # ------------------------------------------------------------------
+    # BLUEBEAR
+    # ------------------------------------------------------------------
+    # Preprocessing is intentionally skipped on Bluebear because P01-P03
+    # require interactive inspection/cleaning that is performed on the Mac.
+    #
+    # Bluebear therefore assumes cleaned epochs already exist.
+    # ------------------------------------------------------------------
 
-    crop_times = _get_or_collect_crop_times(
-        subject, project_root, args.session, args.task, args.run
+    if args.platform == "bluebear":
+
+        print("\n" + "!" * 78)
+        print("BLUEBEAR MODE")
+        print("!" * 78)
+
+        print(
+            "\nPreprocessing will NOT be run on Bluebear.\n\n"
+            "The following steps are being skipped:\n"
+            "  P01 - BIDS conversion\n"
+            "  P02 - stimulation segmentation\n"
+            "  P03 - epoching and manual cleaning\n\n"
+            "Bluebear assumes that preprocessing has already been completed\n"
+            "and that cleaned epoch files are available in the BIDS derivatives.\n"
+        )
+
+        # --------------------------------------------------------------
+        # Check that the required cleaned epochs actually exist
+        # --------------------------------------------------------------
+
+        base = (
+            f"sub-{subject}"
+            f"_ses-{args.session}"
+            f"_task-{args.task}"
+            f"_run-{args.run}"
+            "_eeg"
+        )
+
+        subject_deriv_folder = (
+            Path(bids_root)
+            / "derivatives"
+            / f"sub-{subject}"
+        )
+
+        required_epochs = [
+            subject_deriv_folder / f"{base}_no-stim_epo-cue.fif",
+            subject_deriv_folder / f"{base}_stim_epo-cue.fif",
+        ]
+
+        missing_epochs = [
+            fname
+            for fname in required_epochs
+            if not fname.exists()
+        ]
+
+        if missing_epochs:
+
+            missing_text = "\n".join(
+                f"  {fname}"
+                for fname in missing_epochs
+            )
+
+            raise FileNotFoundError(
+                "\nBluebear cannot start the post-preprocessing analysis "
+                f"for {key}.\n\n"
+                "The following cleaned epoch files are missing:\n"
+                f"{missing_text}\n\n"
+                "Run preprocessing for this participant on the Mac first, "
+                "then make sure the resulting derivatives are available "
+                "on Bluebear."
+            )
+
+        print(
+            f"Cleaned epochs found for {key}.\n"
+            "Starting post-preprocessing analyses."
+        )
+
+        # --------------------------------------------------------------
+        # ERP
+        # --------------------------------------------------------------
+
+        print(
+            f"\n[{key}] BLUEBEAR 1/2 ERP: "
+            f"{SCRIPT_ORDER[3].name}"
+        )
+
+        _run_script(
+            SCRIPT_ORDER[3],
+            subject,
+            project_root,
+            data_root,
+            bids_root,
+            args.session,
+            args.task,
+            args.run,
+        )
+
+        # --------------------------------------------------------------
+        # TFR
+        # --------------------------------------------------------------
+
+        print(
+            f"\n[{key}] BLUEBEAR 2/2 TFR: "
+            f"{SCRIPT_ORDER[4].name}"
+        )
+
+        _run_script(
+            SCRIPT_ORDER[4],
+            subject,
+            project_root,
+            data_root,
+            bids_root,
+            args.session,
+            args.task,
+            args.run,
+        )
+
+        print(
+            f"\nFINISHED {key} "
+            "(Bluebear post-preprocessing analysis)"
+        )
+
+        return
+
+    # ------------------------------------------------------------------
+    # MAC
+    # ------------------------------------------------------------------
+    # The complete preprocessing + sensor-level pipeline runs here.
+    # ------------------------------------------------------------------
+
+    print(
+        "\nMAC MODE\n"
+        "Running the complete preprocessing and sensor-level pipeline."
     )
 
-    print(f"\n[{key}] 2/5 stimulation segmentation: {SCRIPT_ORDER[1].name}")
+    # --------------------------------------------------------------
+    # P01
+    # --------------------------------------------------------------
+
+    p01 = SCRIPT_ORDER[0]
+
+    print(
+        f"\n[{key}] 1/5 BIDS conversion: "
+        f"{p01.name}"
+    )
+
+    _run_script(
+        p01,
+        subject,
+        project_root,
+        data_root,
+        bids_root,
+        args.session,
+        args.task,
+        args.run,
+    )
+
+    # --------------------------------------------------------------
+    # Stimulation crop times
+    # --------------------------------------------------------------
+
+    crop_times = _get_or_collect_crop_times(
+        subject,
+        project_root,
+        args.session,
+        args.task,
+        args.run,
+    )
+
+    # --------------------------------------------------------------
+    # P02
+    # --------------------------------------------------------------
+
+    print(
+        f"\n[{key}] 2/5 stimulation segmentation: "
+        f"{SCRIPT_ORDER[1].name}"
+    )
+
     _run_script(
         SCRIPT_ORDER[1],
         subject,
         project_root,
-        data_root, 
+        data_root,
         bids_root,
         args.session,
         args.task,
@@ -369,26 +539,72 @@ def _run_subject(subject: str, args: argparse.Namespace) -> None:
         crop_times=crop_times,
     )
 
+    # --------------------------------------------------------------
+    # P03
+    # --------------------------------------------------------------
+
     print(
         f"\n[{key}] 3/5 epoching: {SCRIPT_ORDER[2].name}\n"
-        "The epoch browser is interactive. Reject bad trials using PO3, PO4 and POz, "
+        "The epoch browser is interactive.\n"
+        "Reject bad trials using the available posterior channels,\n"
         "then close the browser to save the cleaned epochs and continue."
     )
+
     _run_script(
-        SCRIPT_ORDER[2], subject, project_root, data_root, bids_root, args.session, args.task, args.run
+        SCRIPT_ORDER[2],
+        subject,
+        project_root,
+        data_root,
+        bids_root,
+        args.session,
+        args.task,
+        args.run,
     )
 
-    print(f"\n[{key}] 4/5 ERP: {SCRIPT_ORDER[3].name}")
-    _run_script(
-        SCRIPT_ORDER[3], subject, project_root, data_root, bids_root, args.session, args.task, args.run
+    # --------------------------------------------------------------
+    # ERP
+    # --------------------------------------------------------------
+
+    print(
+        f"\n[{key}] 4/5 ERP: "
+        f"{SCRIPT_ORDER[3].name}"
     )
 
-    print(f"\n[{key}] 5/5 TFR: {SCRIPT_ORDER[4].name}")
     _run_script(
-        SCRIPT_ORDER[4], subject, project_root, data_root, bids_root, args.session, args.task, args.run
+        SCRIPT_ORDER[3],
+        subject,
+        project_root,
+        data_root,
+        bids_root,
+        args.session,
+        args.task,
+        args.run,
     )
 
-    print(f"\nFINISHED {key}")
+    # --------------------------------------------------------------
+    # TFR
+    # --------------------------------------------------------------
+
+    print(
+        f"\n[{key}] 5/5 TFR: "
+        f"{SCRIPT_ORDER[4].name}"
+    )
+
+    _run_script(
+        SCRIPT_ORDER[4],
+        subject,
+        project_root,
+        data_root,
+        bids_root,
+        args.session,
+        args.task,
+        args.run,
+    )
+
+    print(
+        f"\nFINISHED {key} "
+        "(complete Mac pipeline)"
+    )
 
 
 def main() -> None:
@@ -412,6 +628,26 @@ def main() -> None:
     print(f"BIDS root:      {args.bids_root}")
     print(f"Repository root: {REPO_ROOT}")
     print(f"Crop-time table: {CROP_TABLE_PATH}")
+
+    if args.platform == "bluebear":
+        print("\n" + "!" * 78)
+        print("WARNING: BLUEBEAR POST-PREPROCESSING MODE")
+        print("!" * 78)
+        print(
+            "\nP01, P02 and P03 will NOT be run.\n"
+            "No BIDS conversion, stimulation segmentation, channel cleaning,\n"
+            "or manual epoch rejection will occur on Bluebear.\n\n"
+            "The runner will start from the cleaned epoch files and run:\n"
+            "  A01 - ERP\n"
+            "  A02 - TFR\n\n"
+            "Use the Mac version of this runner for preprocessing."
+        )
+        print("!" * 78 + "\n")
+    else:
+        print(
+            "\nMac selected: the complete P01 -> P02 -> P03 -> ERP -> TFR "
+            "pipeline will run.\n"
+        )
 
     failures = []
     for subject in subjects:

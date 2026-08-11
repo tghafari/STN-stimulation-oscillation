@@ -71,7 +71,7 @@ STN-in-PD/
 └── derivatives/
 ```
 
-You pass this path with `--project-root` every time you run the pipeline. This avoids hard-coding one person's computer path into the automated runner.
+the code gives you the option to run on mac or bluebear. But bear in mind that Bluebear does not give you the interactive plotting, so it is useless for preprocessing. but can be done on sensor and group analysis.
 
 ### 4. Use an interactive plotting backend
 
@@ -292,7 +292,6 @@ Before running a large participant range, test one participant that you already 
 ```bash
 python analysis/subject/run_subject_pipeline.py \
   --subjects 115 \
-  --project-root "/path/to/STN-in-PD"
 ```
 
 Check that:
@@ -318,7 +317,6 @@ Run the new participant normally:
 ```bash
 python analysis/subject/run_subject_pipeline.py \
   --subjects 124 \
-  --project-root "/path/to/STN-in-PD"
 ```
 
 After P01, the raw browser will open. Inspect the stimulation sequence, close the browser, enter the requested times, and the runner will save them to `stimulation_cropped_time.json` before continuing.
