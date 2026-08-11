@@ -59,6 +59,7 @@ extension = '.fif'
 project_root = '/Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/BEAR_outage/STN-in-PD'  # local folder
 bids_root = op.join(project_root, 'data', 'BIDS')
 posterior_channels = ['PO3', 'PO4', 'POz']  # These are the ones we agreed with Ole
+GROUP_POSTERIOR_CHANNELS = ['PO3', 'PO4', 'POz']
 
 event_dict = {'cue_onset_right': 1, 'cue_onset_left': 2, 'trial_onset': 3,
               'stim_onset': 4, 'catch_onset': 5, 'dot_onset_right': 6,
@@ -74,6 +75,10 @@ report_folder = op.join(project_root, 'derivatives', 'reports', f'sub-{subject}'
 os.makedirs(fig_folder, exist_ok=True)
 report = ParticipantPDF(report_folder, subject)
 
+interpolation_summary = {
+    "subject": subject,
+    "interpolated_channels": [],
+}
 
 def get_bad_channel_reasons(raw):
     """Run PyPREP detectors and return channel -> reason list."""
@@ -178,7 +183,7 @@ for label in ['no-stim', 'stim']:
 
     # remove the same bad channels from both segments
     raw.info['bads'] = bads_to_remove
-    raw.drop_channels(bads_to_remove)
+    # raw.drop_channels(bads_to_remove)  # we need to interpolate bad posterior channels for group analysis, so don't drop.
 
     bad_text = "\n".join(sorted(set(str(ch) for ch in bads_to_remove))) or "None"
 
@@ -302,8 +307,61 @@ for label in ['no-stim', 'stim']:
     )
     n_after = len(epochs)
 
+    # ------------------------------------------------------------------
+    # Prepare a group-analysis version of the epochs.
+    #
+    # Bad posterior channels are interpolated here so that all subjects
+    # can contribute the same posterior ROI to the group analysis.
+    # The ordinary subject-level epochs below remain cleaned with bad
+    # channels removed.
+    # ------------------------------------------------------------------
+
+    group_epochs = epochs.copy()
+
+    # Make sure the posterior channels have valid sensor positions.
+    if group_epochs.get_montage() is None:
+        group_epochs.set_montage(
+            "standard_1020",
+            on_missing="warn",
+        )
+
+    # Only interpolate posterior channels that were identified as bad.
+    posterior_bads_to_interpolate = [
+        ch
+        for ch in rejected_posterior
+        if ch in group_epochs.ch_names
+    ]
+
+    if posterior_bads_to_interpolate:
+
+        group_epochs.info["bads"] = posterior_bads_to_interpolate
+
+        group_epochs.interpolate_bads(
+            reset_bads=True,
+            mode="accurate",
+        )
+
+        print(
+            f"{label}: interpolated posterior channel(s): "
+            f"{posterior_bads_to_interpolate}"
+        )
+
+    interpolation_summary["interpolated_channels"].extend(
+    posterior_bads_to_interpolate
+    )
+
     output_fname = op.join(deriv_folder, bids_path.basename + f'_{label}_epo-cue.fif')
     epochs.save(output_fname, overwrite=True)
+
+    group_output_fname = op.join(
+    deriv_folder,
+    bids_path.basename + f'_{label}_epo-cue-group.fif'
+    )
+
+    group_epochs.save(
+        group_output_fname,
+        overwrite=True,
+    )
 
     report.add_text(
         f'{label}: manual posterior trial rejection',
@@ -313,6 +371,38 @@ for label in ['no-stim', 'stim']:
         f'Epochs rejected: {n_before - n_after}\n'
         f'Output: {output_fname}',
         'Epoching and channel quality'
+    )
+
+interpolation_summary["interpolated_channels"] = sorted(
+    set(interpolation_summary["interpolated_channels"])
+)
+
+interpolation_dir = op.join(
+    bids_root,
+    "derivatives",
+    f"sub-{subject}",
+    "qc",
+)
+
+os.makedirs(
+    interpolation_dir,
+    exist_ok=True,
+)
+
+interpolation_fname = op.join(
+    interpolation_dir,
+    f"sub-{subject}_group_interpolation.json",
+)
+
+with open(
+    interpolation_fname,
+    "w",
+    encoding="utf-8",
+) as f:
+    json.dump(
+        interpolation_summary,
+        f,
+        indent=2,
     )
 
 print(f'Updated PDF: {report.pdf_fname}')

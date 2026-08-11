@@ -19,6 +19,7 @@ from group_utils import (
     make_report,
     plot_compare_evokeds_by_channel,
     plot_tfr_channel_grid,
+    read_interpolation_summary,
     read_subject_epochs,
     save_subject_list,
     subset_present_channels,
@@ -76,6 +77,31 @@ def build_concat_epoch_report(subjects):
     )
     add_subject_summary(report, subjects)
 
+    # Document interpolated posterior channels
+    analysis_data_lines = []
+
+    for subject in subjects:
+
+        interpolated = read_interpolation_summary(
+            BIDS_ROOT,
+            subject,
+        )
+
+        if interpolated:
+            analysis_data_lines.append(
+                f"sub-{subject}: interpolated "
+                f"{', '.join(interpolated)}"
+            )
+        else:
+            analysis_data_lines.append(
+                f"sub-{subject}: no interpolation"
+            )
+
+    report.add_text(
+        "Group-analysis channel handling",
+        "\n".join(analysis_data_lines),
+        "Group analysis",
+    )
     # Save/update the list for future reruns
     save_subject_list(SUBJECT_LIST_PATH, subjects)
 

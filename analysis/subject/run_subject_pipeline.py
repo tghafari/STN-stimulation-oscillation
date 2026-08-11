@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
-"""Run the five active single-subject EEG scripts in sequence.
+"""
+==============================================
+Run the five active single-subject EEG scripts in sequence.
 
 Pipeline order
 --------------
@@ -22,6 +24,7 @@ before P02 is run.
 
 P03 remains interactive. Its existing MNE epoch browser opens with PO3, PO4 and
 POz only; bad epochs marked there are saved by P03 before ERP and TFR continue.
+==============================================
 """
 
 from __future__ import annotations

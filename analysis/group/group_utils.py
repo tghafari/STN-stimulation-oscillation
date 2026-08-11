@@ -1,3 +1,44 @@
+"""
+==============================================================
+Group analysis utilities
+==============================================================
+
+Shared helper functions for the group-level EEG analyses:
+
+    G01_concatenated_epochs_report.py
+        Concatenates cleaned epochs across subjects before
+        calculating group ERP and TFR.
+
+    G02_grand_average_report.py
+        Calculates subject-level averages first and then
+        combines subjects using mne.grand_average().
+
+This module provides functions to:
+    - load and save the group subject list
+    - locate subject derivative folders
+    - load cleaned epochs, evoked responses, and TFRs
+    - handle missing posterior channels
+    - create standard ERP and TFR figures
+    - create persistent PDF reports
+    - add the included subjects and analysis notes to reports
+
+Expected inputs are outputs from the completed subject-level pipeline
+stored under:
+
+    <BIDS_ROOT>/derivatives/sub-<subject>/
+
+Group analyses currently focus on posterior channels PO3, PO4, and POz.
+A channel may be absent if it was rejected during subject-level cleaning.
+
+This module contains shared utilities only; the actual group analyses
+are performed by G01 and G02.
+
+written by Tara Ghafari
+tara.ghafari@gmail.com
+==============================================================
+"""
+
+
 from __future__ import annotations
 
 import json
@@ -49,19 +90,77 @@ def subject_deriv_folder(bids_root: str, subject: str) -> str:
     return op.join(bids_root, "derivatives", f"sub-{subject}")
 
 
-def read_subject_epochs(bids_root: str, subject: str, suffix: str) -> dict:
+def read_subject_epochs(bids_root: str, subject: str) -> dict:
     """
-    Returns:
-        dict with keys 'no-stim' and 'stim'
+    Load cue-locked epochs for group analysis.
+
+    If a participant had a rejected posterior channel that was
+    interpolated for group analysis, the file with the suffix
+    '-epo-cue-group.fif' is used.
+
+    Otherwise, the normal subject-level '-epo-cue.fif' file is used.
+
+    Returns
+    -------
+    dict
+        Keys:
+            'no-stim'
+            'stim'
+
+        Values:
+            MNE Epochs objects.
     """
-    deriv_folder = subject_deriv_folder(bids_root, subject)
-    base = f"sub-{subject}_ses-01_task-SpAtt_run-01_eeg"
+
+    deriv_folder = subject_deriv_folder(
+        bids_root,
+        subject,
+    )
+
+    base = (
+        f"sub-{subject}"
+        "_ses-01"
+        "_task-SpAtt"
+        "_run-01"
+        "_eeg"
+    )
     out = {}
+
     for stim_label in ["no-stim", "stim"]:
-        fname = op.join(deriv_folder, f"{base}_{stim_label}_epo-cue.fif")
-        if not op.exists(fname):
-            raise FileNotFoundError(f"Missing epochs file: {fname}")
-        out[stim_label] = mne.read_epochs(fname, preload=True, verbose=True)
+        # First look for the group-ready version.
+        group_fname = op.join(
+            deriv_folder,
+            f"{base}_{stim_label}_epo-cue-group.fif",
+        )
+        # If it does not exist, use the normal cleaned epochs.
+        normal_fname = op.join(
+            deriv_folder,
+            f"{base}_{stim_label}_epo-cue.fif",
+        )
+        if op.exists(group_fname):
+            fname = group_fname
+            print(
+                f"sub-{subject} {stim_label}: "
+                f"using interpolated group-analysis epochs"
+            )
+        elif op.exists(normal_fname):
+            fname = normal_fname
+            print(
+                f"sub-{subject} {stim_label}: "
+                f"using standard cleaned epochs"
+            )
+        else:
+            raise FileNotFoundError(
+                f"Neither group nor standard epochs were found for "
+                f"sub-{subject} {stim_label}:\n"
+                f"  {group_fname}\n"
+                f"  {normal_fname}"
+            )
+        out[stim_label] = mne.read_epochs(
+            fname,
+            preload=True,
+            verbose=True,
+        )
+
     return out
 
 
@@ -93,6 +192,40 @@ def read_subject_tfrs(bids_root: str, subject: str) -> dict:
             out[(stim_label, cue)] = read_tfrs(fname)[0]
     return out
 
+def read_interpolation_summary(bids_root: str, subject: str) -> list[str]:
+    """
+    Read the list of posterior channels interpolated for group analysis.
+
+    Parameters
+    ----------
+    bids_root : str
+        Root of the BIDS directory.
+
+    subject : str
+        Subject number without the 'sub-' prefix.
+
+    Returns
+    -------
+    list of str
+        Names of channels interpolated for this participant.
+        Returns an empty list if no interpolation record exists.
+    """
+
+    fname = op.join(
+        bids_root,
+        "derivatives",
+        f"sub-{subject}",
+        "qc",
+        f"sub-{subject}_group_interpolation.json",
+    )
+
+    if not op.exists(fname):
+        return []
+
+    with open(fname, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    return data.get("interpolated_channels", [])
 
 def make_report(report_folder: str, report_name: str):
     from pdf_report import ParticipantPDF  # your persistent helper
