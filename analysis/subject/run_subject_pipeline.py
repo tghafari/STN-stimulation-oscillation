@@ -41,6 +41,27 @@ HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parents[1]
 CROP_TABLE_PATH = HERE / "stimulation_cropped_time.json"
 
+# -----------------------------------------------------------------------------
+# Platform-specific data locations
+# -----------------------------------------------------------------------------
+
+BLUEBEAR_PROJECT_ROOT = Path(
+    "/rds/projects/j/jenseno-avtemporal-attention/"
+    "Projects/subcortical-structures/STN-in-PD"
+)
+
+BLUEBEAR_DATA_ROOT = BLUEBEAR_PROJECT_ROOT / "data" / "data-organised"
+BLUEBEAR_BIDS_ROOT = BLUEBEAR_PROJECT_ROOT / "data" / "BIDS"
+
+MAC_PROJECT_ROOT = Path(
+    "/Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/"
+    "BEAR_outage/STN-in-PD"
+)
+
+MAC_DATA_ROOT = MAC_PROJECT_ROOT / "data" / "data-organised"
+MAC_BIDS_ROOT = MAC_PROJECT_ROOT / "data" / "BIDS"
+
+
 SCRIPT_ORDER = [
     HERE / "preprocessing" / "P01_first_look_BIDS_conversion.py",
     HERE / "preprocessing" / "P02_segmenting_stim.py",
@@ -49,6 +70,33 @@ SCRIPT_ORDER = [
     HERE / "sensor" / "A02_three_channel_TFR.py",
 ]
 
+def _choose_platform():
+    """Ask whether the pipeline is running on Bluebear or Mac."""
+
+    while True:
+        print("\nWhere are you running the analysis?")
+        print("  1 = Bluebear")
+        print("  2 = Mac")
+
+        answer = input("Choose 1 or 2: ").strip().lower()
+
+        if answer in {"1", "bluebear", "bear"}:
+            return {
+                "platform": "bluebear",
+                "project_root": BLUEBEAR_PROJECT_ROOT,
+                "data_root": BLUEBEAR_DATA_ROOT,
+                "bids_root": BLUEBEAR_BIDS_ROOT,
+            }
+
+        if answer in {"2", "mac"}:
+            return {
+                "platform": "mac",
+                "project_root": MAC_PROJECT_ROOT,
+                "data_root": MAC_DATA_ROOT,
+                "bids_root": MAC_BIDS_ROOT,
+            }
+
+        print("Please enter 1 for Bluebear or 2 for Mac.")
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -68,11 +116,6 @@ def _parse_args() -> argparse.Namespace:
         help="Inclusive numeric range, e.g. --range 115 123",
     )
     parser.add_argument(
-        "--project-root",
-        required=True,
-        help="Root of the STN-in-PD data project (contains data/BIDS and derivatives).",
-    )
-    parser.add_argument(
         "--session", default="01", help="BIDS session label without ses- (default: 01)."
     )
     parser.add_argument(
@@ -88,7 +131,6 @@ def _parse_args() -> argparse.Namespace:
     )
     return parser.parse_args()
 
-
 def _subjects_from_args(args: argparse.Namespace) -> List[str]:
     if args.subjects:
         subjects = [str(s).removeprefix("sub-") for s in args.subjects]
@@ -98,7 +140,6 @@ def _subjects_from_args(args: argparse.Namespace) -> List[str]:
             raise ValueError("--range END must be >= START")
         subjects = [str(s) for s in range(start, end + 1)]
     return subjects
-
 
 def _load_crop_table() -> Dict[str, Dict[str, List[float]]]:
     if not CROP_TABLE_PATH.exists():
@@ -212,20 +253,25 @@ def _patch_script_source(
     script_path: Path,
     subject: str,
     project_root: Path,
+    data_root: Path,
+    bids_root: Path,
     session: str,
     task: str,
     run: str,
     crop_times: Dict[str, List[float]] | None,
-) -> str:
+    ) -> str:
     """Patch only runtime configuration; analysis logic stays in the original script."""
+
     values = {
-        "subject": subject,
-        "session": session,
-        "task": task,
-        "run": run,
-        "project_root": str(project_root),
-        "GITHUB_ROOT": str(REPO_ROOT),
-    }
+    "subject": subject,
+    "session": session,
+    "task": task,
+    "run": run,
+    "project_root": str(project_root),
+    "data_root": str(data_root),
+    "bids_root": str(bids_root),
+    "GITHUB_ROOT": str(REPO_ROOT),
+    }   
     for name, value in values.items():
         source = _replace_assignment(source, name, value)
 
@@ -261,6 +307,8 @@ def _run_script(
     script_path: Path,
     subject: str,
     project_root: Path,
+    data_root: Path,
+    bids_root: Path,
     session: str,
     task: str,
     run: str,
@@ -271,14 +319,16 @@ def _run_script(
 
     source = script_path.read_text(encoding="utf-8")
     source = _patch_script_source(
-        source,
-        script_path,
-        subject,
-        project_root,
-        session,
-        task,
-        run,
-        crop_times,
+    source,
+    script_path,
+    subject,
+    project_root,
+    data_root,
+    bids_root,
+    session,
+    task,
+    run,
+    crop_times,
     )
     globals_dict = {
         "__name__": "__main__",
@@ -287,9 +337,10 @@ def _run_script(
     }
     exec(compile(source, str(script_path), "exec"), globals_dict, globals_dict)
 
-
 def _run_subject(subject: str, args: argparse.Namespace) -> None:
-    project_root = Path(args.project_root).expanduser().resolve()
+    project_root = args.project_root
+    data_root = args.data_root
+    bids_root = args.bids_root
     key = f"sub-{subject}"
     print("\n" + "=" * 78)
     print(f"STARTING {key}")
@@ -299,7 +350,7 @@ def _run_subject(subject: str, args: argparse.Namespace) -> None:
     # produced/updated there.
     p01 = SCRIPT_ORDER[0]
     print(f"\n[{key}] 1/5 BIDS conversion: {p01.name}")
-    _run_script(p01, subject, project_root, args.session, args.task, args.run)
+    _run_script(p01, subject, project_root, data_root, bids_root, args.session, args.task, args.run)
 
     crop_times = _get_or_collect_crop_times(
         subject, project_root, args.session, args.task, args.run
@@ -310,6 +361,8 @@ def _run_subject(subject: str, args: argparse.Namespace) -> None:
         SCRIPT_ORDER[1],
         subject,
         project_root,
+        data_root, 
+        bids_root,
         args.session,
         args.task,
         args.run,
@@ -322,17 +375,17 @@ def _run_subject(subject: str, args: argparse.Namespace) -> None:
         "then close the browser to save the cleaned epochs and continue."
     )
     _run_script(
-        SCRIPT_ORDER[2], subject, project_root, args.session, args.task, args.run
+        SCRIPT_ORDER[2], subject, project_root, data_root, bids_root, args.session, args.task, args.run
     )
 
     print(f"\n[{key}] 4/5 ERP: {SCRIPT_ORDER[3].name}")
     _run_script(
-        SCRIPT_ORDER[3], subject, project_root, args.session, args.task, args.run
+        SCRIPT_ORDER[3], subject, project_root, data_root, bids_root, args.session, args.task, args.run
     )
 
     print(f"\n[{key}] 5/5 TFR: {SCRIPT_ORDER[4].name}")
     _run_script(
-        SCRIPT_ORDER[4], subject, project_root, args.session, args.task, args.run
+        SCRIPT_ORDER[4], subject, project_root, data_root, bids_root, args.session, args.task, args.run
     )
 
     print(f"\nFINISHED {key}")
@@ -340,10 +393,23 @@ def _run_subject(subject: str, args: argparse.Namespace) -> None:
 
 def main() -> None:
     args = _parse_args()
+    paths = _choose_platform()
+    args.platform = paths["platform"]
+    args.project_root = paths["project_root"]
+    args.data_root = paths["data_root"]
+    args.bids_root = paths["bids_root"]
+
     subjects = _subjects_from_args(args)
 
+    print("\n" + "=" * 78)
+    print("PIPELINE CONFIGURATION")
+    print("=" * 78)
+
     print("Subjects to run: " + ", ".join(f"sub-{s}" for s in subjects))
+    print(f"Platform:       {args.platform}")
     print(f"Project root: {Path(args.project_root).expanduser().resolve()}")
+    print(f"Data root:      {args.data_root}")
+    print(f"BIDS root:      {args.bids_root}")
     print(f"Repository root: {REPO_ROOT}")
     print(f"Crop-time table: {CROP_TABLE_PATH}")
 

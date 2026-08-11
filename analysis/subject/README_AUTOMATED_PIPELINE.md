@@ -87,9 +87,7 @@ Run the pipeline in an environment where MNE plots can open interactively. A nor
 From the repository root:
 
 ```bash
-python analysis/subject/run_subject_pipeline.py \
-  --subjects 115 \
-  --project-root "/path/to/STN-in-PD"
+python analysis/subject/run_subject_pipeline.py --subjects 119
 ```
 
 For several specific participants:
@@ -97,17 +95,13 @@ For several specific participants:
 Note: not recommended, as brainvision basename for subjects might vary.
 
 ```bash
-python analysis/subject/run_subject_pipeline.py \
-  --subjects 115 116 118 121 \
-  --project-root "/path/to/STN-in-PD"
+python analysis/subject/run_subject_pipeline.py --subjects 115 116 118 121
 ```
 
 For an inclusive numeric range, for example participants 115 through 123:
 
 ```bash
-python analysis/subject/run_subject_pipeline.py \
-  --range 115 123 \
-  --project-root "/path/to/STN-in-PD"
+python analysis/subject/run_subject_pipeline.py --range 119 123
 ```
 
 The default BIDS settings are:
