@@ -160,6 +160,46 @@ def plot_three_channel_tfrs(
 
     return fig
 
+def plot_single_roi_tfr(
+    tfr,
+    title,
+    baseline=None,
+    mode=None,
+    vlim=None,
+):
+    """Plot one posterior-ROI TFR."""
+
+    fig, ax = plt.subplots(
+        1,
+        1,
+        figsize=(10, 5),
+        constrained_layout=True,
+    )
+
+    plot_kwargs = dict(
+        picks=["posterior_ROI"],
+        tmin=-0.5,
+        tmax=1.5,
+        fmin=2,
+        fmax=31,
+        baseline=baseline,
+        mode=mode,
+        axes=ax,
+        show=False,
+        colorbar=True,
+    )
+
+    if vlim is not None:
+        plot_kwargs["vlim"] = vlim
+
+    tfr.plot(
+        **plot_kwargs
+    )
+
+    ax.set_title(title)
+
+    return fig
+
 def build_grand_average_report(subjects):
     ensure_dir(GROUP_REPORT_DIR)
     ensure_dir(GROUP_DERIV_DIR)
@@ -209,16 +249,85 @@ def build_grand_average_report(subjects):
                 ch in subject_epochs[subject]["stim"].ch_names
             )
         ]
+    channel_summary = []
 
+    for ch in OCCIPITAL_CHANNELS:
+
+        included = subjects_by_channel[ch]
+
+        excluded = [
+            subject
+            for subject in subjects
+            if subject not in included
+        ]
+
+        text = (
+            f"{ch}: included "
+            f"{', '.join('sub-' + s for s in included)}"
+        )
+
+        if excluded:
+            text += (
+                f"\nExcluded because channel was unavailable: "
+                f"{', '.join('sub-' + s for s in excluded)}"
+            )
+
+        channel_summary.append(text)
+
+    report.add_text(
+        "Subjects contributing to each posterior channel",
+        "\n\n".join(channel_summary),
+        "Group analysis",
+    )
+
+    report.add_text(
+        "Analysis details",
+        (
+            "ERP\n"
+            "• Cue-locked ERP: cue onset = 0 s.\n"
+            "• Epoch window: -0.5 to 1.6 s.\n"
+            "• ERP is low-pass filtered at 30 Hz.\n"
+            "• Cue ERP baseline: -0.1 to 0 s.\n"
+            "• Grating-locked ERP: grating onset = 0 s.\n"
+            "• Each subject is averaged first, then subject averages "
+            "are grand-averaged, so each participant contributes equally.\n\n"
+
+            "TFR\n"
+            "• TFRs are calculated from cue-locked epochs.\n"
+            "• Left- and right-attention trials are combined ('both').\n"
+            "• Epoch window: -0.5 to 1.6 s.\n"
+            "• Frequency range: 2-31.5 Hz in 0.5-Hz steps.\n"
+            "• Multitaper method.\n"
+            "• n_cycles = frequency / 2.\n"
+            "• Time-bandwidth = 2.\n"
+            "• Decimation = 2.\n"
+            "• Stim/no-stim TFRs: baseline -0.3 to -0.1 s, "
+            "percent change.\n"
+            "• Difference: stimulation minus no-stimulation, "
+            "using the original non-baseline-corrected TFRs.\n"
+            "• Ratio: (stimulation - no-stimulation) / "
+            "(stimulation + no-stimulation), using the original "
+            "non-baseline-corrected TFRs.\n"
+
+            "Posterior channels\n"
+            "• PO3, PO4 and POz are analysed separately.\n"
+            "• A channel contributes only for subjects in whom it "
+            "was available after subject-level cleaning.\n\n"
+
+            "Combined posterior ROI\n"
+            "• Within each subject, the available posterior channels "
+            "are averaged within each epoch.\n"
+            "• A subject-level ROI TFR is then calculated.\n"
+            "• Subject-level ROI TFRs are grand-averaged, so every "
+            "subject contributes equally."
+        ),
+        "Analysis details",
+    )
 
     # ----------------------------------------------------------
     # ERP grand averages
     # ----------------------------------------------------------
 
-    evoked_by_condition = {
-        "no-stim": {"cue": [], "grating": []},
-        "stim": {"cue": [], "grating": []},
-    }
     # ----------------------------------------------------------
     # Prepare subject-level ERP data
     # ----------------------------------------------------------
@@ -687,30 +796,20 @@ def build_grand_average_report(subjects):
 
     for ch in OCCIPITAL_CHANNELS:
 
-        stim_bc = grand_tfr_by_channel[
+        stim_tfr = grand_tfr_by_channel[
             "stim"
         ][ch].copy()
 
-        no_stim_bc = grand_tfr_by_channel[
+        no_stim_tfr = grand_tfr_by_channel[
             "no-stim"
         ][ch].copy()
 
-        # Baseline correction for the difference.
-        stim_bc.apply_baseline(
-            baseline=BASELINE,
-            mode="percent",
-        )
-
-        no_stim_bc.apply_baseline(
-            baseline=BASELINE,
-            mode="percent",
-        )
-
-        diff = no_stim_bc.copy()
+        # Difference uses non-baseline corrected TFRs.
+        diff = no_stim_tfr.copy()
 
         diff.data = (
-            no_stim_bc.data
-            - stim_bc.data
+            stim_tfr.data
+            - no_stim_tfr.data
         )
 
         grand_tfr_diff[ch] = diff
@@ -727,21 +826,536 @@ def build_grand_average_report(subjects):
         ratio = no_stim.copy()
 
         ratio.data = (
-            no_stim.data
-            - stim.data
+            stim.data
+            - no_stim.data
         ) / (
-            no_stim.data
-            + stim.data
+            stim.data
+            + no_stim.data
             + np.finfo(float).eps
         )
 
         grand_tfr_ratio[ch] = ratio
 
+    subject_counts = {
+        ch: len(subjects_by_channel[ch])
+        for ch in OCCIPITAL_CHANNELS
+    }
+
+    # ==========================================================
+    # Channel-specific TFR plots
+    # ==========================================================
+
+    # ----------------------------------------------------------
+    # No stimulation
+    # ----------------------------------------------------------
+
+    fig_tfr_no = plot_three_channel_tfrs(
+        grand_tfr_by_channel["no-stim"],
+        OCCIPITAL_CHANNELS,
+        subject_counts,
+        (
+            "Grand-average cue-locked TFR - "
+            "no stimulation - combined attention"
+        ),
+        baseline=BASELINE,
+        mode="percent",
+        vlim=(-0.75, 0.75),
+    )
+
+    fname = op.join(
+        GROUP_REPORT_DIR,
+        "group_grand_average_TFR_no_stim.png",
+    )
+
+    fig_tfr_no.savefig(
+        fname,
+        dpi=180,
+        bbox_inches="tight",
+    )
+
+    report.add_figure(
+        fig_tfr_no,
+        fname,
+        "Grand-average cue-locked TFR - no stimulation",
+        (
+            "Each subject is averaged first and the subject-level TFRs "
+            "are then grand-averaged. Cue onset = 0 s. "
+            "Left- and right-attention trials are combined ('both'). "
+            "Baseline: -0.3 to -0.1 s, percent change. "
+            "Frequency range: 2-31.5 Hz."
+        ),
+        "TFR",
+    )
 
 
-    add_analysis_notes_section(report, prompt_text="Analysis notes")
-    report.save(op.join(GROUP_REPORT_DIR, f"{REPORT_NAME}.hdf5"), overwrite=True)
-    report.save(op.join(GROUP_REPORT_DIR, f"{REPORT_NAME}.html"), overwrite=True, open_browser=True)
+    # ----------------------------------------------------------
+    # Stimulation
+    # ----------------------------------------------------------
+
+    fig_tfr_stim = plot_three_channel_tfrs(
+        grand_tfr_by_channel["stim"],
+        OCCIPITAL_CHANNELS,
+        subject_counts,
+        (
+            "Grand-average cue-locked TFR - "
+            "stimulation - combined attention"
+        ),
+        baseline=BASELINE,
+        mode="percent",
+        vlim=(-0.75, 0.75),
+    )
+
+    fname = op.join(
+        GROUP_REPORT_DIR,
+        "group_grand_average_TFR_stim.png",
+    )
+
+    fig_tfr_stim.savefig(
+        fname,
+        dpi=180,
+        bbox_inches="tight",
+    )
+
+    report.add_figure(
+        fig_tfr_stim,
+        fname,
+        "Grand-average cue-locked TFR - stimulation",
+        (
+            "Each subject is averaged first and the subject-level TFRs "
+            "are then grand-averaged. Cue onset = 0 s. "
+            "Left- and right-attention trials are combined ('both'). "
+            "Baseline: -0.3 to -0.1 s, percent change. "
+            "Frequency range: 2-31.5 Hz."
+        ),
+        "TFR",
+    )
+
+
+    # ----------------------------------------------------------
+    # Difference
+    # ----------------------------------------------------------
+
+    fig_tfr_diff = plot_three_channel_tfrs(
+        grand_tfr_diff,
+        OCCIPITAL_CHANNELS,
+        subject_counts,
+        (
+            "Grand-average cue-locked TFR difference - "
+            "stimulation minus no stimulation"
+        ),
+        baseline=None,
+        mode=None,
+        vlim=None,
+    )
+
+    fname = op.join(
+        GROUP_REPORT_DIR,
+        "group_grand_average_TFR_difference.png",
+    )
+
+    fig_tfr_diff.savefig(
+        fname,
+        dpi=180,
+        bbox_inches="tight",
+    )
+
+    report.add_figure(
+        fig_tfr_diff,
+        fname,
+        "Grand-average cue-locked TFR difference",
+        (
+            "Each subject is averaged first and then grand-averaged. "
+            "Cue onset = 0 s. Left- and right-attention trials are "
+            "combined ('both'). "
+            "Difference = stimulation minus no-stimulation. "
+            "No baseline correction was applied to the difference."
+        ),
+        "TFR",
+    )
+
+
+    # ----------------------------------------------------------
+    # Ratio
+    # ----------------------------------------------------------
+
+    fig_tfr_ratio = plot_three_channel_tfrs(
+        grand_tfr_ratio,
+        OCCIPITAL_CHANNELS,
+        subject_counts,
+        (
+            "Grand-average cue-locked TFR ratio - "
+            "stimulation versus no stimulation"
+        ),
+        baseline=None,
+        mode=None,
+        vlim=None,
+    )
+
+    fname = op.join(
+        GROUP_REPORT_DIR,
+        "group_grand_average_TFR_ratio.png",
+    )
+
+    fig_tfr_ratio.savefig(
+        fname,
+        dpi=180,
+        bbox_inches="tight",
+    )
+
+    report.add_figure(
+        fig_tfr_ratio,
+        fname,
+        "Grand-average cue-locked TFR ratio",
+        (
+            "Cue onset = 0 s. Left- and right-attention trials are "
+            "combined ('both'). "
+            "Ratio = (stimulation - no-stimulation) / "
+            "(stimulation + no-stimulation)."
+        ),
+        "TFR",
+    )
+
+    # ==========================================================
+    # Combined posterior ROI grand-average TFR
+    # ==========================================================
+
+    roi_tfr_by_condition = {
+        "no-stim": [],
+        "stim": [],
+    }
+
+    roi_subjects = []
+    roi_channel_summary = []
+
+
+    for subject in subjects:
+
+        available_channels = [
+            ch
+            for ch in OCCIPITAL_CHANNELS
+            if (
+                ch in subject_epochs[subject]["no-stim"].ch_names
+                and
+                ch in subject_epochs[subject]["stim"].ch_names
+            )
+        ]
+
+        if not available_channels:
+            continue
+
+        roi_channel_summary.append(
+            f"sub-{subject}: {', '.join(available_channels)}"
+        )
+
+        roi_subjects.append(subject)
+
+        for stim_label in [
+            "no-stim",
+            "stim",
+        ]:
+
+            epochs = (
+                subject_epochs[subject][stim_label]
+                .copy()
+            )
+
+            available = [
+                ch
+                for ch in OCCIPITAL_CHANNELS
+                if ch in epochs.ch_names
+            ]
+
+            epochs.pick(
+                available
+            )
+
+            # Average the available posterior channels within each epoch.
+            roi_data = epochs.get_data().mean(
+                axis=1,
+                keepdims=True,
+            )
+
+            roi_info = mne.create_info(
+                ["posterior_ROI"],
+                sfreq=epochs.info["sfreq"],
+                ch_types=["eeg"],
+            )
+
+            roi_epochs = mne.EpochsArray(
+                roi_data,
+                roi_info,
+                events=epochs.events.copy(),
+                event_id=epochs.event_id.copy(),
+                tmin=epochs.tmin,
+            )
+
+            # Calculate the subject-level ROI TFR.
+            subject_roi_tfr = (
+                roi_epochs.compute_tfr(
+                    **TFR_PARAMS
+                )
+            )
+
+            subject_roi_tfr.comment = (
+                f"sub-{subject}, {stim_label}, "
+                "posterior ROI, cue-locked, combined attention"
+            )
+
+            roi_tfr_by_condition[
+                stim_label
+            ].append(
+                subject_roi_tfr
+            )
+
+
+    report.add_text(
+        "Grand-average posterior ROI definition",
+        (
+            "The posterior ROI is calculated separately for each subject "
+            "before the subject-level ROI TFRs are grand-averaged.\n\n"
+            "Cue onset = 0 s. Left- and right-attention trials are "
+            "combined ('both').\n\n"
+            "Posterior channels available for each subject:\n"
+            + "\n".join(roi_channel_summary)
+            + "\n\n"
+            "Each subject contributes equally to the final posterior ROI "
+            "grand average."
+        ),
+        "Analysis details",
+    )
+
+
+    # ----------------------------------------------------------
+    # Grand-average ROI TFR
+    # ----------------------------------------------------------
+
+    roi_grand_tfr = {}
+
+    for stim_label in [
+        "no-stim",
+        "stim",
+    ]:
+
+        roi_grand_tfr[
+            stim_label
+        ] = mne.grand_average(
+            roi_tfr_by_condition[
+                stim_label
+            ]
+        )
+
+        fname = op.join(
+            GROUP_DERIV_DIR,
+            f"group_{stim_label}_posterior-ROI_grand-tfr.h5",
+        )
+
+        roi_grand_tfr[
+            stim_label
+        ].save(
+            fname,
+            overwrite=True,
+        )
+
+
+    # ----------------------------------------------------------
+    # ROI difference
+    # ----------------------------------------------------------
+
+    roi_stim_tfr = roi_grand_tfr[
+        "stim"
+    ].copy()
+
+    roi_no_stim_tfr = roi_grand_tfr[
+        "no-stim"
+    ].copy()
+
+    roi_grand_diff = roi_no_stim_tfr.copy()
+
+    roi_grand_diff.data = (
+        roi_stim_tfr.data
+        - roi_no_stim_tfr.data
+    )
+
+
+    # ----------------------------------------------------------
+    # ROI ratio
+    # ----------------------------------------------------------
+
+    roi_grand_ratio = roi_grand_tfr[
+        "no-stim"
+    ].copy()
+
+    roi_grand_ratio.data = (
+        roi_grand_tfr["stim"].data
+        - roi_grand_tfr["no-stim"].data
+    ) / (
+        roi_grand_tfr["stim"].data
+        + roi_grand_tfr["no-stim"].data
+        + np.finfo(float).eps
+    )
+
+    # ==========================================================
+    # Posterior ROI TFR plots
+    # ==========================================================
+
+    fig_roi_no = plot_single_roi_tfr(
+        roi_grand_tfr["no-stim"],
+        (
+            "Grand-average cue-locked posterior ROI TFR - "
+            "no stimulation"
+        ),
+        baseline=BASELINE,
+        mode="percent",
+        vlim=(-0.75, 0.75),
+    )
+
+    fname = op.join(
+        GROUP_REPORT_DIR,
+        "group_grand_average_TFR_posterior_ROI_no_stim.png",
+    )
+
+    fig_roi_no.savefig(
+        fname,
+        dpi=180,
+        bbox_inches="tight",
+    )
+
+    report.add_figure(
+        fig_roi_no,
+        fname,
+        "Grand-average posterior ROI TFR - no stimulation",
+        (
+            "Each subject contributes equally. Cue onset = 0 s. "
+            "Left- and right-attention trials are combined ('both'). "
+            "The posterior ROI is calculated within each subject from "
+            "the available posterior channels before grand averaging. "
+            "Baseline: -0.3 to -0.1 s, percent change."
+        ),
+        "TFR",
+    )
+
+
+    fig_roi_stim = plot_single_roi_tfr(
+        roi_grand_tfr["stim"],
+        (
+            "Grand-average cue-locked posterior ROI TFR - "
+            "stimulation"
+        ),
+        baseline=BASELINE,
+        mode="percent",
+        vlim=(-0.75, 0.75),
+    )
+
+    fname = op.join(
+        GROUP_REPORT_DIR,
+        "group_grand_average_TFR_posterior_ROI_stim.png",
+    )
+
+    fig_roi_stim.savefig(
+        fname,
+        dpi=180,
+        bbox_inches="tight",
+    )
+
+    report.add_figure(
+        fig_roi_stim,
+        fname,
+        "Grand-average posterior ROI TFR - stimulation",
+        (
+            "Each subject contributes equally. Cue onset = 0 s. "
+            "Left- and right-attention trials are combined ('both'). "
+            "The posterior ROI is calculated within each subject from "
+            "the available posterior channels before grand averaging. "
+            "Baseline: -0.3 to -0.1 s, percent change."
+        ),
+        "TFR",
+    )
+
+
+    fig_roi_diff = plot_single_roi_tfr(
+        roi_grand_diff,
+        (
+            "Grand-average cue-locked posterior ROI TFR - "
+            "difference: stim - no-stim"
+        ),
+        baseline=None,
+        mode=None,
+        vlim=None,
+    )
+
+    fname = op.join(
+        GROUP_REPORT_DIR,
+        "group_grand_average_TFR_posterior_ROI_difference.png",
+    )
+
+    fig_roi_diff.savefig(
+        fname,
+        dpi=180,
+        bbox_inches="tight",
+    )
+
+    report.add_figure(
+        fig_roi_diff,
+        fname,
+        "Grand-average posterior ROI TFR - difference",
+        (
+            "Cue onset = 0 s. Left- and right-attention trials are "
+            "combined ('both'). Difference = baseline-corrected "
+            "stimulation minus no-stimulation. "
+            "Baseline: -0.3 to -0.1 s, percent change."
+        ),
+        "TFR",
+    )
+
+
+    fig_roi_ratio = plot_single_roi_tfr(
+        roi_grand_ratio,
+        (
+            "Grand-average cue-locked posterior ROI TFR - "
+            "ratio"
+        ),
+        baseline=None,
+        mode=None,
+        vlim=None,
+    )
+
+    fname = op.join(
+        GROUP_REPORT_DIR,
+        "group_grand_average_TFR_posterior_ROI_ratio.png",
+    )
+
+    fig_roi_ratio.savefig(
+        fname,
+        dpi=180,
+        bbox_inches="tight",
+    )
+
+    report.add_figure(
+        fig_roi_ratio,
+        fname,
+        "Grand-average posterior ROI TFR - ratio",
+        (
+            "Cue onset = 0 s. Left- and right-attention trials are "
+            "combined ('both'). Ratio = (stimulation - no-stimulation) / "
+            "(stimulation + no-stimulation)."
+        ),
+        "TFR",
+    )
+
+    add_analysis_notes_section(
+        report,
+        prompt_text="Analysis notes",
+    )
+
+    print(
+        f"\nGroup report completed:\n"
+        f"{report.pdf_fname}"
+    )
+
+    print(
+        f"Report manifest:\n"
+        f"{report.manifest_fname}"
+    )
 
 
 if __name__ == "__main__":
