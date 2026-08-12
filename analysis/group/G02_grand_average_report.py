@@ -102,6 +102,64 @@ TFR_PARAMS = dict(
     zero_mean=True,
 )
 
+def plot_three_channel_tfrs(
+    tfr_dict,
+    channels,
+    subject_counts,
+    title,
+    baseline=None,
+    mode=None,
+    vlim=None,
+):
+    """Plot PO3, PO4 and POz TFRs in one row."""
+
+    fig, axes = plt.subplots(
+        1,
+        len(channels),
+        figsize=(18, 5),
+        constrained_layout=True,
+    )
+
+    if len(channels) == 1:
+        axes = [axes]
+
+    for ax, ch in zip(
+        axes,
+        channels,
+    ):
+
+        plot_kwargs = dict(
+            picks=[ch],
+            tmin=-0.5,
+            tmax=1.5,
+            fmin=2,
+            fmax=31,
+            baseline=baseline,
+            mode=mode,
+            axes=ax,
+            show=False,
+            colorbar=True,
+        )
+
+        if vlim is not None:
+            plot_kwargs["vlim"] = vlim
+
+        tfr_dict[ch].plot(
+            **plot_kwargs
+        )
+
+        ax.set_title(
+            f"{ch} "
+            f"(n={subject_counts[ch]} subjects)"
+        )
+
+    fig.suptitle(
+        title,
+        fontsize=14,
+    )
+
+    return fig
+
 def build_grand_average_report(subjects):
     ensure_dir(GROUP_REPORT_DIR)
     ensure_dir(GROUP_DERIV_DIR)
@@ -480,70 +538,206 @@ def build_grand_average_report(subjects):
         "ERP",
     )
 
-    # -----------------------
+    # ==========================================================
     # TFR grand averages
-    # -----------------------
-    tfrs = {"no-stim": {"both": [], "right": [], "left": []}, "stim": {"both": [], "right": [], "left": []}}
+    # ==========================================================
+    #
+    # TFRs are calculated separately for each subject from the same
+    # cleaned cue-locked epochs used for the group ERP.
+    #
+    # Left- and right-attention trials are combined because the
+    # cue-locked epochs contain both cue directions.
+    #
+    # Each subject contributes equally:
+    #
+    #     subject epochs
+    #            ↓
+    #       subject TFR
+    #            ↓
+    #     grand average
+    #
+    # TFR settings match G01:
+    #     frequency range: 2-31.5 Hz
+    #     frequency step: 0.5 Hz
+    #     multitaper
+    #     n_cycles = frequency / 2
+    #     time-bandwidth = 2
+    #     decimation = 2
+    #     baseline = -0.3 to -0.1 s
+    #
+    # Missing channels are handled separately for each channel.
+    # ==========================================================
+
+    tfr_by_channel = {
+        "no-stim": {
+            ch: []
+            for ch in OCCIPITAL_CHANNELS
+        },
+        "stim": {
+            ch: []
+            for ch in OCCIPITAL_CHANNELS
+        },
+    }
+
+
+    # ----------------------------------------------------------
+    # Calculate one TFR per subject and posterior channel
+    # ----------------------------------------------------------
 
     for subject in subjects:
-        subj_tfrs = read_subject_tfrs(BIDS_ROOT, subject)
-        for stim_label in ["no-stim", "stim"]:
-            for cue in ["both", "right", "left"]:
-                tfr = subj_tfrs[(stim_label, cue)].copy().pick(OCCIPITAL_CHANNELS)
-                tfrs[stim_label][cue].append(tfr)
 
-    grand_tfr = {"no-stim": {}, "stim": {}}
-    for stim_label in ["no-stim", "stim"]:
-        for cue in ["both", "right", "left"]:
-            grand_tfr[stim_label][cue] = mne.grand_average(tfrs[stim_label][cue])
-            grand_tfr[stim_label][cue].save(
-                op.join(GROUP_DERIV_DIR, f"group_{stim_label}_{cue}_grand-tfr.h5"),
+        for stim_label in [
+            "no-stim",
+            "stim",
+        ]:
+
+            epochs = (
+                subject_epochs[subject][stim_label]
+                .copy()
+            )
+
+            for ch in OCCIPITAL_CHANNELS:
+
+                # Skip this subject if the channel was unavailable.
+                if subject not in subjects_by_channel[ch]:
+                    continue
+
+                channel_epochs = (
+                    epochs
+                    .copy()
+                    .pick([ch])
+                )
+
+                print(
+                    f"Computing subject TFR: "
+                    f"sub-{subject}, {stim_label}, {ch}"
+                )
+
+                subject_tfr = (
+                    channel_epochs
+                    .compute_tfr(
+                        **TFR_PARAMS
+                    )
+                )
+
+                # Keep the subject identity in the comment.
+                subject_tfr.comment = (
+                    f"sub-{subject}, {stim_label}, "
+                    f"{ch}, cue-locked, combined attention"
+                )
+
+                tfr_by_channel[
+                    stim_label
+                ][ch].append(
+                    subject_tfr
+                )
+
+
+    # ----------------------------------------------------------
+    # Grand-average the subject-level TFRs
+    # ----------------------------------------------------------
+
+    grand_tfr_by_channel = {
+        "no-stim": {},
+        "stim": {},
+    }
+
+    for stim_label in [
+        "no-stim",
+        "stim",
+    ]:
+
+        for ch in OCCIPITAL_CHANNELS:
+
+            subject_tfrs = tfr_by_channel[
+                stim_label
+            ][ch]
+
+            if not subject_tfrs:
+                raise RuntimeError(
+                    f"No subject TFRs available for "
+                    f"{stim_label}, {ch}."
+                )
+
+            grand_tfr_by_channel[
+                stim_label
+            ][ch] = mne.grand_average(
+                subject_tfrs
+            )
+
+            fname = op.join(
+                GROUP_DERIV_DIR,
+                f"group_{stim_label}_{ch}_grand-tfr.h5",
+            )
+
+            grand_tfr_by_channel[
+                stim_label
+            ][ch].save(
+                fname,
                 overwrite=True,
             )
 
-    # Same style as single-subject TFR plots
-    for stim_label in ["no-stim", "stim"]:
-        fig_tfr = grand_tfr[stim_label]["both"].plot_topo(
-            tmin=-0.5, tmax=1.5, baseline=BASELINE, mode="percent",
-            title=f"Grand average TFR across subjects ({', '.join('sub-' + s for s in subjects)}) - {stim_label}",
-            show=False, fig_facecolor="w", font_color="k"
-        )
-        report.add_figure(
-            fig_tfr,
-            title=f"Grand average TFR across subjects - {stim_label}",
-            caption=f"Grand average TFR for {stim_label} across subjects.",
-            section="TFR",
+
+    # ----------------------------------------------------------
+    # Channel-specific difference and ratio
+    # ----------------------------------------------------------
+
+    grand_tfr_diff = {}
+    grand_tfr_ratio = {}
+
+    for ch in OCCIPITAL_CHANNELS:
+
+        stim_bc = grand_tfr_by_channel[
+            "stim"
+        ][ch].copy()
+
+        no_stim_bc = grand_tfr_by_channel[
+            "no-stim"
+        ][ch].copy()
+
+        # Baseline correction for the difference.
+        stim_bc.apply_baseline(
+            baseline=BASELINE,
+            mode="percent",
         )
 
-    diff = grand_tfr["no-stim"]["both"].copy()
-    diff.data = grand_tfr["no-stim"]["both"].data - grand_tfr["stim"]["both"].data
-    fig_diff = diff.plot_topo(
-        tmin=-0.5, tmax=1.5, baseline=None, mode=None,
-        title=f"Grand average TFR across subjects ({', '.join('sub-' + s for s in subjects)}) - difference",
-        show=False, fig_facecolor="w", font_color="k"
-    )
-    report.add_figure(
-        fig_diff,
-        title="Grand average TFR across subjects - difference",
-        caption="Difference = no-stim - stim from subject-level grand averages.",
-        section="TFR",
-    )
+        no_stim_bc.apply_baseline(
+            baseline=BASELINE,
+            mode="percent",
+        )
 
-    ratio = grand_tfr["no-stim"]["both"].copy()
-    ratio.data = (grand_tfr["no-stim"]["both"].data - grand_tfr["stim"]["both"].data) / (
-        grand_tfr["no-stim"]["both"].data + grand_tfr["stim"]["both"].data + np.finfo(float).eps
-    )
-    fig_ratio = ratio.plot_topo(
-        tmin=-0.5, tmax=1.5, baseline=None, mode=None,
-        title=f"Grand average TFR across subjects ({', '.join('sub-' + s for s in subjects)}) - ratio",
-        show=False, fig_facecolor="w", font_color="k"
-    )
-    report.add_figure(
-        fig_ratio,
-        title="Grand average TFR across subjects - ratio",
-        caption="Ratio = (no-stim - stim) / (no-stim + stim) from subject-level grand averages.",
-        section="TFR",
-    )
+        diff = no_stim_bc.copy()
+
+        diff.data = (
+            no_stim_bc.data
+            - stim_bc.data
+        )
+
+        grand_tfr_diff[ch] = diff
+
+        # Ratio uses the original, non-baseline-corrected TFRs.
+        no_stim = grand_tfr_by_channel[
+            "no-stim"
+        ][ch]
+
+        stim = grand_tfr_by_channel[
+            "stim"
+        ][ch]
+
+        ratio = no_stim.copy()
+
+        ratio.data = (
+            no_stim.data
+            - stim.data
+        ) / (
+            no_stim.data
+            + stim.data
+            + np.finfo(float).eps
+        )
+
+        grand_tfr_ratio[ch] = ratio
+
+
 
     add_analysis_notes_section(report, prompt_text="Analysis notes")
     report.save(op.join(GROUP_REPORT_DIR, f"{REPORT_NAME}.hdf5"), overwrite=True)
