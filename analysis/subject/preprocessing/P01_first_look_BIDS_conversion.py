@@ -169,7 +169,8 @@ mapping = {1:'cue_onset_right',
            21:'block_end',
            30:'experiment_end',
            #31: 'abort',  # participant 04_wmf has abort
-           #10001:'new_stim_segment_maybe',  # sub01 has an extra trigger           
+           #10001:'new_stim_segment_maybe',  # sub01 has an extra trigger        
+           255: 'new_stim_segment_maybe',  # sub102 has an extra trigger   
            99999:'new_stim_segment',
         }
 annotations_from_events = mne.annotations_from_events(events=events,
@@ -196,7 +197,7 @@ event_dict = {'cue_onset_right':1,
            'response_press_onset':8,
            'block_onset':20,
            'block_end':21,
-        #    'experiment_end':30,  #sub02 does not have this
+           'experiment_end':30,  #sub02 does not have this
            #'abort':31,  # participant 04_wmf has abort
            'new_stim_segment_maybe':255,  # sub102 has an extra trigger
            'new_stim_segment':99999, 
