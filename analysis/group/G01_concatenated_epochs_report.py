@@ -493,6 +493,50 @@ def build_concat_epoch_report(subjects):
         "Group analysis",
     )
 
+    report.add_text(
+        "Analysis details",
+        (
+            "ERP\n"
+            "• ERP is calculated from cue-locked epochs.\n"
+            "• Cue onset = 0 s.\n"
+            "• Epoch window: -0.5 to 1.6 s.\n"
+            "• ERP is low-pass filtered at 30 Hz for plotting.\n"
+            "• ERP baseline correction: -0.1 to 0 s.\n\n"
+
+            "TFR\n"
+            "• TFRs are calculated from cue-locked epochs.\n"
+            "• Left- and right-attention trials are combined ('both').\n"
+            "• Epoch window: -0.5 to 1.6 s.\n"
+            "• Frequency range: 2–31.5 Hz.\n"
+            "• Frequencies are spaced in 0.5 Hz steps.\n"
+            "• Multitaper method.\n"
+            "• Number of cycles increases with frequency "
+            "(n_cycles = frequency / 2).\n"
+            "• Time-bandwidth = 2.\n"
+            "• Decimation factor = 2.\n"
+            "• Baseline for stimulation/no-stimulation TFR plots: "
+            "-0.3 to -0.1 s, percent change.\n"
+            "• Difference TFR: no-stimulation minus stimulation "
+            "after baseline correction.\n"
+            "• Ratio TFR: (no-stimulation - stimulation) / "
+            "(no-stimulation + stimulation).\n\n"
+
+            "Posterior-channel TFRs\n"
+            "• PO3, PO4 and POz are plotted separately.\n"
+            "• A channel is included only for subjects in whom that channel "
+            "was available after subject-level cleaning.\n\n"
+
+            "Combined posterior ROI TFR\n"
+            "• For each subject, the available posterior channels "
+            "(PO3, PO4, POz) are averaged within each epoch.\n"
+            "• The resulting subject-level posterior ROI epochs are then "
+            "concatenated across subjects.\n"
+            "• This allows participants with a missing posterior channel "
+            "to contribute using their remaining posterior channels."
+        ),
+        "Analysis details",
+    )
+
     subject_counts = {
         ch: len(subjects_by_channel[ch])
         for ch in OCCIPITAL_CHANNELS
@@ -648,8 +692,8 @@ def build_concat_epoch_report(subjects):
         )
 
         ax.set_title(
-            f"{ch} "
-            f"(n={subject_counts[ch]} subjects)"
+            f"{ch} (n={subject_counts[ch]} subjects)\n"
+            f"Cue onset = 0 s"
         )
 
         ax.axvline(
@@ -659,7 +703,8 @@ def build_concat_epoch_report(subjects):
         )
 
     fig_erp.suptitle(
-        "ERP from concatenated epochs across subjects",
+        "Cue-locked ERP from concatenated epochs across subjects "
+        "(cue onset = 0 s)",
         fontsize=14,
     )
 
@@ -677,10 +722,11 @@ def build_concat_epoch_report(subjects):
     report.add_figure(
         fig_erp,
         erp_fig_fname,
-        "Concatenated epochs across subjects - ERP",
+        "Cue-locked ERP from concatenated epochs across subjects",
         (
-            "ERP computed separately for each posterior channel. "
-            "The number of contributing subjects is shown for each channel."
+            "Cue-locked ERP; cue onset = 0 s. "
+            "ERP is calculated separately for PO3, PO4 and POz, "
+            "using only subjects with that channel available."
         ),
         "ERP",
     )
@@ -796,7 +842,7 @@ def build_concat_epoch_report(subjects):
         subject_counts,
         (
             "Concatenated epochs across subjects - "
-            "no stimulation TFR"
+            "Cue-locked TFR - no stimulation - combined attention"
         ),
         baseline=BASELINE,
         mode="percent",
@@ -818,9 +864,10 @@ def build_concat_epoch_report(subjects):
         fig_tfr_no,
         fname,
         "Concatenated epochs across subjects - no stimulation TFR",
-        (
-            "Three posterior channels shown separately. "
-            "Each panel displays the subjects contributing to that channel."
+        (    
+            "Cue-locked TFR with cue onset = 0 s. "
+            "Left- and right-attention trials are combined ('both'). "
+            "Baseline: -0.3 to -0.1 s, percent change."
         ),
         "TFR",
     )
@@ -835,7 +882,7 @@ def build_concat_epoch_report(subjects):
         subject_counts,
         (
             "Concatenated epochs across subjects - "
-            "stimulation TFR"
+            "Cue-locked TFR - stimulation - combined attention"
         ),
         baseline=BASELINE,
         mode="percent",
@@ -858,7 +905,9 @@ def build_concat_epoch_report(subjects):
         fname,
         "Concatenated epochs across subjects - stimulation TFR",
         (
-            "Three posterior channels shown separately."
+            "Cue-locked TFR with cue onset = 0 s. "
+            "Left- and right-attention trials are combined ('both'). "
+            "Baseline: -0.3 to -0.1 s, percent change."
         ),
         "TFR",
     )
@@ -873,7 +922,7 @@ def build_concat_epoch_report(subjects):
         subject_counts,
         (
             "Concatenated epochs across subjects - "
-            "TFR difference: no-stim - stim"
+            "Cue-locked TFR difference - no stimulation minus stimulation"
         ),
         baseline=None,
         mode=None,
@@ -895,7 +944,12 @@ def build_concat_epoch_report(subjects):
         fig_diff,
         fname,
         "Concatenated epochs across subjects - TFR difference",
-        "Difference = no-stim - stim.",
+        (
+            "Cue-locked TFR difference with cue onset = 0 s. "
+            "Left- and right-attention trials are combined. "
+            "Difference = no-stimulation minus stimulation after "
+            "percent baseline correction (-0.3 to -0.1 s)."
+        ),
         "TFR",
     )
 
@@ -909,7 +963,7 @@ def build_concat_epoch_report(subjects):
         subject_counts,
         (
             "Concatenated epochs across subjects - "
-            "TFR ratio"
+            "Cue-locked TFR ratio - no stimulation versus stimulation"
         ),
         baseline=None,
         mode=None,
@@ -932,9 +986,10 @@ def build_concat_epoch_report(subjects):
         fname,
         "Concatenated epochs across subjects - TFR ratio",
         (
-            "Ratio = "
-            "(no-stim - stim) / "
-            "(no-stim + stim)."
+            "Cue-locked TFR ratio with cue onset = 0 s. "
+            "Left- and right-attention trials are combined. "
+            "Ratio = (no-stimulation - stimulation) / "
+            "(no-stimulation + stimulation)."
         ),
         "TFR",
     )
@@ -951,7 +1006,9 @@ def build_concat_epoch_report(subjects):
     #     sub-118 -> PO3 + PO4 + POz
     #     sub-119 -> PO3 + PO4
     #
-    # The resulting subject-level ROI epochs are then concatenated.
+    # Left- and right-attention trials are combined because the input
+    # epochs are cue-locked epochs containing both cue directions.
+    # Cue onset = 0 s.
     # ==========================================================
 
     roi_epochs_by_condition = {
@@ -960,10 +1017,30 @@ def build_concat_epoch_report(subjects):
     }
 
     roi_subjects = []
+    roi_channel_summary = []
+
 
     for subject in subjects:
 
         subject_has_roi = False
+
+        # Determine which posterior channels are available in this subject.
+        available_channels = [
+            ch
+            for ch in OCCIPITAL_CHANNELS
+            if ch in subject_epochs[subject]["no-stim"].ch_names
+            and ch in subject_epochs[subject]["stim"].ch_names
+        ]
+
+        if not available_channels:
+            raise RuntimeError(
+                f"sub-{subject} has no posterior channels available "
+                "for both stimulation conditions."
+            )
+
+        roi_channel_summary.append(
+            f"sub-{subject}: {', '.join(available_channels)}"
+        )
 
         for stim_label in [
             "no-stim",
@@ -983,15 +1060,18 @@ def build_concat_epoch_report(subjects):
 
             if not available:
                 raise RuntimeError(
-                    f"sub-{subject} has no posterior "
-                    f"channels available for {stim_label}."
+                    f"sub-{subject} has no posterior channels available "
+                    f"for {stim_label}."
                 )
 
             epochs.pick(
                 available
             )
 
+            # ------------------------------------------------------
             # Average available posterior channels within each epoch.
+            # ------------------------------------------------------
+
             roi_data = epochs.get_data().mean(
                 axis=1,
                 keepdims=True,
@@ -1024,24 +1104,34 @@ def build_concat_epoch_report(subjects):
                 subject
             )
 
+
+    # ----------------------------------------------------------
+    # Report ROI definition
+    # ----------------------------------------------------------
+
     report.add_text(
         "Posterior ROI definition",
         (
-            "For the combined posterior ROI, the available posterior "
-            "channels were averaged within each epoch for each subject "
-            "before concatenation.\n\n"
-            + "\n".join(
-                f"sub-{subject}: "
-                + ", ".join(
-                    ch
-                    for ch in OCCIPITAL_CHANNELS
-                    if ch in subject_epochs[subject]["no-stim"].ch_names
-                )
-                for subject in roi_subjects
-            )
+            "The posterior ROI is calculated from cue-locked epochs "
+            "(cue onset = 0 s). Left- and right-attention trials are "
+            "combined ('both').\n\n"
+            "For each subject, the available posterior channels "
+            "(PO3, PO4, POz) are averaged within each epoch before "
+            "the epochs are concatenated across subjects.\n\n"
+            "Posterior channels available for each subject:\n"
+            + "\n".join(roi_channel_summary)
+            + "\n\n"
+            "This means that participants with a rejected/missing "
+            "posterior channel can still contribute to the ROI using "
+            "their remaining posterior channels."
         ),
-        "Group analysis",
+        "Analysis details",
     )
+
+
+    # ==========================================================
+    # Concatenate posterior ROI epochs
+    # ==========================================================
 
     roi_concat = {}
 
@@ -1070,9 +1160,20 @@ def build_concat_epoch_report(subjects):
             overwrite=True,
         )
 
-    # ----------------------------------------------------------
+
+    # ==========================================================
     # ROI TFR
-    # ----------------------------------------------------------
+    # ==========================================================
+    #
+    # TFR is calculated from cue-locked epochs containing the
+    # combined left- and right-attention conditions.
+    #
+    # Frequency range: 2-31.5 Hz
+    # Multitaper
+    # n_cycles = frequency / 2
+    # time-bandwidth = 2
+    # decimation = 2
+    # ==========================================================
 
     roi_tfr = {}
 
@@ -1101,9 +1202,19 @@ def build_concat_epoch_report(subjects):
             overwrite=True,
         )
 
-    # ----------------------------------------------------------
+
+    # ==========================================================
     # ROI difference
-    # ----------------------------------------------------------
+    # ==========================================================
+    #
+    # Both TFRs are baseline corrected using percent change:
+    #
+    #     baseline = -0.3 to -0.1 s
+    #
+    # Difference:
+    #
+    #     no-stim - stim
+    # ==========================================================
 
     roi_stim_bc = roi_tfr[
         "stim"
@@ -1130,9 +1241,18 @@ def build_concat_epoch_report(subjects):
         - roi_stim_bc.data
     )
 
-    # ----------------------------------------------------------
+
+    # ==========================================================
     # ROI ratio
-    # ----------------------------------------------------------
+    # ==========================================================
+    #
+    # Ratio:
+    #
+    #     (no-stim - stim) / (no-stim + stim)
+    #
+    # This is calculated from the original TFR values rather than
+    # the baseline-corrected values.
+    # ==========================================================
 
     roi_ratio = roi_tfr[
         "no-stim"
@@ -1147,15 +1267,16 @@ def build_concat_epoch_report(subjects):
         + np.finfo(float).eps
     )
 
-    # ----------------------------------------------------------
-    # ROI no-stim plot
-    # ----------------------------------------------------------
+
+    # ==========================================================
+    # ROI no-stimulation plot
+    # ==========================================================
 
     fig_roi_no = plot_single_roi_tfr(
         roi_tfr["no-stim"],
         (
-            "Posterior ROI TFR from concatenated epochs - "
-            "no stimulation"
+            "Cue-locked posterior ROI TFR - "
+            "no stimulation (combined attention)"
         ),
         baseline=BASELINE,
         mode="percent",
@@ -1176,23 +1297,28 @@ def build_concat_epoch_report(subjects):
     report.add_figure(
         fig_roi_no,
         fname,
-        "Posterior ROI TFR - no stimulation",
+        "Cue-locked posterior ROI TFR - no stimulation",
         (
-            "Posterior ROI is the mean of the available posterior "
-            "channels within each subject."
+            "Cue onset = 0 s. Left- and right-attention trials are "
+            "combined ('both'). The posterior ROI is the mean of the "
+            "available posterior channels within each subject before "
+            "epoch concatenation. "
+            "TFR baseline: -0.3 to -0.1 s, percent change. "
+            "Frequency range: 2-31.5 Hz."
         ),
         "TFR",
     )
 
-    # ----------------------------------------------------------
-    # ROI stim plot
-    # ----------------------------------------------------------
+
+    # ==========================================================
+    # ROI stimulation plot
+    # ==========================================================
 
     fig_roi_stim = plot_single_roi_tfr(
         roi_tfr["stim"],
         (
-            "Posterior ROI TFR from concatenated epochs - "
-            "stimulation"
+            "Cue-locked posterior ROI TFR - "
+            "stimulation (combined attention)"
         ),
         baseline=BASELINE,
         mode="percent",
@@ -1213,23 +1339,28 @@ def build_concat_epoch_report(subjects):
     report.add_figure(
         fig_roi_stim,
         fname,
-        "Posterior ROI TFR - stimulation",
+        "Cue-locked posterior ROI TFR - stimulation",
         (
-            "Posterior ROI is the mean of the available posterior "
-            "channels within each subject."
+            "Cue onset = 0 s. Left- and right-attention trials are "
+            "combined ('both'). The posterior ROI is the mean of the "
+            "available posterior channels within each subject before "
+            "epoch concatenation. "
+            "TFR baseline: -0.3 to -0.1 s, percent change. "
+            "Frequency range: 2-31.5 Hz."
         ),
         "TFR",
     )
 
-    # ----------------------------------------------------------
+
+    # ==========================================================
     # ROI difference plot
-    # ----------------------------------------------------------
+    # ==========================================================
 
     fig_roi_diff = plot_single_roi_tfr(
         roi_diff,
         (
-            "Posterior ROI TFR from concatenated epochs - "
-            "difference: no-stim - stim"
+            "Cue-locked posterior ROI TFR - "
+            "difference (no-stim - stim)"
         ),
         baseline=None,
         mode=None,
@@ -1250,20 +1381,27 @@ def build_concat_epoch_report(subjects):
     report.add_figure(
         fig_roi_diff,
         fname,
-        "Posterior ROI TFR - difference",
-        "Difference = no-stim - stim.",
+        "Cue-locked posterior ROI TFR - difference",
+        (
+            "Cue onset = 0 s. Left- and right-attention trials are "
+            "combined ('both'). Difference = no-stimulation minus "
+            "stimulation after percent baseline correction "
+            "(-0.3 to -0.1 s). "
+            "Frequency range: 2-31.5 Hz."
+        ),
         "TFR",
     )
 
-    # ----------------------------------------------------------
+
+    # ==========================================================
     # ROI ratio plot
-    # ----------------------------------------------------------
+    # ==========================================================
 
     fig_roi_ratio = plot_single_roi_tfr(
         roi_ratio,
         (
-            "Posterior ROI TFR from concatenated epochs - "
-            "ratio"
+            "Cue-locked posterior ROI TFR - "
+            "ratio (no-stim vs stim)"
         ),
         baseline=None,
         mode=None,
@@ -1284,15 +1422,15 @@ def build_concat_epoch_report(subjects):
     report.add_figure(
         fig_roi_ratio,
         fname,
-        "Posterior ROI TFR - ratio",
+        "Cue-locked posterior ROI TFR - ratio",
         (
-            "Ratio = "
-            "(no-stim - stim) / "
-            "(no-stim + stim)."
+            "Cue onset = 0 s. Left- and right-attention trials are "
+            "combined ('both'). "
+            "Ratio = (no-stim - stim) / (no-stim + stim). "
+            "Frequency range: 2-31.5 Hz."
         ),
         "TFR",
     )
-
     # ==========================================================
     # Analysis notes
     # ==========================================================
