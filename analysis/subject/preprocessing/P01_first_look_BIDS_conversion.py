@@ -96,8 +96,7 @@ project_root = "/path/to/STN-in-PD"
 data_root = "/path/to/STN-in-PD/data/data-organised"
 bids_root = "/path/to/STN-in-PD/data/BIDS"
 
-print(f"Remember to edit brainVision_basename in P01 based on the file's name. \
-      in data-organised folder.")
+print(f"\n Remember to edit brainVision_basename in P01 based on the file's name in data-organised folder.\n\n ")
 
 brainVision_basename = f"{subject[1:]}_ao"
 
@@ -199,7 +198,7 @@ event_dict = {'cue_onset_right':1,
            'block_end':21,
            'experiment_end':30,  #sub02 does not have this
            #'abort':31,  # participant 04_wmf has abort
-        #    'new_stim_segment_maybe':255,  # sub102 has an extra trigger
+           'new_stim_segment_maybe':255,  # sub102 has an extra trigger
            'new_stim_segment':99999, 
         }
 _, events_id = mne.events_from_annotations(raw, event_id=event_dict)
