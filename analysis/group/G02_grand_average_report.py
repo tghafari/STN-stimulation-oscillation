@@ -1,10 +1,55 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""
+==============================================================
+G02. Grand-average analysis across subjects
+==============================================================
+
+This script performs descriptive group-level ERP and TFR analyses in
+which each participant is averaged separately before the group average
+is calculated. Therefore, unlike G01, every participant contributes
+equally regardless of the number of retained trials.
+
+Posterior-channel handling
+--------------------------
+Analyses use PO3, PO4 and POz. For each channel, only subjects in whom
+that channel remains after subject-level cleaning contribute to its
+grand average. Missing channels are not interpolated.
+
+A combined posterior ROI is also calculated. For each subject, the
+available posterior channels are averaged first, so subjects with a
+missing posterior channel can still contribute to the ROI.
+
+Outputs
+-------
+The report contains:
+    - cue-locked ERP (cue onset = 0 s)
+    - grating-locked ERP (grating onset = 0 s)
+    - cue-locked TFR for combined left/right attention
+    - no-stim, stim, difference and ratio TFRs
+    - separate PO3, PO4 and POz results
+    - combined posterior-ROI results
+    - subjects contributing to each channel
+    - analysis notes
+
+TFR settings match G01:
+    2-31.5 Hz, 0.5-Hz steps, multitaper,
+    n_cycles = frequency / 2, time-bandwidth = 2,
+    decimation = 2, baseline = -0.3 to -0.1 s (percent).
+
+No PAF, MI or statistical testing is performed here.
+
+written by Tara Ghafari
+tara.ghafari@gmail.com
+==============================================================
+"""
+
 
 from __future__ import annotations
 
 import os.path as op
 from pathlib import Path
+import matplotlib.pyplot as plt
 
 import mne
 import numpy as np
@@ -15,11 +60,9 @@ from group_utils import (
     ensure_dir,
     load_subject_list,
     make_report,
-    plot_compare_evokeds_by_channel,
-    subset_present_channels,
-    read_subject_evokeds,
-    read_subject_tfrs,
+    read_subject_epochs,
     save_subject_list,
+    read_subject_evokeds,
 )
 
 # -----------------------
@@ -66,74 +109,376 @@ def build_grand_average_report(subjects):
     report = make_report(GROUP_REPORT_DIR, REPORT_NAME)
     report.add_text(
         "Group analysis summary",
-        f"Report: {REPORT_TITLE}\nSubjects analysed: {', '.join('sub-' + s for s in subjects)}\nNumber of subjects: {len(subjects)}\nEach subject contributes equally.",
+        (
+            f"Report: {REPORT_TITLE}\n"
+            f"Subjects analysed: "
+            f"{', '.join('sub-' + s for s in subjects)}\n"
+            f"Number of subjects: {len(subjects)}\n"
+            "Each subject contributes equally."
+        ),
         "Group analysis",
     )
     add_subject_summary(report, subjects)
 
     save_subject_list(SUBJECT_LIST_PATH, subjects)
 
-    # -----------------------
-    # ERP grand averages
-    # -----------------------
-    evoked_by_condition = {"no-stim": {"cue": [], "grating": []}, "stim": {"cue": [], "grating": []}}
+    # ----------------------------------------------------------
+    # Load cleaned subject-level epochs
+    # ----------------------------------------------------------
+
+    subject_epochs = {}
 
     for subject in subjects:
-        evokeds = read_subject_evokeds(BIDS_ROOT, subject)
+        subject_epochs[subject] = read_subject_epochs(
+            BIDS_ROOT,
+            subject,
+        )
+
+    # ----------------------------------------------------------
+    # Determine which subjects contribute to each posterior channel
+    # ----------------------------------------------------------
+
+    subjects_by_channel = {}
+
+    for ch in OCCIPITAL_CHANNELS:
+
+        subjects_by_channel[ch] = [
+            subject
+            for subject in subjects
+            if (
+                ch in subject_epochs[subject]["no-stim"].ch_names
+                and
+                ch in subject_epochs[subject]["stim"].ch_names
+            )
+        ]
+
+
+    # ----------------------------------------------------------
+    # ERP grand averages
+    # ----------------------------------------------------------
+
+    evoked_by_condition = {
+        "no-stim": {"cue": [], "grating": []},
+        "stim": {"cue": [], "grating": []},
+    }
+    # ----------------------------------------------------------
+    # Prepare subject-level ERP data
+    # ----------------------------------------------------------
+
+    cue_evoked_by_channel = {
+        "no-stim": {ch: [] for ch in OCCIPITAL_CHANNELS},
+        "stim": {ch: [] for ch in OCCIPITAL_CHANNELS},
+    }
+
+    grating_evoked_by_channel = {
+        "no-stim": {ch: [] for ch in OCCIPITAL_CHANNELS},
+        "stim": {ch: [] for ch in OCCIPITAL_CHANNELS},
+    }
+
+
+    for subject in subjects:
+
+        # ------------------------------------------------------
+        # Cue-locked ERP from cleaned epochs
+        # ------------------------------------------------------
+
         for stim_label in ["no-stim", "stim"]:
-            cue_evoked = evokeds[(stim_label, "cue")].copy()
-            grating_evoked = evokeds[(stim_label, "grating")].copy()
 
-            present = subset_present_channels(cue_evoked.ch_names, OCCIPITAL_CHANNELS)
-            if not present:
-                raise RuntimeError(f"No occipital channels present for sub-{subject} {stim_label}")
-            cue_evoked.pick(present)
-            grating_evoked.pick(present)
+            epochs = (
+                subject_epochs[subject][stim_label]
+                .copy()
+            )
 
-            evoked_by_condition[stim_label]["cue"].append(cue_evoked)
-            evoked_by_condition[stim_label]["grating"].append(grating_evoked)
+            for ch in OCCIPITAL_CHANNELS:
 
-    grand_evoked = {"no-stim": {}, "stim": {}}
-    for stim_label in ["no-stim", "stim"]:
-        grand_evoked[stim_label]["cue"] = mne.grand_average(evoked_by_condition[stim_label]["cue"])
-        grand_evoked[stim_label]["grating"] = mne.grand_average(evoked_by_condition[stim_label]["grating"])
+                if subject not in subjects_by_channel[ch]:
+                    continue
 
-    fig = plot_compare_evokeds_by_channel(
-        {"No stimulation": grand_evoked["no-stim"]["cue"], "Stimulation": grand_evoked["stim"]["cue"]},
-        channels=OCCIPITAL_CHANNELS,
-        title=f"Grand average ERP across subjects ({', '.join('sub-' + s for s in subjects)})",
-    )
-    report.add_figure(
-        fig,
-        title="Grand average ERP across subjects - cue locked",
-        caption=f"ERP computed as a grand average across subjects: {', '.join('sub-' + s for s in subjects)}",
-        section="ERP",
-    )
+                subject_channel_epochs = (
+                    epochs
+                    .copy()
+                    .pick([ch])
+                )
 
-    fig2 = plot_compare_evokeds_by_channel(
-        {"No stimulation": grand_evoked["no-stim"]["grating"], "Stimulation": grand_evoked["stim"]["grating"]},
-        channels=OCCIPITAL_CHANNELS,
-        title=f"Grand average ERP across subjects ({', '.join('sub-' + s for s in subjects)}) - grating locked",
-    )
-    report.add_figure(
-        fig2,
-        title="Grand average ERP across subjects - grating locked",
-        caption="Grating-locked ERP computed as a grand average across subjects.",
-        section="ERP",
-    )
+                cue_evoked = (
+                    subject_channel_epochs
+                    .average()
+                    .filter(
+                        l_freq=None,
+                        h_freq=30,
+                    )
+                    .crop(
+                        tmin=-0.1,
+                        tmax=1.0,
+                    )
+                )
 
-    # Save evokeds
-    for stim_label in ["no-stim", "stim"]:
-        mne.write_evokeds(
-            op.join(GROUP_DERIV_DIR, f"group_{stim_label}_grand-evoked-cue.fif"),
-            grand_evoked[stim_label]["cue"],
-            overwrite=True,
+                cue_evoked.apply_baseline(
+                    baseline=(-0.1, 0),
+                )
+
+                cue_evoked.comment = (
+                    f"sub-{subject}, {stim_label}, "
+                    f"{ch}, cue-locked"
+                )
+
+                cue_evoked_by_channel[
+                    stim_label
+                ][ch].append(
+                    cue_evoked
+                )
+
+        # ------------------------------------------------------
+        # Grating-locked ERP from existing subject-level evokeds
+        # ------------------------------------------------------
+
+        subject_evokeds = read_subject_evokeds(
+            BIDS_ROOT,
+            subject,
         )
-        mne.write_evokeds(
-            op.join(GROUP_DERIV_DIR, f"group_{stim_label}_grand-evoked-grating.fif"),
-            grand_evoked[stim_label]["grating"],
-            overwrite=True,
+
+        for stim_label in ["no-stim", "stim"]:
+
+            grating_evoked = subject_evokeds[
+                (stim_label, "grating")
+            ].copy()
+
+            for ch in OCCIPITAL_CHANNELS:
+
+                if (
+                    subject not in subjects_by_channel[ch]
+                    or ch not in grating_evoked.ch_names
+                ):
+                    continue
+
+                subject_grating = (
+                    grating_evoked
+                    .copy()
+                    .pick([ch])
+                )
+
+                subject_grating.comment = (
+                    f"sub-{subject}, {stim_label}, "
+                    f"{ch}, grating-locked"
+                )
+
+                grating_evoked_by_channel[
+                    stim_label
+                ][ch].append(
+                    subject_grating
+                )
+    # ----------------------------------------------------------
+    # Grand-average ERPs
+    # ----------------------------------------------------------
+
+    grand_cue_evoked = {
+        "no-stim": {},
+        "stim": {},
+    }
+
+    grand_grating_evoked = {
+        "no-stim": {},
+        "stim": {},
+    }
+
+    for stim_label in ["no-stim", "stim"]:
+
+        for ch in OCCIPITAL_CHANNELS:
+
+            if cue_evoked_by_channel[
+                stim_label
+            ][ch]:
+
+                grand_cue_evoked[
+                    stim_label
+                ][ch] = mne.grand_average(
+                    cue_evoked_by_channel[
+                        stim_label
+                    ][ch]
+                )
+
+            if grating_evoked_by_channel[
+                stim_label
+            ][ch]:
+
+                grand_grating_evoked[
+                    stim_label
+                ][ch] = mne.grand_average(
+                    grating_evoked_by_channel[
+                        stim_label
+                    ][ch]
+                )
+
+    # ----------------------------------------------------------
+    # Cue-locked grand-average ERP
+    # ----------------------------------------------------------
+
+    fig_cue, axes = plt.subplots(
+        len(OCCIPITAL_CHANNELS),
+        1,
+        figsize=(10, 4 * len(OCCIPITAL_CHANNELS)),
+        constrained_layout=True,
+    )
+
+    if len(OCCIPITAL_CHANNELS) == 1:
+        axes = [axes]
+
+    for ax, ch in zip(
+        axes,
+        OCCIPITAL_CHANNELS,
+    ):
+
+        if (
+            ch not in grand_cue_evoked["no-stim"]
+            or ch not in grand_cue_evoked["stim"]
+        ):
+            ax.set_title(
+                f"{ch}: insufficient data"
+            )
+            continue
+
+        mne.viz.plot_compare_evokeds(
+            {
+                "No stimulation": grand_cue_evoked[
+                    "no-stim"
+                ][ch],
+                "Stimulation": grand_cue_evoked[
+                    "stim"
+                ][ch],
+            },
+            picks=[ch],
+            axes=ax,
+            show=False,
+            ci=False,
+            truncate_xaxis=False,
+            truncate_yaxis=False,
         )
+
+        ax.axvline(
+            0,
+            linestyle="--",
+            linewidth=1,
+        )
+
+        ax.set_title(
+            f"{ch} "
+            f"(n={len(cue_evoked_by_channel['no-stim'][ch])} subjects)\n"
+            "Cue onset = 0 s"
+        )
+
+    fig_cue.suptitle(
+        "Grand-average cue-locked ERP across subjects "
+        "(cue onset = 0 s)",
+        fontsize=14,
+    )
+
+    cue_fig_fname = op.join(
+        GROUP_REPORT_DIR,
+        "group_grand_average_ERP_cue.png",
+    )
+
+    fig_cue.savefig(
+        cue_fig_fname,
+        dpi=180,
+        bbox_inches="tight",
+    )
+
+    report.add_figure(
+        fig_cue,
+        cue_fig_fname,
+        "Grand-average cue-locked ERP",
+        (
+            "Each subject is averaged first, then subject averages are "
+            "grand-averaged. Cue onset = 0 s. "
+            "Only subjects with the relevant posterior channel contribute."
+        ),
+        "ERP",
+    )
+
+    # ----------------------------------------------------------
+    # Grating-locked grand-average ERP
+    # ----------------------------------------------------------
+
+    fig_grating, axes = plt.subplots(
+        len(OCCIPITAL_CHANNELS),
+        1,
+        figsize=(10, 4 * len(OCCIPITAL_CHANNELS)),
+        constrained_layout=True,
+    )
+
+    if len(OCCIPITAL_CHANNELS) == 1:
+        axes = [axes]
+
+    for ax, ch in zip(
+        axes,
+        OCCIPITAL_CHANNELS,
+    ):
+
+        if (
+            ch not in grand_grating_evoked["no-stim"]
+            or ch not in grand_grating_evoked["stim"]
+        ):
+            ax.set_title(
+                f"{ch}: insufficient data"
+            )
+            continue
+
+        mne.viz.plot_compare_evokeds(
+            {
+                "No stimulation": grand_grating_evoked[
+                    "no-stim"
+                ][ch],
+                "Stimulation": grand_grating_evoked[
+                    "stim"
+                ][ch],
+            },
+            picks=[ch],
+            axes=ax,
+            show=False,
+            ci=False,
+            truncate_xaxis=False,
+            truncate_yaxis=False,
+        )
+
+        ax.axvline(
+            0,
+            linestyle="--",
+            linewidth=1,
+        )
+
+        ax.set_title(
+            f"{ch} "
+            f"(n={len(grating_evoked_by_channel['no-stim'][ch])} subjects)\n"
+            "Grating onset = 0 s"
+        )
+
+    fig_grating.suptitle(
+        "Grand-average grating-locked ERP across subjects "
+        "(grating onset = 0 s)",
+        fontsize=14,
+    )
+
+    grating_fig_fname = op.join(
+        GROUP_REPORT_DIR,
+        "group_grand_average_ERP_grating.png",
+    )
+
+    fig_grating.savefig(
+        grating_fig_fname,
+        dpi=180,
+        bbox_inches="tight",
+    )
+
+    report.add_figure(
+        fig_grating,
+        grating_fig_fname,
+        "Grand-average grating-locked ERP",
+        (
+            "Each subject is averaged first, then subject averages are "
+            "grand-averaged. Grating onset = 0 s."
+        ),
+        "ERP",
+    )
 
     # -----------------------
     # TFR grand averages
