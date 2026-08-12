@@ -311,7 +311,7 @@ def plot_single_roi_tfr(
         constrained_layout=True,
     )
 
-    tfr.plot(
+    plot_kwargs = dict(
         picks=["posterior_ROI"],
         tmin=-0.5,
         tmax=1.5,
@@ -322,7 +322,13 @@ def plot_single_roi_tfr(
         axes=ax,
         show=False,
         colorbar=True,
-        vlim=vlim,
+    )
+
+    if vlim is not None:
+        plot_kwargs["vlim"] = vlim
+
+    tfr.plot(
+        **plot_kwargs
     )
 
     ax.set_title(title)
