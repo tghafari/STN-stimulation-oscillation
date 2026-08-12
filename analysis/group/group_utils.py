@@ -90,25 +90,16 @@ def subject_deriv_folder(bids_root: str, subject: str) -> str:
     return op.join(bids_root, "derivatives", f"sub-{subject}")
 
 
-def read_subject_epochs(bids_root: str, subject: str) -> dict:
+def read_subject_epochs(
+    bids_root: str,
+    subject: str,
+) -> dict:
     """
-    Load cue-locked epochs for group analysis.
+    Load the standard subject-level cleaned epochs for group analysis.
 
-    If a participant had a rejected posterior channel that was
-    interpolated for group analysis, the file with the suffix
-    '-epo-cue-group.fif' is used.
-
-    Otherwise, the normal subject-level '-epo-cue.fif' file is used.
-
-    Returns
-    -------
-    dict
-        Keys:
-            'no-stim'
-            'stim'
-
-        Values:
-            MNE Epochs objects.
+    The group analysis uses the original cleaned epochs and does not use
+    interpolated group-analysis epochs. Missing channels are handled later
+    in G01 by including only subjects that have the channel available.
     """
 
     deriv_folder = subject_deriv_folder(
@@ -118,43 +109,30 @@ def read_subject_epochs(bids_root: str, subject: str) -> dict:
 
     base = (
         f"sub-{subject}"
-        "_ses-01"
-        "_task-SpAtt"
-        "_run-01"
-        "_eeg"
+        "_ses-01_task-SpAtt_run-01_eeg"
     )
+
     out = {}
 
     for stim_label in ["no-stim", "stim"]:
-        # First look for the group-ready version.
-        group_fname = op.join(
-            deriv_folder,
-            f"{base}_{stim_label}_epo-cue-group.fif",
-        )
-        # If it does not exist, use the normal cleaned epochs.
-        normal_fname = op.join(
+
+        fname = op.join(
             deriv_folder,
             f"{base}_{stim_label}_epo-cue.fif",
         )
-        if op.exists(group_fname):
-            fname = group_fname
-            print(
-                f"sub-{subject} {stim_label}: "
-                f"using interpolated group-analysis epochs"
-            )
-        elif op.exists(normal_fname):
-            fname = normal_fname
-            print(
-                f"sub-{subject} {stim_label}: "
-                f"using standard cleaned epochs"
-            )
-        else:
+
+        if not op.exists(fname):
             raise FileNotFoundError(
-                f"Neither group nor standard epochs were found for "
+                f"Missing cleaned epochs for "
                 f"sub-{subject} {stim_label}:\n"
-                f"  {group_fname}\n"
-                f"  {normal_fname}"
+                f"{fname}"
             )
+
+        print(
+            f"sub-{subject} {stim_label}: "
+            "using standard cleaned epochs"
+        )
+
         out[stim_label] = mne.read_epochs(
             fname,
             preload=True,
@@ -162,7 +140,6 @@ def read_subject_epochs(bids_root: str, subject: str) -> dict:
         )
 
     return out
-
 
 def read_subject_evokeds(bids_root: str, subject: str) -> dict:
     deriv_folder = subject_deriv_folder(bids_root, subject)
