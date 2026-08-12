@@ -236,7 +236,7 @@ def plot_three_channel_tfrs(
         channels,
     ):
 
-        tfr_dict[ch].plot(
+        plot_kwargs = dict(
             picks=[ch],
             tmin=-0.5,
             tmax=1.5,
@@ -247,7 +247,15 @@ def plot_three_channel_tfrs(
             axes=ax,
             show=False,
             colorbar=True,
-            vlim=vlim,
+        )
+
+        # Only give MNE vlim when actual limits were specified.
+        # Passing vlim=None causes an error in the current MNE version.
+        if vlim is not None:
+            plot_kwargs["vlim"] = vlim
+
+        tfr_dict[ch].plot(
+            **plot_kwargs
         )
 
         ax.set_title(
