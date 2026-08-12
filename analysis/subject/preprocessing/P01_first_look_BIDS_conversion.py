@@ -84,27 +84,25 @@ stim_sequence = {'sub-01':["no_stim-left rec", "no_stim-right rec", "Right stim-
                  }
 
 
-# BIDS settings
-subject = '120'
-brainVision_basename = f'AO{subject[1:]}'  # needs modification per subject
+# Runtime configuration
+# These variables are patched by run_subject_pipeline.py.
+subject = "120"
+session = "01"
+task = "SpAtt"
+run = "01"
+modality = "eeg"
 
-session = '01'
-task = 'SpAtt'
-run = '01'
-modality = 'eeg'
-platform = 'mac'  # are you using 'bluebear', 'mac'
-sanity_test = False  # set to True to check event durations and plot histograms
+project_root = "/path/to/STN-in-PD"
+data_root = "/path/to/STN-in-PD/data/data-organised"
+bids_root = "/path/to/STN-in-PD/data/BIDS"
 
-if platform == 'bluebear':
-    rds_dir = '/rds/projects/j/jenseno-avtemporal-attention'
-elif platform == 'mac':
-    rds_dir = '/Volumes/jenseno-avtemporal-attention'
+print(f"Remember to edit brainVision_basename in P01 based on the file's name. \
+      in data-organised folder.")
 
-project_root = '/Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/BEAR_outage/STN-in-PD'  # local folder
-# project_root = op.join(rds_dir, 'Projects/subcortical-structures/STN-in-PD')
-data_root = '/Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/BEAR_outage/STN-in-PD/data/data-organised'  # local folder
-# data_root = op.join(project_root, 'data/data-organised')
-bids_root = op.join(project_root, 'data', 'BIDS')
+brainVision_basename = f"{subject[1:]}_ao"
+
+# Optional event-duration sanity checks.
+sanity_test = False
 
 base_fpath = op.join(data_root, f'sub-{subject}', f'ses-{session}', f'{modality}')  
 base_fname = f'sub-{subject}_ses-{session}_task-{task}_run-{run}_{modality}'
@@ -115,6 +113,8 @@ report_folder = op.join(project_root, 'derivatives', 'reports', f'sub-{subject}'
 os.makedirs(fig_folder, exist_ok=True)
 report = ParticipantPDF(report_folder, subject)
 beh_fig_fname = op.join(project_root, 'derivatives/figures', f'sub-{subject}-beh-performance.png')  # where you save the matlab output of behavioural performance plots
+
+print(f'Running subject: {subject}')
 
 # Read raw file in BrainVision (.vhdr, .vmrk, .eeg) format
 if subject == '110':
