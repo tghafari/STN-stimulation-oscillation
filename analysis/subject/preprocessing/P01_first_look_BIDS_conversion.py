@@ -196,7 +196,7 @@ event_dict = {'cue_onset_right':1,
            'response_press_onset':8,
            'block_onset':20,
            'block_end':21,
-           'experiment_end':30,  #sub02 does not have this
+        #    'experiment_end':30,  #sub02 does not have this
            #'abort':31,  # participant 04_wmf has abort
            'new_stim_segment_maybe':255,  # sub102 has an extra trigger
            'new_stim_segment':99999, 
