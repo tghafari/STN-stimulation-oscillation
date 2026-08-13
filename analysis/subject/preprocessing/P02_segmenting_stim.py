@@ -61,19 +61,19 @@ raw.plot()  # visual confirmation of your saved crop times
 
 # Keep and extend your existing crop dictionary. Four numbers mean two kept pieces;
 # the interval between the pieces is not included in the concatenated output.
-stimulation_cropped_time = {
-    'sub-107_no-stim': [15, 974], 'sub-107_stim': [1000, 1845],
-    'sub-108_no-stim': [8, 890], 'sub-108_stim': [930, 1882],
-    'sub-110_no-stim': [905, 1711], 'sub-110_stim': [0, 840],
-    'sub-102_no-stim': [0, 965], 'sub-102_stim': [1490, 2230],
-    'sub-101_no-stim': [0, 360, 515, 865], 'sub-101_stim': [1144, 1900],
-    'sub-112_no-stim': [878, 1289, 1870, 2280], 'sub-112_stim': [244, 650, 2708, 3117],
-    'sub-103_no-stim': [785, 1113, 1380, 1715], 'sub-103_stim': [72, 476, 1862, 2182],
-    'sub-104_no-stim': [1100, 1412, 1946, 2269], 'sub-104_stim': [9, 772],
-    'sub-105_no-stim': [4326, 5103], 'sub-105_stim': [112, 597, 850, 1327],
-    'sub-113_no-stim': [144, 507, 883, 1233], 'sub-113_stim': [1895, 2255, 2306, 2668],
-    'sub-115_no-stim': [1523, 1960, 2353, 2750], 'sub-115_stim': [30, 620, 768, 1235],
-}  # full list is saved separately in stimulation_cropped_time_json
+# stimulation_cropped_time = {
+#     'sub-107_no-stim': [15, 974], 'sub-107_stim': [1000, 1845],
+#     'sub-108_no-stim': [8, 890], 'sub-108_stim': [930, 1882],
+#     'sub-110_no-stim': [905, 1711], 'sub-110_stim': [0, 840],
+#     'sub-102_no-stim': [0, 965], 'sub-102_stim': [1490, 2230],
+#     'sub-101_no-stim': [0, 360, 515, 865], 'sub-101_stim': [1144, 1900],
+#     'sub-112_no-stim': [878, 1289, 1870, 2280], 'sub-112_stim': [244, 650, 2708, 3117],
+#     'sub-103_no-stim': [785, 1113, 1380, 1715], 'sub-103_stim': [72, 476, 1862, 2182],
+#     'sub-104_no-stim': [1100, 1412, 1946, 2269], 'sub-104_stim': [9, 772],
+#     'sub-105_no-stim': [4326, 5103], 'sub-105_stim': [112, 597, 850, 1327],
+#     'sub-113_no-stim': [144, 507, 883, 1233], 'sub-113_stim': [1895, 2255, 2306, 2668],
+#     'sub-115_no-stim': [1523, 1960, 2353, 2750], 'sub-115_stim': [30, 620, 768, 1235],
+# }  # full list is saved separately in stimulation_cropped_time_json
 # sub 115 stim sequence does not follow the stim sequence in the table on github. so I 
 # I can't know which no stim segment has right lfp rec and which has left lfp rec. but i can tell 
 # from the time series that first half is stim on second half is stim off.

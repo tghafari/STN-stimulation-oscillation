@@ -314,6 +314,57 @@ def _patch_script_source(
             value,
         )
 
+        # ----------------------------------------------------------
+        # P02: inject stimulation crop times resolved by the runner
+        # ----------------------------------------------------------
+
+        if script_path.name == "P02_segmenting_stim.py":
+
+            if crop_times is None:
+                raise RuntimeError(
+                    "P02 requires stimulation crop times, but "
+                    "crop_times=None was passed by the runner."
+                )
+
+            # Show exactly what was read from stimulation_cropped_time.json.
+            print(
+                f"\nCrop times passed to P02 for sub-{subject}:"
+                f"\n  NO-STIM: {crop_times['no-stim']}"
+                f"\n  STIM:    {crop_times['stim']}"
+            )
+
+            # Inject/overwrite this subject's crop times in P02's
+            # stimulation_cropped_time dictionary.
+            injection = (
+                "\n# ----------------------------------------------------------\n"
+                "# Crop times injected by run_subject_pipeline.py\n"
+                "# ----------------------------------------------------------\n"
+                f"stimulation_cropped_time['sub-{subject}_no-stim'] = "
+                f"{crop_times['no-stim']!r}\n"
+                f"stimulation_cropped_time['sub-{subject}_stim'] = "
+                f"{crop_times['stim']!r}\n"
+                f"print('P02 using NO-STIM crop times: "
+                f"{crop_times['no-stim']}')\n"
+                f"print('P02 using STIM crop times: "
+                f"{crop_times['stim']}')\n\n"
+            )
+
+            # Put the injected values after P02's dictionary has been
+            # created, but before make_segment() uses it.
+            marker = "def make_segment"
+
+            if marker not in source:
+                raise RuntimeError(
+                    "Could not locate make_segment() in "
+                    "P02_segmenting_stim.py"
+                )
+
+            source = source.replace(
+                marker,
+                injection + marker,
+                1,
+        )
+
     return source
 
 def _find_brainvision_basename(
@@ -753,6 +804,12 @@ def _run_subject(subject: str, args: argparse.Namespace) -> None:
         args.session,
         args.task,
         args.run,
+    )
+
+    print(
+        f"Crop times for sub-{subject}:"
+        f"\n  NO-STIM: {crop_times['no-stim']}"
+        f"\n  STIM:    {crop_times['stim']}"
     )
 
     # --------------------------------------------------------------
