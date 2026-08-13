@@ -320,17 +320,19 @@ def _find_brainvision_basename(
     subject: str,
     data_root: Path,
     session: str,
-) -> str | None:
+) -> str:
     """
-    Find the BrainVision .vhdr recording for a subject.
+    Find the BrainVision filename basename for a subject.
 
-    Returns the filename stem, for example:
+    For ordinary subjects, exactly one .vhdr file is expected.
 
-        102-AO.vhdr  ->  102-AO
-        AO_115.vhdr  ->  AO_115
+    For special subjects with multiple recordings:
+        sub-110: *_blocks1-2.vhdr and *_blocks3-8.vhdr
+        sub-111: *_stimright.vhdr, *_nostimright.vhdr,
+                 and *_nostimleft.vhdr
 
-    Subjects with special multi-file recordings (currently 110 and 111)
-    are handled explicitly in P01.
+    In those cases, the common basename before the special suffix
+    is returned.
     """
 
     eeg_folder = (
@@ -346,39 +348,170 @@ def _find_brainvision_basename(
             f"{eeg_folder}"
         )
 
-    # These subjects are handled explicitly in P01 because they have
-    # multiple BrainVision recordings.
-    if subject in {"110", "111"}:
-        return None
-
     vhdr_files = sorted(eeg_folder.glob("*.vhdr"))
 
     if not vhdr_files:
         raise FileNotFoundError(
-            f"No BrainVision .vhdr file found for sub-{subject}:\n"
+            f"No BrainVision .vhdr files found for sub-{subject}:\n"
             f"{eeg_folder}"
         )
 
-    if len(vhdr_files) > 1:
+    # ----------------------------------------------------------
+    # Special subject 110
+    # ----------------------------------------------------------
+    if subject == "110":
+
+        expected_suffixes = [
+            "_blocks1-2.vhdr",
+            "_blocks3-8.vhdr",
+        ]
+
+        matches = []
+
+        for suffix in expected_suffixes:
+
+            candidates = [
+                f for f in vhdr_files
+                if f.name.endswith(suffix)
+            ]
+
+            if len(candidates) != 1:
+                names = "\n".join(
+                    f"  {f.name}" for f in candidates
+                )
+
+                raise RuntimeError(
+                    f"Could not uniquely identify the "
+                    f"{suffix} recording for sub-110.\n"
+                    f"Candidates:\n{names}"
+                )
+
+            matches.append(candidates[0])
+
+        basenames = [
+            f.name[:-len(suffix)]
+            for f, suffix in zip(
+                matches,
+                expected_suffixes,
+            )
+        ]
+
+        if len(set(basenames)) != 1:
+            raise RuntimeError(
+                "The two sub-110 BrainVision files do not "
+                "share a common basename:\n"
+                + "\n".join(
+                    f"  {f.name}"
+                    for f in matches
+                )
+            )
+
+        basename = basenames[0]
+
+        print(
+            f"Found BrainVision files for sub-110:"
+        )
+        for f in matches:
+            print(f"  {f.name}")
+
+        print(
+            f"Using BrainVision basename for sub-110: "
+            f"{basename}"
+        )
+
+        return basename
+
+    # ----------------------------------------------------------
+    # Special subject 111
+    # ----------------------------------------------------------
+    if subject == "111":
+
+        expected_suffixes = [
+            "_stimright.vhdr",
+            "_nostimright.vhdr",
+            "_nostimleft.vhdr",
+        ]
+
+        matches = []
+
+        for suffix in expected_suffixes:
+
+            candidates = [
+                f for f in vhdr_files
+                if f.name.endswith(suffix)
+            ]
+
+            if len(candidates) != 1:
+                names = "\n".join(
+                    f"  {f.name}" for f in candidates
+                )
+
+                raise RuntimeError(
+                    f"Could not uniquely identify the "
+                    f"{suffix} recording for sub-111.\n"
+                    f"Candidates:\n{names}"
+                )
+
+            matches.append(candidates[0])
+
+        basenames = [
+            f.name[:-len(suffix)]
+            for f, suffix in zip(
+                matches,
+                expected_suffixes,
+            )
+        ]
+
+        if len(set(basenames)) != 1:
+            raise RuntimeError(
+                "The sub-111 BrainVision files do not "
+                "share a common basename:\n"
+                + "\n".join(
+                    f"  {f.name}"
+                    for f in matches
+                )
+            )
+
+        basename = basenames[0]
+
+        print(
+            f"Found BrainVision files for sub-111:"
+        )
+        for f in matches:
+            print(f"  {f.name}")
+
+        print(
+            f"Using BrainVision basename for sub-111: "
+            f"{basename}"
+        )
+
+        return basename
+
+    # ----------------------------------------------------------
+    # Ordinary subjects
+    # ----------------------------------------------------------
+
+    if len(vhdr_files) != 1:
+
         names = "\n".join(
-            f"  {f.name}" for f in vhdr_files
+            f"  {f.name}"
+            for f in vhdr_files
         )
 
         raise RuntimeError(
-            f"Multiple BrainVision .vhdr files found for sub-{subject}:\n"
-            f"{names}\n\n"
-            "P01 expects one standard recording for this subject. "
-            "Please add this subject to P01's special-case handling."
+            f"Expected exactly one BrainVision .vhdr file "
+            f"for sub-{subject}, but found {len(vhdr_files)}:\n"
+            f"{names}"
         )
 
-    vhdr_path = vhdr_files[0]
+    basename = vhdr_files[0].stem
 
     print(
         f"Found BrainVision file for sub-{subject}: "
-        f"{vhdr_path.name}"
+        f"{vhdr_files[0].name}"
     )
 
-    return vhdr_path.stem
+    return basename
 
 def _run_script(
     script_path: Path,
