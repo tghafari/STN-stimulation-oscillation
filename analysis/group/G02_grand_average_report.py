@@ -218,6 +218,29 @@ def build_grand_average_report(subjects):
     )
     add_subject_summary(report, subjects)
 
+
+def parse_args():
+    """Get the subjects to include in the group analysis."""
+
+    parser = argparse.ArgumentParser(
+        description=(
+            "Run G01 concatenated-epochs group analysis "
+            "for selected subjects."
+        )
+    )
+
+    parser.add_argument(
+        "--subjects",
+        nargs="+",
+        required=True,
+        help=(
+            "Subject numbers to include, e.g. "
+            "--subjects 115 116 118 119"
+        ),
+    )
+
+    return parser.parse_args()
+
     # ----------------------------------------------------------
     # Load cleaned subject-level epochs
     # ----------------------------------------------------------
