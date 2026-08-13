@@ -241,8 +241,11 @@ def _get_or_collect_crop_times(
     return table[key]
 
 
-def _replace_assignment(source: str, name: str, value: str) -> str:
-    """Replace a simple top-level assignment in a legacy analysis script."""
+def _replace_assignment(
+    source: str,
+    name: str,
+    value,
+) -> str:
 
     pattern = (
         rf"(?m)^"
@@ -256,7 +259,9 @@ def _replace_assignment(source: str, name: str, value: str) -> str:
         rf"\s*(?:#.*)?$"
     )
 
-    replacement = f"{name} = {value!r}"
+    replacement = (
+        f"{name} = {value!r}"
+    )
 
     updated, n = re.subn(
         pattern,
@@ -267,11 +272,11 @@ def _replace_assignment(source: str, name: str, value: str) -> str:
 
     if n == 0:
         print(
-            f"WARNING: {name!r} was not found for patching."
+            f"WARNING: could not patch {name!r} "
+            f"in {source[:100]!r}..."
         )
 
     return updated
-
 
 def _patch_script_source(
     source: str,
@@ -283,50 +288,31 @@ def _patch_script_source(
     session: str,
     task: str,
     run: str,
-    crop_times: Dict[str, List[float]] | None,
-    brainvision_basename: str | None = None,
-    ) -> str:
-    """Patch only runtime configuration; analysis logic stays in the original script."""
+    brainvision_basename: str | None,
+    crop_times=None,
+) -> str:
 
     values = {
-    "subject": subject,
-    "session": session,
-    "task": task,
-    "run": run,
-    "project_root": str(project_root),
-    "data_root": str(data_root),
-    "bids_root": str(bids_root),
-    "GITHUB_ROOT": str(REPO_ROOT),
-    "brainVision_basename": brainvision_basename,
-    }   
+        "subject": subject,
+        "session": session,
+        "task": task,
+        "run": run,
+        "project_root": str(project_root),
+        "data_root": str(data_root),
+        "bids_root": str(bids_root),
+        "GITHUB_ROOT": str(REPO_ROOT),
+        "brainVision_basename": brainvision_basename,
+    }
 
     for name, value in values.items():
-        source = _replace_assignment(source, name, value)
+        if value is None:
+            continue
 
-    if script_path.name == "P02_segmenting_stim.py":
-        if crop_times is None:
-            raise RuntimeError("P02 requires resolved stimulation crop times.")
-
-        # P02 currently opens raw unconditionally. The runner has already opened it
-        # when input was needed, so suppress that duplicate browser.
-        source = re.sub(
-            r"(?m)^\s*raw\.plot\([^\n]*\)\s*(?:#.*)?$",
-            "print('Crop times resolved by run_subject_pipeline.py; continuing segmentation.')",
+        source = _replace_assignment(
             source,
-            count=1,
+            name,
+            value,
         )
-
-        # Override/extend the dictionary in memory, including subjects not yet listed
-        # in P02 itself. No source file is edited.
-        injection = (
-            "\n# injected by run_subject_pipeline.py\n"
-            f"stimulation_cropped_time['sub-{subject}_no-stim'] = {crop_times['no-stim']!r}\n"
-            f"stimulation_cropped_time['sub-{subject}_stim'] = {crop_times['stim']!r}\n\n"
-        )
-        marker = "def make_segment"
-        if marker not in source:
-            raise RuntimeError("Could not locate make_segment() in P02_segmenting_stim.py")
-        source = source.replace(marker, injection + marker, 1)
 
     return source
 
@@ -404,24 +390,24 @@ def _run_script(
     task: str,
     run: str,
     brainvision_basename: str | None = None,
-    crop_times: Dict[str, List[float]] | None = None,
+    crop_times=None,
 ) -> None:
     if not script_path.exists():
         raise FileNotFoundError(f"Required analysis script not found: {script_path}")
 
     source = script_path.read_text(encoding="utf-8")
     source = _patch_script_source(
-    source,
-    script_path,
-    subject,
-    project_root,
-    data_root,
-    bids_root,
-    session,
-    task,
-    run,
-    brainvision_basename,
-    crop_times,
+        source=source,
+        script_path=script_path,
+        subject=subject,
+        project_root=project_root,
+        data_root=data_root,
+        bids_root=bids_root,
+        session=session,
+        task=task,
+        run=run,
+        brainvision_basename=brainvision_basename,
+        crop_times=crop_times,
     )
     globals_dict = {
         "__name__": "__main__",
