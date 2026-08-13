@@ -500,10 +500,10 @@ def build_concat_epoch_report(subjects):
             "• Decimation factor = 2.\n"
             "• Baseline for stimulation/no-stimulation TFR plots: "
             "-0.3 to -0.1 s, percent change.\n"
-            "• Difference TFR: no-stimulation minus stimulation "
+            "• Difference TFR: stimulation minus no-stimulation "
             "no baseline correction.\n"
-            "• Ratio TFR: (no-stimulation - stimulation) / "
-            "(no-stimulation + stimulation).\n"
+            "• Ratio TFR: (stimulation - no-stimulation) / "
+            "(stimulation + no-stimulation).\n"
             "no baseline correction.\n\n"
 
             "Posterior-channel TFRs\n"
@@ -962,7 +962,7 @@ def build_concat_epoch_report(subjects):
         ),
         baseline=None,
         mode=None,
-        vlim=shared_vlim,
+        vlim=None,
     )
 
     fname = op.join(
@@ -1003,7 +1003,7 @@ def build_concat_epoch_report(subjects):
         ),
         baseline=None,
         mode=None,
-        vlim=shared_vlim,
+        vlim=None,
     )
 
     fname = op.join(
@@ -1405,7 +1405,7 @@ def build_concat_epoch_report(subjects):
         ),
         baseline=None,
         mode=None,
-        vlim=roi_shared_vlim,
+        vlim=None,
     )
 
     fname = op.join(
@@ -1445,7 +1445,7 @@ def build_concat_epoch_report(subjects):
         ),
         baseline=None,
         mode=None,
-        vlim=roi_shared_vlim,
+        vlim=None,
     )
 
     fname = op.join(
