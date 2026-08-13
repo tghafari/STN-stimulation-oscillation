@@ -199,28 +199,6 @@ def plot_single_roi_tfr(
 
     return fig
 
-def parse_args():
-    """Get the subjects to include in the grand-average analysis."""
-
-    parser = argparse.ArgumentParser(
-        description=(
-            "Run G02 grand-average group analysis "
-            "for selected subjects."
-        )
-    )
-
-    parser.add_argument(
-        "--subjects",
-        nargs="+",
-        required=True,
-        help=(
-            "Subject numbers to include, e.g. "
-            "--subjects 115 116 118 119"
-        ),
-    )
-
-    return parser.parse_args()
-
 def build_grand_average_report(subjects):
     ensure_dir(GROUP_REPORT_DIR)
     ensure_dir(GROUP_DERIV_DIR)
@@ -1378,19 +1356,5 @@ def build_grand_average_report(subjects):
 
 
 if __name__ == "__main__":
-
-    args = parse_args()
-
-    subjects = [
-        str(s).removeprefix("sub-")
-        for s in args.subjects
-    ]
-
-    print(
-        "\nSubjects included in G02:"
-        f"\n  {', '.join('sub-' + s for s in subjects)}\n"
-    )
-
-    build_grand_average_report(
-        subjects
-    )
+    subjects = load_subject_list(SUBJECT_LIST_PATH) if Path(SUBJECT_LIST_PATH).exists() else DEFAULT_SUBJECTS
+    build_grand_average_report(subjects)

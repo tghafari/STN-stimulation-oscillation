@@ -41,10 +41,10 @@ For each condition the report contains:
        PO3 | PO4 | POz
 
     3. Difference TFR
-       no-stim - stim
+       stim - no-stim
 
     4. Ratio TFR
-       (no-stim - stim) / (no-stim + stim)
+       (stim - no-stim) / (stim + no-stim)
 
 A second set of four TFR figures is calculated for a combined
 posterior ROI. For each participant, the available posterior channels
@@ -240,6 +240,7 @@ def plot_three_channel_tfrs(
             axes=ax,
             show=False,
             colorbar=True,
+            cmap="RdBu_r",
         )
 
         # Only give MNE vlim when actual limits were specified.
@@ -315,6 +316,7 @@ def plot_single_roi_tfr(
         axes=ax,
         show=False,
         colorbar=True,
+        cmap="RdBu_r",
     )
 
     if vlim is not None:
@@ -759,7 +761,47 @@ def build_concat_epoch_report(subjects):
             )
 
     # ----------------------------------------------------------
+    # Baseline-corrected condition TFRs
+    #
+    # These are ONLY used for the individual stim/no-stim plots.
+    # The original TFRs in tfr_by_channel remain unchanged.
+    # ----------------------------------------------------------
+
+    tfr_stim_baselined = {}
+    tfr_no_stim_baselined = {}
+
+    for ch in OCCIPITAL_CHANNELS:
+
+        tfr_stim_baselined[ch] = (
+            tfr_by_channel["stim"][ch].copy()
+        )
+
+        tfr_no_stim_baselined[ch] = (
+            tfr_by_channel["no-stim"][ch].copy()
+        )
+
+        tfr_stim_baselined[ch].apply_baseline(
+            baseline=BASELINE,
+            mode="percent",
+        )
+
+        tfr_no_stim_baselined[ch].apply_baseline(
+            baseline=BASELINE,
+            mode="percent",
+        )
+
+
+    # ----------------------------------------------------------
     # Difference and ratio
+    #
+    # IMPORTANT:
+    # Both use the ORIGINAL, NON-BASELINE-CORRECTED TFRs.
+    #
+    # Difference:
+    #     stim - no-stim
+    #
+    # Ratio:
+    #     (stim - no-stim) / (stim + no-stim)
     # ----------------------------------------------------------
 
     tfr_diff = {}
@@ -767,60 +809,71 @@ def build_concat_epoch_report(subjects):
 
     for ch in OCCIPITAL_CHANNELS:
 
-        stim_bc = tfr_by_channel[
+        stim = tfr_by_channel[
             "stim"
-        ][ch].copy()
-
-        no_stim_bc = tfr_by_channel[
-            "no-stim"
-        ][ch].copy()
-
-        stim_bc.apply_baseline(
-            baseline=BASELINE,
-            mode="percent",
-        )
-
-        no_stim_bc.apply_baseline(
-            baseline=BASELINE,
-            mode="percent",
-        )
-
-        diff = no_stim_bc.copy()
-
-        diff.data = (
-            no_stim_bc.data
-            - stim_bc.data
-        )
-
-        tfr_diff[ch] = diff
+        ][ch]
 
         no_stim = tfr_by_channel[
             "no-stim"
         ][ch]
 
-        stim = tfr_by_channel[
-            "stim"
-        ][ch]
+        # Difference: RAW stim - RAW no-stim
+        diff = stim.copy()
 
-        ratio = no_stim.copy()
+        diff.data = (
+            stim.data
+            - no_stim.data
+        )
+
+        tfr_diff[ch] = diff
+
+        # Ratio: RAW (stim - no-stim) / (stim + no-stim)
+        ratio = stim.copy()
 
         ratio.data = (
-            no_stim.data
-            - stim.data
+            stim.data
+            - no_stim.data
         ) / (
-            no_stim.data
-            + stim.data
+            stim.data
+            + no_stim.data
             + np.finfo(float).eps
         )
 
         tfr_ratio[ch] = ratio
 
     # ----------------------------------------------------------
+    # Shared symmetric colour scale for difference and ratio
+    #
+    # Positive = stimulation > no-stimulation
+    # Negative = stimulation < no-stimulation
+    # ----------------------------------------------------------
+
+    all_diff_values = np.concatenate([
+        tfr_diff[ch].data.ravel()
+        for ch in OCCIPITAL_CHANNELS
+    ])
+
+    all_ratio_values = np.concatenate([
+        tfr_ratio[ch].data.ravel()
+        for ch in OCCIPITAL_CHANNELS
+    ])
+
+    shared_vmax = max(
+        np.nanmax(np.abs(all_diff_values)),
+        np.nanmax(np.abs(all_ratio_values)),
+    )
+
+    shared_vlim = (
+        -shared_vmax,
+        shared_vmax,
+    )
+
+    # ----------------------------------------------------------
     # Channel-specific TFR figure: no stimulation
     # ----------------------------------------------------------
 
     fig_tfr_no = plot_three_channel_tfrs(
-        tfr_by_channel["no-stim"],
+        tfr_no_stim_baselined,
         OCCIPITAL_CHANNELS,
         subject_counts,
         (
@@ -860,7 +913,7 @@ def build_concat_epoch_report(subjects):
     # ----------------------------------------------------------
 
     fig_tfr_stim = plot_three_channel_tfrs(
-        tfr_by_channel["stim"],
+        tfr_stim_baselined,
         OCCIPITAL_CHANNELS,
         subject_counts,
         (
@@ -909,7 +962,7 @@ def build_concat_epoch_report(subjects):
         ),
         baseline=None,
         mode=None,
-        vlim=None,
+        vlim=shared_vlim,
     )
 
     fname = op.join(
@@ -931,7 +984,7 @@ def build_concat_epoch_report(subjects):
             "Cue-locked TFR difference with cue onset = 0 s. "
             "Left- and right-attention trials are combined. "
             "Difference = no-stimulation minus stimulation after "
-            "no baseline correction."
+            "No baseline correction was applied."
         ),
         "TFR",
     )
@@ -950,7 +1003,7 @@ def build_concat_epoch_report(subjects):
         ),
         baseline=None,
         mode=None,
-        vlim=None,
+        vlim=shared_vlim,
     )
 
     fname = op.join(
@@ -973,6 +1026,7 @@ def build_concat_epoch_report(subjects):
             "Left- and right-attention trials are combined. "
             "Ratio = (no-stimulation - stimulation) / "
             "(no-stimulation + stimulation)."
+            "No baseline correction was applied."
         ),
         "TFR",
     )
@@ -982,12 +1036,7 @@ def build_concat_epoch_report(subjects):
     # ==========================================================
     #
     # For each subject, average all available posterior channels
-    # within each epoch. This means:
-    #
-    #     sub-115 -> PO3 + PO4 + POz
-    #     sub-116 -> PO3 + PO4 + POz
-    #     sub-118 -> PO3 + PO4 + POz
-    #     sub-119 -> PO3 + PO4
+    # within each epoch.
     #
     # Left- and right-attention trials are combined because the input
     # epochs are cue-locked epochs containing both cue directions.
@@ -1190,38 +1239,26 @@ def build_concat_epoch_report(subjects):
     # ROI difference
     # ==========================================================
     #
-    # Both TFRs are baseline corrected using percent change:
-    #
-    #     baseline = -0.3 to -0.1 s
+    # Both TFRs are not baseline corrected.
     #
     # Difference:
     #
-    #     no-stim - stim
+    #     stim - no-stim
     # ==========================================================
 
-    roi_stim_bc = roi_tfr[
+    roi_stim = roi_tfr[
         "stim"
     ].copy()
 
-    roi_no_stim_bc = roi_tfr[
+    roi_no_stim = roi_tfr[
         "no-stim"
     ].copy()
 
-    roi_stim_bc.apply_baseline(
-        baseline=BASELINE,
-        mode="percent",
-    )
-
-    roi_no_stim_bc.apply_baseline(
-        baseline=BASELINE,
-        mode="percent",
-    )
-
-    roi_diff = roi_no_stim_bc.copy()
+    roi_diff = roi_no_stim.copy()
 
     roi_diff.data = (
-        roi_no_stim_bc.data
-        - roi_stim_bc.data
+        roi_stim.data
+        - roi_no_stim.data
     )
 
 
@@ -1231,7 +1268,7 @@ def build_concat_epoch_report(subjects):
     #
     # Ratio:
     #
-    #     (no-stim - stim) / (no-stim + stim)
+    #     (stim - no-stim) / (stim + no-stim)
     #
     # This is calculated from the original TFR values rather than
     # the baseline-corrected values.
@@ -1242,14 +1279,35 @@ def build_concat_epoch_report(subjects):
     ].copy()
 
     roi_ratio.data = (
-        roi_tfr["no-stim"].data
-        - roi_tfr["stim"].data
+        roi_tfr["stim"].data
+        - roi_tfr["no-stim"].data
     ) / (
-        roi_tfr["no-stim"].data
-        + roi_tfr["stim"].data
+        roi_tfr["stim"].data
+        + roi_tfr["no-stim"].data
         + np.finfo(float).eps
     )
 
+    # ----------------------------------------------------------
+    # Shared symmetric colour scale for ROI difference and ratio
+    # ----------------------------------------------------------
+
+    roi_diff_vmax = np.nanmax(
+        np.abs(roi_diff.data)
+    )
+
+    roi_ratio_vmax = np.nanmax(
+        np.abs(roi_ratio.data)
+    )
+
+    roi_shared_vmax = max(
+        roi_diff_vmax,
+        roi_ratio_vmax,
+    )
+
+    roi_shared_vlim = (
+        -roi_shared_vmax,
+        roi_shared_vmax,
+    )
 
     # ==========================================================
     # ROI no-stimulation plot
@@ -1343,11 +1401,11 @@ def build_concat_epoch_report(subjects):
         roi_diff,
         (
             "Cue-locked posterior ROI TFR - "
-            "difference (no-stim - stim)"
+            "difference (stim - no-stim)"
         ),
         baseline=None,
         mode=None,
-        vlim=None,
+        vlim=roi_shared_vlim,
     )
 
     fname = op.join(
@@ -1367,8 +1425,8 @@ def build_concat_epoch_report(subjects):
         "Cue-locked posterior ROI TFR - difference",
         (
             "Cue onset = 0 s. Left- and right-attention trials are "
-            "combined ('both'). Difference = no-stimulation minus "
-            "stimulation- no baseline correction "
+            "combined ('both'). Difference = stimulation minus "
+            "no-stimulation. No baseline correction. "
             "Frequency range: 2-31.5 Hz."
         ),
         "TFR",
@@ -1383,11 +1441,11 @@ def build_concat_epoch_report(subjects):
         roi_ratio,
         (
             "Cue-locked posterior ROI TFR - "
-            "ratio (no-stim vs stim)"
+            "ratio (stim - no-stim)"
         ),
         baseline=None,
         mode=None,
-        vlim=None,
+        vlim=roi_shared_vlim,
     )
 
     fname = op.join(
@@ -1408,7 +1466,7 @@ def build_concat_epoch_report(subjects):
         (
             "Cue onset = 0 s. Left- and right-attention trials are "
             "combined ('both'). "
-            "Ratio = (no-stim - stim) / (no-stim + stim). "
+            "Ratio = (stim - no-stim) / (stim + no-stim). "
             "Frequency range: 2-31.5 Hz."
         ),
         "TFR",
