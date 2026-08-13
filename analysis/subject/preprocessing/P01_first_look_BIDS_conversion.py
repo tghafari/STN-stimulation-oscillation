@@ -98,7 +98,7 @@ bids_root = "/path/to/STN-in-PD/data/BIDS"
 
 print(f"\n Remember to edit brainVision_basename in P01 based on the file's name in data-organised folder.\n\n ")
 
-brainVision_basename = None  # this gets filled by run_subject_pipeline.py based on the subject and session. It is used to read the correct .vhdr file for each subject/session.
+brainVision_basename = ""  # this gets filled by run_subject_pipeline.py based on the subject and session. It is used to read the correct .vhdr file for each subject/session.
 
 # Optional event-duration sanity checks.
 sanity_test = False
