@@ -73,7 +73,7 @@ BIDS_ROOT = op.join(PROJECT_ROOT, "data", "BIDS")
 GROUP_REPORT_DIR = op.join(PROJECT_ROOT, "derivatives", "reports", "group", "grand_average")
 GROUP_DERIV_DIR = op.join(BIDS_ROOT, "derivatives", "group", "grand_average")
 
-REPORT_NAME = "group_grand_average"
+REPORT_NAME = "group_grand_average_"+ "_".join(subjects)
 REPORT_TITLE = "Grand average across subjects"
 
 OCCIPITAL_CHANNELS = ["PO3", "PO4", "POz"]
