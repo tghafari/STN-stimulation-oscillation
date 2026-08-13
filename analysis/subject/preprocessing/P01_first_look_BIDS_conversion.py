@@ -98,7 +98,7 @@ bids_root = "/path/to/STN-in-PD/data/BIDS"
 
 print(f"\n Remember to edit brainVision_basename in P01 based on the file's name in data-organised folder.\n\n ")
 
-brainVision_basename = f"{subject[1:]}_ao"
+brainVision_basename = None  # this gets filled by run_subject_pipeline.py based on the subject and session. It is used to read the correct .vhdr file for each subject/session.
 
 # Optional event-duration sanity checks.
 sanity_test = False
@@ -111,7 +111,7 @@ fig_folder = op.join(project_root, 'derivatives', 'figures', f'sub-{subject}')
 report_folder = op.join(project_root, 'derivatives', 'reports', f'sub-{subject}')
 os.makedirs(fig_folder, exist_ok=True)
 report = ParticipantPDF(report_folder, subject)
-beh_fig_fname = op.join(project_root, 'derivatives/figures', f'sub-{subject}-beh-performance.png')  # where you save the matlab output of behavioural performance plots
+beh_fig_fname = op.join(project_root, 'derivatives/figures/beh_figures', f'sub-{subject}-beh-performance.png')  # where you save the matlab output of behavioural performance plots
 
 print(f'Running subject: {subject}')
 

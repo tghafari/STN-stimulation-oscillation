@@ -262,6 +262,7 @@ def _patch_script_source(
     task: str,
     run: str,
     crop_times: Dict[str, List[float]] | None,
+    brainvision_basename: str | None = None,
     ) -> str:
     """Patch only runtime configuration; analysis logic stays in the original script."""
 
@@ -275,6 +276,9 @@ def _patch_script_source(
     "bids_root": str(bids_root),
     "GITHUB_ROOT": str(REPO_ROOT),
     }   
+    if brainvision_basename:
+        values["brainVision_basename"] = brainvision_basename
+
     for name, value in values.items():
         source = _replace_assignment(source, name, value)
 
@@ -305,6 +309,69 @@ def _patch_script_source(
 
     return source
 
+def _find_brainvision_basename(
+    subject: str,
+    data_root: Path,
+    session: str,
+) -> str:
+    """
+    Find the BrainVision .vhdr recording for a subject.
+
+    Returns the filename stem, for example:
+
+        102-AO.vhdr  ->  102-AO
+        AO_115.vhdr  ->  AO_115
+
+    Subjects with special multi-file recordings (currently 110 and 111)
+    are handled explicitly in P01.
+    """
+
+    eeg_folder = (
+        data_root
+        / f"sub-{subject}"
+        / f"ses-{session}"
+        / "eeg"
+    )
+
+    if not eeg_folder.exists():
+        raise FileNotFoundError(
+            f"EEG folder does not exist for sub-{subject}:\n"
+            f"{eeg_folder}"
+        )
+
+    # These subjects are handled explicitly in P01 because they have
+    # multiple BrainVision recordings.
+    if subject in {"110", "111"}:
+        return None
+
+    vhdr_files = sorted(eeg_folder.glob("*.vhdr"))
+
+    if not vhdr_files:
+        raise FileNotFoundError(
+            f"No BrainVision .vhdr file found for sub-{subject}:\n"
+            f"{eeg_folder}"
+        )
+
+    if len(vhdr_files) > 1:
+        names = "\n".join(
+            f"  {f.name}" for f in vhdr_files
+        )
+
+        raise RuntimeError(
+            f"Multiple BrainVision .vhdr files found for sub-{subject}:\n"
+            f"{names}\n\n"
+            "P01 expects one standard recording for this subject. "
+            "Please add this subject to P01's special-case handling."
+        )
+
+    vhdr_path = vhdr_files[0]
+
+    print(
+        f"Found BrainVision file for sub-{subject}: "
+        f"{vhdr_path.name}"
+    )
+
+    return vhdr_path.stem
 
 def _run_script(
     script_path: Path,
@@ -315,6 +382,7 @@ def _run_script(
     session: str,
     task: str,
     run: str,
+    brainvision_basename: str | None = None,
     crop_times: Dict[str, List[float]] | None = None,
 ) -> None:
     if not script_path.exists():
@@ -331,6 +399,7 @@ def _run_script(
     session,
     task,
     run,
+    brainvision_basename,
     crop_times,
     )
     globals_dict = {
@@ -493,11 +562,19 @@ def _run_subject(subject: str, args: argparse.Namespace) -> None:
 
     p01 = SCRIPT_ORDER[0]
 
+    brainvision_basename = _find_brainvision_basename(
+        subject,
+        data_root,
+        args.session,
+    )
     print(
         f"\n[{key}] 1/5 BIDS conversion: "
         f"{p01.name}"
     )
 
+    print(
+        f"BrainVision basename: {brainvision_basename}"
+    )
     _run_script(
         p01,
         subject,
@@ -507,6 +584,7 @@ def _run_subject(subject: str, args: argparse.Namespace) -> None:
         args.session,
         args.task,
         args.run,
+        brainvision_basename=brainvision_basename,
     )
 
     # --------------------------------------------------------------

@@ -92,7 +92,7 @@ python analysis/subject/run_subject_pipeline.py --subjects 119
 
 For several specific participants:
 
-Note: not recommended, as brainvision basename for subjects might vary.
+Note: the runner updates brainvision basename automatically
 
 ```bash
 python analysis/subject/run_subject_pipeline.py --subjects 115 116 118 121
