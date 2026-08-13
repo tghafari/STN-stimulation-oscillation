@@ -242,12 +242,34 @@ def _get_or_collect_crop_times(
 
 
 def _replace_assignment(source: str, name: str, value: str) -> str:
-    """Replace a simple top-level string assignment in one of the legacy scripts."""
-    pattern = rf"(?m)^(?P<indent>\s*){re.escape(name)}\s*=\s*(?:r)?['\"].*?['\"]\s*(?:#.*)?$"
+    """Replace a simple top-level assignment in a legacy analysis script."""
+
+    pattern = (
+        rf"(?m)^"
+        rf"(?P<indent>\s*)"
+        rf"{re.escape(name)}"
+        rf"\s*=\s*"
+        rf"(?:"
+        rf"(?:r)?['\"].*?['\"]"
+        rf"|None"
+        rf")"
+        rf"\s*(?:#.*)?$"
+    )
+
     replacement = f"{name} = {value!r}"
-    updated, n = re.subn(pattern, replacement, source, count=1)
+
+    updated, n = re.subn(
+        pattern,
+        replacement,
+        source,
+        count=1,
+    )
+
     if n == 0:
-        print(f"Note: variable {name!r} was not found in this script; leaving it unchanged.")
+        print(
+            f"WARNING: {name!r} was not found for patching."
+        )
+
     return updated
 
 
@@ -275,9 +297,8 @@ def _patch_script_source(
     "data_root": str(data_root),
     "bids_root": str(bids_root),
     "GITHUB_ROOT": str(REPO_ROOT),
+    "brainVision_basename": brainvision_basename,
     }   
-    if brainvision_basename:
-        values["brainVision_basename"] = brainvision_basename
 
     for name, value in values.items():
         source = _replace_assignment(source, name, value)
@@ -342,7 +363,7 @@ def _find_brainvision_basename(
     # These subjects are handled explicitly in P01 because they have
     # multiple BrainVision recordings.
     if subject in {"110", "111"}:
-        return None
+        return ""
 
     vhdr_files = sorted(eeg_folder.glob("*.vhdr"))
 
@@ -407,6 +428,22 @@ def _run_script(
         "__file__": str(script_path),
         "__package__": None,
     }
+
+    if script_path.name == "P01_first_look_BIDS_conversion.py":
+        print(
+            "DEBUG: brainVision_basename in patched P01 source:"
+        )
+
+        match = re.search(
+            r"(?m)^\s*brainVision_basename\s*=\s*.*$",
+            source,
+        )
+
+        print(
+            match.group(0)
+            if match
+            else "NOT FOUND"
+        )
     exec(compile(source, str(script_path), "exec"), globals_dict, globals_dict)
 
 def _run_subject(subject: str, args: argparse.Namespace) -> None:
