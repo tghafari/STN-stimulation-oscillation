@@ -842,33 +842,6 @@ def build_concat_epoch_report(subjects):
         tfr_ratio[ch] = ratio
 
     # ----------------------------------------------------------
-    # Shared symmetric colour scale for difference and ratio
-    #
-    # Positive = stimulation > no-stimulation
-    # Negative = stimulation < no-stimulation
-    # ----------------------------------------------------------
-
-    all_diff_values = np.concatenate([
-        tfr_diff[ch].data.ravel()
-        for ch in OCCIPITAL_CHANNELS
-    ])
-
-    all_ratio_values = np.concatenate([
-        tfr_ratio[ch].data.ravel()
-        for ch in OCCIPITAL_CHANNELS
-    ])
-
-    shared_vmax = max(
-        np.nanmax(np.abs(all_diff_values)),
-        np.nanmax(np.abs(all_ratio_values)),
-    )
-
-    shared_vlim = (
-        -shared_vmax,
-        shared_vmax,
-    )
-
-    # ----------------------------------------------------------
     # Channel-specific TFR figure: no stimulation
     # ----------------------------------------------------------
 
@@ -880,8 +853,8 @@ def build_concat_epoch_report(subjects):
             "Concatenated epochs across subjects - "
             "Cue-locked TFR - no stimulation - combined attention"
         ),
-        baseline=BASELINE,
-        mode="percent",
+        baseline=None,
+        mode=None,
         vlim=(-0.75, 0.75),
     )
 
@@ -920,8 +893,8 @@ def build_concat_epoch_report(subjects):
             "Concatenated epochs across subjects - "
             "Cue-locked TFR - stimulation - combined attention"
         ),
-        baseline=BASELINE,
-        mode="percent",
+        baseline=None,
+        mode=None,
         vlim=(-0.75, 0.75),
     )
 
@@ -1285,28 +1258,6 @@ def build_concat_epoch_report(subjects):
         roi_tfr["stim"].data
         + roi_tfr["no-stim"].data
         + np.finfo(float).eps
-    )
-
-    # ----------------------------------------------------------
-    # Shared symmetric colour scale for ROI difference and ratio
-    # ----------------------------------------------------------
-
-    roi_diff_vmax = np.nanmax(
-        np.abs(roi_diff.data)
-    )
-
-    roi_ratio_vmax = np.nanmax(
-        np.abs(roi_ratio.data)
-    )
-
-    roi_shared_vmax = max(
-        roi_diff_vmax,
-        roi_ratio_vmax,
-    )
-
-    roi_shared_vlim = (
-        -roi_shared_vmax,
-        roi_shared_vmax,
     )
 
     # ==========================================================

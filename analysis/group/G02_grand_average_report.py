@@ -52,6 +52,7 @@ import os.path as op
 from pathlib import Path
 import matplotlib.pyplot as plt
 
+from analysis.group.G01_concatenated_epochs_report import parse_args
 import mne
 import numpy as np
 
@@ -1008,6 +1009,7 @@ def build_grand_average_report(subjects):
             "combined ('both'). "
             "Ratio = (stimulation - no-stimulation) / "
             "(stimulation + no-stimulation)."
+            "No baseline correction was applied to the ratio."
         ),
         "TFR",
     )
@@ -1356,5 +1358,19 @@ def build_grand_average_report(subjects):
 
 
 if __name__ == "__main__":
-    subjects = load_subject_list(SUBJECT_LIST_PATH) if Path(SUBJECT_LIST_PATH).exists() else DEFAULT_SUBJECTS
-    build_grand_average_report(subjects)
+
+    args = parse_args()
+
+    subjects = [
+        str(s).removeprefix("sub-")
+        for s in args.subjects
+    ]
+
+    print(
+        "\nSubjects included in G01:"
+        f"\n  {', '.join('sub-' + s for s in subjects)}\n"
+    )
+
+    build_grand_average_report(
+        subjects
+    )
