@@ -334,7 +334,7 @@ def _find_brainvision_basename(
     subject: str,
     data_root: Path,
     session: str,
-) -> str:
+) -> str | None:
     """
     Find the BrainVision .vhdr recording for a subject.
 
@@ -363,7 +363,7 @@ def _find_brainvision_basename(
     # These subjects are handled explicitly in P01 because they have
     # multiple BrainVision recordings.
     if subject in {"110", "111"}:
-        return ""
+        return None
 
     vhdr_files = sorted(eeg_folder.glob("*.vhdr"))
 
