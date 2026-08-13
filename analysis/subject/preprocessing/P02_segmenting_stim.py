@@ -61,8 +61,8 @@ raw.plot()  # visual confirmation of your saved crop times
 
 # Keep and extend your existing crop dictionary. Four numbers mean two kept pieces;
 # the interval between the pieces is not included in the concatenated output.
-# stimulation_cropped_time = {
-#     'sub-107_no-stim': [15, 974], 'sub-107_stim': [1000, 1845],
+stimulation_cropped_time = {
+    'sub-107_no-stim': [15, 974], 'sub-107_stim': [1000, 1845],}
 #     'sub-108_no-stim': [8, 890], 'sub-108_stim': [930, 1882],
 #     'sub-110_no-stim': [905, 1711], 'sub-110_stim': [0, 840],
 #     'sub-102_no-stim': [0, 965], 'sub-102_stim': [1490, 2230],
