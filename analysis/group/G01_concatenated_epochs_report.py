@@ -121,7 +121,6 @@ SUBJECT_LIST_PATH = op.join(
     "subjects_for_group_analysis.json",
 )
 
-REPORT_NAME = "group_concatenated_epochs"
 REPORT_TITLE = "Concatenated epochs across subjects"
 
 OCCIPITAL_CHANNELS = [
@@ -378,9 +377,11 @@ def build_concat_epoch_report(subjects):
         GROUP_DERIV_DIR
     )
 
-    # ----------------------------------------------------------
-    # Create report
-    # ----------------------------------------------------------
+    # Create a unique report name for this exact subject set.
+    REPORT_NAME = (
+        "group_concatenated_epochs_"
+        + "_".join(subjects)
+    )
 
     report = make_report(
         GROUP_REPORT_DIR,
