@@ -52,7 +52,6 @@ import os.path as op
 from pathlib import Path
 import matplotlib.pyplot as plt
 
-from analysis.group.G01_concatenated_epochs_report import parse_args
 import mne
 import numpy as np
 
@@ -60,10 +59,8 @@ from group_utils import (
     add_analysis_notes_section,
     add_subject_summary,
     ensure_dir,
-    load_subject_list,
     make_report,
     read_subject_epochs,
-    save_subject_list,
     read_subject_evokeds,
 )
 
@@ -200,6 +197,28 @@ def plot_single_roi_tfr(
 
     return fig
 
+def parse_args():
+    """Get the subjects to include in the group analysis."""
+
+    parser = argparse.ArgumentParser(
+        description=(
+            "Run G02 grand-average group analysis "
+            "for selected subjects."
+        )
+    )
+
+    parser.add_argument(
+        "--subjects",
+        nargs="+",
+        required=True,
+        help=(
+            "Subject numbers to include, e.g. "
+            "--subjects 115 116 118 119"
+        ),
+    )
+
+    return parser.parse_args()
+
 def build_grand_average_report(subjects):
     ensure_dir(GROUP_REPORT_DIR)
     ensure_dir(GROUP_DERIV_DIR)
@@ -217,29 +236,6 @@ def build_grand_average_report(subjects):
         "Group analysis",
     )
     add_subject_summary(report, subjects)
-
-
-def parse_args():
-    """Get the subjects to include in the group analysis."""
-
-    parser = argparse.ArgumentParser(
-        description=(
-            "Run G01 concatenated-epochs group analysis "
-            "for selected subjects."
-        )
-    )
-
-    parser.add_argument(
-        "--subjects",
-        nargs="+",
-        required=True,
-        help=(
-            "Subject numbers to include, e.g. "
-            "--subjects 115 116 118 119"
-        ),
-    )
-
-    return parser.parse_args()
 
     # ----------------------------------------------------------
     # Load cleaned subject-level epochs
@@ -1390,7 +1386,7 @@ if __name__ == "__main__":
     ]
 
     print(
-        "\nSubjects included in G01:"
+        "\nSubjects included in G02:"
         f"\n  {', '.join('sub-' + s for s in subjects)}\n"
     )
 
