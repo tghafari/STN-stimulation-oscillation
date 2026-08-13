@@ -46,6 +46,7 @@ tara.ghafari@gmail.com
 
 
 from __future__ import annotations
+import argparse
 
 import os.path as op
 from pathlib import Path
@@ -73,12 +74,10 @@ BIDS_ROOT = op.join(PROJECT_ROOT, "data", "BIDS")
 
 GROUP_REPORT_DIR = op.join(PROJECT_ROOT, "derivatives", "reports", "group", "grand_average")
 GROUP_DERIV_DIR = op.join(BIDS_ROOT, "derivatives", "group", "grand_average")
-SUBJECT_LIST_PATH = op.join(PROJECT_ROOT, "derivatives", "reports", "group", "subjects_for_group_analysis.json")
 
 REPORT_NAME = "group_grand_average"
 REPORT_TITLE = "Grand average across subjects"
 
-DEFAULT_SUBJECTS = ["115", "116", "118", "119"]
 OCCIPITAL_CHANNELS = ["PO3", "PO4", "POz"]
 SESSION = "01"
 TASK = "SpAtt"
@@ -200,6 +199,28 @@ def plot_single_roi_tfr(
 
     return fig
 
+def parse_args():
+    """Get the subjects to include in the grand-average analysis."""
+
+    parser = argparse.ArgumentParser(
+        description=(
+            "Run G02 grand-average group analysis "
+            "for selected subjects."
+        )
+    )
+
+    parser.add_argument(
+        "--subjects",
+        nargs="+",
+        required=True,
+        help=(
+            "Subject numbers to include, e.g. "
+            "--subjects 115 116 118 119"
+        ),
+    )
+
+    return parser.parse_args()
+
 def build_grand_average_report(subjects):
     ensure_dir(GROUP_REPORT_DIR)
     ensure_dir(GROUP_DERIV_DIR)
@@ -217,8 +238,6 @@ def build_grand_average_report(subjects):
         "Group analysis",
     )
     add_subject_summary(report, subjects)
-
-    save_subject_list(SUBJECT_LIST_PATH, subjects)
 
     # ----------------------------------------------------------
     # Load cleaned subject-level epochs
@@ -1359,5 +1378,19 @@ def build_grand_average_report(subjects):
 
 
 if __name__ == "__main__":
-    subjects = load_subject_list(SUBJECT_LIST_PATH) if Path(SUBJECT_LIST_PATH).exists() else DEFAULT_SUBJECTS
-    build_grand_average_report(subjects)
+
+    args = parse_args()
+
+    subjects = [
+        str(s).removeprefix("sub-")
+        for s in args.subjects
+    ]
+
+    print(
+        "\nSubjects included in G02:"
+        f"\n  {', '.join('sub-' + s for s in subjects)}\n"
+    )
+
+    build_grand_average_report(
+        subjects
+    )
