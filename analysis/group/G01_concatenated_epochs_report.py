@@ -1031,7 +1031,7 @@ def build_concat_epoch_report(subjects):
             "Cue-locked TFR difference with cue onset = 0 s. "
             "Left- and right-attention trials are combined. "
             "Difference = stimulation minus no stimulation after "
-            + {baseline_caption},
+            + baseline_caption,
         ),
         "TFR",
     )
@@ -1046,7 +1046,7 @@ def build_concat_epoch_report(subjects):
         subject_counts,
         (
             "Concatenated epochs across subjects - "
-            "Cue-locked TFR ratio - no stimulation versus stimulation"
+            "Cue-locked TFR ratio - stimulation versus no stimulation"
         ),
         baseline=None,
         mode=None,
@@ -1071,9 +1071,9 @@ def build_concat_epoch_report(subjects):
         (
             "Cue-locked TFR ratio with cue onset = 0 s. "
             "Left- and right-attention trials are combined. "
-            "Ratio = (no-stimulation - stimulation) / "
-            "(no-stimulation + stimulation)."
-            + {baseline_caption},
+            "Ratio = (stimulation - no-stimulation) / "
+            "(stimulation + no-stimulation)."
+            + baseline_caption,
         ),
         "TFR",
     )
@@ -1466,8 +1466,8 @@ def build_concat_epoch_report(subjects):
             "Cue onset = 0 s. Left- and right-attention trials are "
             "combined ('both'). Difference = stimulation minus "
             "no-stimulation. "
-            + {baseline_caption},
-            "Frequency range: 2-31.5 Hz."
+            + baseline_caption
+            + "Frequency range: 2-31.5 Hz."
         ),
         "TFR",
     )
@@ -1507,8 +1507,8 @@ def build_concat_epoch_report(subjects):
             "Cue onset = 0 s. Left- and right-attention trials are "
             "combined ('both'). "
             "Ratio = (stim - no-stim) / (stim + no-stim). "
-            + {baseline_caption},
-            "Frequency range: 2-31.5 Hz."
+            + baseline_caption
+            + "Frequency range: 2-31.5 Hz."
         ),
         "TFR",
     )
