@@ -37,6 +37,18 @@ TFR settings match G01:
     n_cycles = frequency / 2, time-bandwidth = 2,
     decimation = 2, baseline = -0.3 to -0.1 s (percent).
 
+Difference and ratio handling
+-----------------------------
+The stimulation and no-stimulation TFRs are baseline corrected
+for plotting.
+
+The difference TFR is optionally baseline corrected according to
+user input at runtime.
+
+The ratio TFR is always calculated from the original,
+non-baseline-corrected TFRs.
+    
+    
 No PAF, MI or statistical testing is performed here.
 
 written by Tara Ghafari
@@ -218,7 +230,49 @@ def parse_args():
 
     return parser.parse_args()
 
+def get_difference_baseline_choice():
+    """
+    Ask whether baseline correction should be applied
+    to the difference TFR.
+    """
+
+    while True:
+        choice = input(
+            "\nApply baseline correction to the DIFFERENCE TFR? "
+            "(y/n): "
+        ).strip().lower()
+
+        if choice in {"y", "yes"}:
+            return True
+
+        if choice in {"n", "no"}:
+            return False
+
+        print("Please enter 'y' or 'n'.")
+
+
 def build_grand_average_report(subjects):
+
+    apply_baseline_to_diff = (
+        get_difference_baseline_choice()
+    )
+
+    if apply_baseline_to_diff:
+        print(
+            "\nBaseline correction WILL be applied to the "
+            "difference TFR."
+        )
+    else:
+        print(
+            "\nBaseline correction will NOT be applied to the "
+            "difference TFR."
+        )
+
+    print(
+        "The ratio TFR will use the original, "
+        "non-baseline-corrected TFRs."
+    )
+
     ensure_dir(GROUP_REPORT_DIR)
     ensure_dir(GROUP_DERIV_DIR)
 
@@ -299,6 +353,14 @@ def build_grand_average_report(subjects):
         "Group analysis",
     )
 
+    contrast_baseline_text = (
+        f"Difference TFR: baseline corrected using "
+        f"{BASELINE[0]} to {BASELINE[1]} s in percent mode."
+        if apply_baseline_to_diff
+        else
+        "Difference TFR: no baseline correction."
+    )
+
     report.add_text(
         "Analysis details",
         (
@@ -322,8 +384,7 @@ def build_grand_average_report(subjects):
             "• Decimation = 2.\n"
             "• Stim/no-stim TFRs: baseline -0.3 to -0.1 s, "
             "percent change.\n"
-            "• Difference: stimulation minus no-stimulation, "
-            "using the original non-baseline-corrected TFRs.\n"
+            f"• {contrast_baseline_text}\n"
             "• Ratio: (stimulation - no-stimulation) / "
             "(stimulation + no-stimulation), using the original "
             "non-baseline-corrected TFRs.\n"
@@ -808,6 +869,12 @@ def build_grand_average_report(subjects):
 
     # ----------------------------------------------------------
     # Channel-specific difference and ratio
+    #
+    # Difference:
+    #   user chooses whether to baseline correct
+    #
+    # Ratio:
+    #   ALWAYS uses the original, non-baseline-corrected TFRs
     # ----------------------------------------------------------
 
     grand_tfr_diff = {}
@@ -815,41 +882,61 @@ def build_grand_average_report(subjects):
 
     for ch in OCCIPITAL_CHANNELS:
 
-        stim_tfr = grand_tfr_by_channel[
+        stim_raw = grand_tfr_by_channel[
             "stim"
         ][ch].copy()
 
-        no_stim_tfr = grand_tfr_by_channel[
+        no_stim_raw = grand_tfr_by_channel[
             "no-stim"
         ][ch].copy()
 
-        # Difference uses non-baseline corrected TFRs.
-        diff = no_stim_tfr.copy()
+        # ------------------------------------------------------
+        # Difference
+        # ------------------------------------------------------
+
+        if apply_baseline_to_diff:
+
+            stim_diff = stim_raw.copy()
+            no_stim_diff = no_stim_raw.copy()
+
+            stim_diff.apply_baseline(
+                baseline=BASELINE,
+                mode="percent",
+            )
+
+            no_stim_diff.apply_baseline(
+                baseline=BASELINE,
+                mode="percent",
+            )
+
+        else:
+
+            stim_diff = stim_raw
+            no_stim_diff = no_stim_raw
+
+        diff = stim_diff.copy()
 
         diff.data = (
-            stim_tfr.data
-            - no_stim_tfr.data
+            stim_diff.data
+            - no_stim_diff.data
         )
 
         grand_tfr_diff[ch] = diff
 
-        # Ratio uses the original, non-baseline-corrected TFRs.
-        no_stim = grand_tfr_by_channel[
-            "no-stim"
-        ][ch]
+        # ------------------------------------------------------
+        # Ratio
+        #
+        # ALWAYS calculated from RAW TFRs
+        # ------------------------------------------------------
 
-        stim = grand_tfr_by_channel[
-            "stim"
-        ][ch]
-
-        ratio = no_stim.copy()
+        ratio = stim_raw.copy()
 
         ratio.data = (
-            stim.data
-            - no_stim.data
+            stim_raw.data
+            - no_stim_raw.data
         ) / (
-            stim.data
-            + no_stim.data
+            stim_raw.data
+            + no_stim_raw.data
             + np.finfo(float).eps
         )
 
@@ -949,7 +1036,13 @@ def build_grand_average_report(subjects):
         "TFR",
     )
 
-
+    baseline_caption = (
+            f"Baseline correction was applied using "
+            f"{BASELINE[0]} to {BASELINE[1]} s in percent mode."
+            if apply_baseline_to_diff
+            else
+            "No baseline correction was applied."
+        )
     # ----------------------------------------------------------
     # Difference
     # ----------------------------------------------------------
@@ -987,7 +1080,7 @@ def build_grand_average_report(subjects):
             "Cue onset = 0 s. Left- and right-attention trials are "
             "combined ('both'). "
             "Difference = stimulation minus no-stimulation. "
-            "No baseline correction was applied to the difference."
+            + baseline_caption,
         ),
         "TFR",
     )
@@ -1178,39 +1271,62 @@ def build_grand_average_report(subjects):
 
 
     # ----------------------------------------------------------
-    # ROI difference
+    # ROI difference and ratio
     # ----------------------------------------------------------
 
-    roi_stim_tfr = roi_grand_tfr[
+    roi_stim_raw = roi_grand_tfr[
         "stim"
     ].copy()
 
-    roi_no_stim_tfr = roi_grand_tfr[
+    roi_no_stim_raw = roi_grand_tfr[
         "no-stim"
     ].copy()
 
-    roi_grand_diff = roi_no_stim_tfr.copy()
+    # ----------------------------------------------------------
+    # ROI difference
+    # ----------------------------------------------------------
+
+    if apply_baseline_to_diff:
+
+        roi_stim_diff = roi_stim_raw.copy()
+        roi_no_stim_diff = roi_no_stim_raw.copy()
+
+        roi_stim_diff.apply_baseline(
+            baseline=BASELINE,
+            mode="percent",
+        )
+
+        roi_no_stim_diff.apply_baseline(
+            baseline=BASELINE,
+            mode="percent",
+        )
+
+    else:
+
+        roi_stim_diff = roi_stim_raw
+        roi_no_stim_diff = roi_no_stim_raw
+
+    roi_grand_diff = roi_stim_diff.copy()
 
     roi_grand_diff.data = (
-        roi_stim_tfr.data
-        - roi_no_stim_tfr.data
+        roi_stim_diff.data
+        - roi_no_stim_diff.data
     )
-
 
     # ----------------------------------------------------------
     # ROI ratio
+    #
+    # ALWAYS calculated from RAW TFRs
     # ----------------------------------------------------------
 
-    roi_grand_ratio = roi_grand_tfr[
-        "no-stim"
-    ].copy()
+    roi_grand_ratio = roi_stim_raw.copy()
 
     roi_grand_ratio.data = (
-        roi_grand_tfr["stim"].data
-        - roi_grand_tfr["no-stim"].data
+        roi_stim_raw.data
+        - roi_no_stim_raw.data
     ) / (
-        roi_grand_tfr["stim"].data
-        + roi_grand_tfr["no-stim"].data
+        roi_stim_raw.data
+        + roi_no_stim_raw.data
         + np.finfo(float).eps
     )
 
@@ -1320,9 +1436,9 @@ def build_grand_average_report(subjects):
         "Grand-average posterior ROI TFR - difference",
         (
             "Cue onset = 0 s. Left- and right-attention trials are "
-            "combined ('both'). Difference = baseline-corrected "
+            "combined ('both'). Difference =  "
             "stimulation minus no-stimulation. "
-            "Baseline: -0.3 to -0.1 s, percent change."
+            + baseline_caption,
         ),
         "TFR",
     )
@@ -1332,7 +1448,7 @@ def build_grand_average_report(subjects):
         roi_grand_ratio,
         (
             "Grand-average cue-locked posterior ROI TFR - "
-            "ratio"
+            "ratio (stim - no-stim)"
         ),
         baseline=None,
         mode=None,
