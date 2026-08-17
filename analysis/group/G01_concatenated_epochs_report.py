@@ -804,6 +804,39 @@ def build_concat_epoch_report(subjects):
             )
 
     # ----------------------------------------------------------
+    # Baseline-corrected condition TFRs
+    #
+    # These are ONLY used for the separate stimulation and
+    # no-stimulation plots.
+    #
+    # The original tfr_by_channel objects remain unchanged and
+    # are used for the contrast calculations below.
+    # ----------------------------------------------------------
+
+    tfr_stim_baselined = {}
+    tfr_no_stim_baselined = {}
+
+    for ch in OCCIPITAL_CHANNELS:
+
+        tfr_stim_baselined[ch] = (
+            tfr_by_channel["stim"][ch].copy()
+        )
+
+        tfr_no_stim_baselined[ch] = (
+            tfr_by_channel["no-stim"][ch].copy()
+        )
+
+        tfr_stim_baselined[ch].apply_baseline(
+            baseline=BASELINE,
+            mode="percent",
+        )
+
+        tfr_no_stim_baselined[ch].apply_baseline(
+            baseline=BASELINE,
+            mode="percent",
+        )
+
+    # ----------------------------------------------------------
     # Difference and ratio
     #
     # The user chooses whether these calculations use:
@@ -989,7 +1022,13 @@ def build_concat_epoch_report(subjects):
             "Cue-locked TFR difference with cue onset = 0 s. "
             "Left- and right-attention trials are combined. "
             "Difference = no-stimulation minus stimulation after "
-            "No baseline correction was applied."
+            + (
+                f"Baseline corrected using {BASELINE[0]} to {BASELINE[1]} s "
+                "in percent mode."
+                if apply_baseline_to_contrasts
+                else
+                "No baseline correction was applied."
+            )
         ),
         "TFR",
     )
@@ -1031,7 +1070,13 @@ def build_concat_epoch_report(subjects):
             "Left- and right-attention trials are combined. "
             "Ratio = (no-stimulation - stimulation) / "
             "(no-stimulation + stimulation)."
-            "No baseline correction was applied."
+            + (
+                f"Baseline corrected using {BASELINE[0]} to {BASELINE[1]} s "
+                "in percent mode."
+                if apply_baseline_to_contrasts
+                else
+                "No baseline correction was applied."
+            )
         ),
         "TFR",
     )
