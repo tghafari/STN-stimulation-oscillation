@@ -351,6 +351,26 @@ def parse_args():
 
     return parser.parse_args()
 
+def get_difference_baseline_choice():
+    """
+    Ask whether baseline correction should also be applied
+    before calculating the difference and ratio TFRs.
+    """
+
+    while True:
+        choice = input(
+            "\nApply baseline correction to difference and ratio TFRs? "
+            "(y/n): "
+        ).strip().lower()
+
+        if choice in {"y", "yes"}:
+            return True
+
+        if choice in {"n", "no"}:
+            return False
+
+        print("Please enter 'y' or 'n'.")
+
 # ==============================================================
 # Main group analysis
 # ==============================================================
@@ -368,6 +388,21 @@ def build_concat_epoch_report(subjects):
     -------
     None
     """
+
+    apply_baseline_to_contrasts = (
+        get_difference_baseline_choice()
+    )
+
+    if apply_baseline_to_contrasts:
+        print(
+            "\nBaseline correction WILL be applied "
+            "to difference and ratio TFRs."
+        )
+    else:
+        print(
+            "\nBaseline correction will NOT be applied "
+            "to difference and ratio TFRs."
+        )
 
     ensure_dir(
         GROUP_REPORT_DIR
@@ -478,6 +513,15 @@ def build_concat_epoch_report(subjects):
         "Group analysis",
     )
 
+    contrast_baseline_text = (
+        "Baseline correction was applied to the difference and ratio "
+        f"TFRs using {BASELINE[0]} to {BASELINE[1]} s, percent change."
+        if apply_baseline_to_contrasts
+        else
+        "No baseline correction was applied to the difference and ratio "
+        "TFRs."
+    )
+    
     report.add_text(
         "Analysis details",
         (
@@ -500,12 +544,10 @@ def build_concat_epoch_report(subjects):
             "• Time-bandwidth = 2.\n"
             "• Decimation factor = 2.\n"
             "• Baseline for stimulation/no-stimulation TFR plots: "
-            "-0.3 to -0.1 s, percent change.\n"
-            "• Difference TFR: stimulation minus no-stimulation "
-            "no baseline correction.\n"
-            "• Ratio TFR: (stimulation - no-stimulation) / "
-            "(stimulation + no-stimulation).\n"
-            "no baseline correction.\n\n"
+            "-0.3 to -0.1 s, percent change.\n\n"
+
+            "Difference/ratio baseline handling\n"
+            f"• {contrast_baseline_text}\n\n"
 
             "Posterior-channel TFRs\n"
             "• PO3, PO4 and POz are plotted separately.\n"
@@ -762,47 +804,15 @@ def build_concat_epoch_report(subjects):
             )
 
     # ----------------------------------------------------------
-    # Baseline-corrected condition TFRs
-    #
-    # These are ONLY used for the individual stim/no-stim plots.
-    # The original TFRs in tfr_by_channel remain unchanged.
-    # ----------------------------------------------------------
-
-    tfr_stim_baselined = {}
-    tfr_no_stim_baselined = {}
-
-    for ch in OCCIPITAL_CHANNELS:
-
-        tfr_stim_baselined[ch] = (
-            tfr_by_channel["stim"][ch].copy()
-        )
-
-        tfr_no_stim_baselined[ch] = (
-            tfr_by_channel["no-stim"][ch].copy()
-        )
-
-        tfr_stim_baselined[ch].apply_baseline(
-            baseline=BASELINE,
-            mode="percent",
-        )
-
-        tfr_no_stim_baselined[ch].apply_baseline(
-            baseline=BASELINE,
-            mode="percent",
-        )
-
-
-    # ----------------------------------------------------------
     # Difference and ratio
     #
-    # IMPORTANT:
-    # Both use the ORIGINAL, NON-BASELINE-CORRECTED TFRs.
+    # The user chooses whether these calculations use:
     #
-    # Difference:
-    #     stim - no-stim
+    #   NO  -> original, non-baseline-corrected TFRs
+    #   YES -> baseline-corrected TFRs
     #
-    # Ratio:
-    #     (stim - no-stim) / (stim + no-stim)
+    # The separate stim/no-stim condition plots are always
+    # baseline corrected independently above.
     # ----------------------------------------------------------
 
     tfr_diff = {}
@@ -812,13 +822,30 @@ def build_concat_epoch_report(subjects):
 
         stim = tfr_by_channel[
             "stim"
-        ][ch]
+        ][ch].copy()
 
         no_stim = tfr_by_channel[
             "no-stim"
-        ][ch]
+        ][ch].copy()
 
-        # Difference: RAW stim - RAW no-stim
+        # Apply baseline correction to the inputs used for
+        # difference and ratio only if the user requested it.
+        if apply_baseline_to_contrasts:
+
+            stim.apply_baseline(
+                baseline=BASELINE,
+                mode="percent",
+            )
+
+            no_stim.apply_baseline(
+                baseline=BASELINE,
+                mode="percent",
+            )
+
+        # ------------------------------------------------------
+        # Difference: stim - no-stim
+        # ------------------------------------------------------
+
         diff = stim.copy()
 
         diff.data = (
@@ -828,7 +855,11 @@ def build_concat_epoch_report(subjects):
 
         tfr_diff[ch] = diff
 
-        # Ratio: RAW (stim - no-stim) / (stim + no-stim)
+        # ------------------------------------------------------
+        # Ratio:
+        # (stim - no-stim) / (stim + no-stim)
+        # ------------------------------------------------------
+
         ratio = stim.copy()
 
         ratio.data = (
@@ -1213,7 +1244,8 @@ def build_concat_epoch_report(subjects):
     # ROI difference
     # ==========================================================
     #
-    # Both TFRs are not baseline corrected.
+    # TFR is baseline corrected or not based on the user's input
+    # above.
     #
     # Difference:
     #
@@ -1228,7 +1260,22 @@ def build_concat_epoch_report(subjects):
         "no-stim"
     ].copy()
 
-    roi_diff = roi_no_stim.copy()
+    # Apply baseline correction to the ROI contrast inputs
+    # only if requested by the user.
+    if apply_baseline_to_contrasts:
+
+        roi_stim.apply_baseline(
+            baseline=BASELINE,
+            mode="percent",
+        )
+
+        roi_no_stim.apply_baseline(
+            baseline=BASELINE,
+            mode="percent",
+        )
+
+    # Difference: stim - no-stim
+    roi_diff = roi_stim.copy()
 
     roi_diff.data = (
         roi_stim.data
@@ -1244,20 +1291,18 @@ def build_concat_epoch_report(subjects):
     #
     #     (stim - no-stim) / (stim + no-stim)
     #
-    # This is calculated from the original TFR values rather than
-    # the baseline-corrected values.
+    # Like diff, this can be baseline corrected or not based on 
+    # the user's input above.
     # ==========================================================
 
-    roi_ratio = roi_tfr[
-        "no-stim"
-    ].copy()
+    roi_ratio = roi_stim.copy()
 
     roi_ratio.data = (
-        roi_tfr["stim"].data
-        - roi_tfr["no-stim"].data
+        roi_stim.data
+        - roi_no_stim.data
     ) / (
-        roi_tfr["stim"].data
-        + roi_tfr["no-stim"].data
+        roi_stim.data
+        + roi_no_stim.data
         + np.finfo(float).eps
     )
 
