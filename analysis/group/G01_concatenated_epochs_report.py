@@ -986,6 +986,15 @@ def build_concat_epoch_report(subjects):
         "TFR",
     )
 
+
+    baseline_caption = (
+            f"Baseline correction was applied using "
+            f"{BASELINE[0]} to {BASELINE[1]} s in percent mode."
+            if apply_baseline_to_contrasts
+            else
+            "No baseline correction was applied."
+        )
+
     # ----------------------------------------------------------
     # Channel-specific TFR figure: difference
     # ----------------------------------------------------------
@@ -996,7 +1005,7 @@ def build_concat_epoch_report(subjects):
         subject_counts,
         (
             "Concatenated epochs across subjects - "
-            "Cue-locked TFR difference - no stimulation minus stimulation"
+            "Cue-locked TFR difference - stimulation minus no stimulation"
         ),
         baseline=None,
         mode=None,
@@ -1021,14 +1030,8 @@ def build_concat_epoch_report(subjects):
         (
             "Cue-locked TFR difference with cue onset = 0 s. "
             "Left- and right-attention trials are combined. "
-            "Difference = no-stimulation minus stimulation after "
-            + (
-                f"Baseline corrected using {BASELINE[0]} to {BASELINE[1]} s "
-                "in percent mode."
-                if apply_baseline_to_contrasts
-                else
-                "No baseline correction was applied."
-            )
+            "Difference = stimulation minus no stimulation after "
+            + {baseline_caption},
         ),
         "TFR",
     )
@@ -1070,13 +1073,7 @@ def build_concat_epoch_report(subjects):
             "Left- and right-attention trials are combined. "
             "Ratio = (no-stimulation - stimulation) / "
             "(no-stimulation + stimulation)."
-            + (
-                f"Baseline corrected using {BASELINE[0]} to {BASELINE[1]} s "
-                "in percent mode."
-                if apply_baseline_to_contrasts
-                else
-                "No baseline correction was applied."
-            )
+            + {baseline_caption},
         ),
         "TFR",
     )
@@ -1468,7 +1465,8 @@ def build_concat_epoch_report(subjects):
         (
             "Cue onset = 0 s. Left- and right-attention trials are "
             "combined ('both'). Difference = stimulation minus "
-            "no-stimulation. No baseline correction. "
+            "no-stimulation. "
+            + {baseline_caption},
             "Frequency range: 2-31.5 Hz."
         ),
         "TFR",
@@ -1509,6 +1507,7 @@ def build_concat_epoch_report(subjects):
             "Cue onset = 0 s. Left- and right-attention trials are "
             "combined ('both'). "
             "Ratio = (stim - no-stim) / (stim + no-stim). "
+            + {baseline_caption},
             "Frequency range: 2-31.5 Hz."
         ),
         "TFR",
