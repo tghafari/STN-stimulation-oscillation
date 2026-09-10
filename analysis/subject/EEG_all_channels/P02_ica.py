@@ -3,7 +3,7 @@
 The rereferenced stim and no-stim Epochs are concatenated ONLY for fitting one
 shared ICA decomposition. A filtered/resampled fitting copy is used (1-40 Hz,
 200 Hz). The same fitted ICA solution is then applied separately to the original
-full-resolution stim epochs and no-stim epochs. FastICA uses 19 components by
+full-resolution stim epochs and no-stim epochs. FastICA uses 30 components by
 default and every fitted component topography is written to the participant PDF.
 """
 from __future__ import annotations
@@ -13,7 +13,7 @@ from mne.preprocessing import ICA
 from pipeline_config import CONDITIONS,qc_dir,resolve_project_root,stage_path
 from all_channel_report import participant_report,figure_dir,fmt_channels
 def parse_args():
-    p=argparse.ArgumentParser(description=__doc__); p.add_argument('--subject',required=True); p.add_argument('--session',default='01'); p.add_argument('--task',default='SpAtt'); p.add_argument('--run',default='01'); p.add_argument('--platform',choices=['mac','bluebear'],default='mac'); p.add_argument('--project-root',default=None); p.add_argument('--n-components',type=int,default=19); p.add_argument('--random-state',type=int,default=97); return p.parse_args()
+    p=argparse.ArgumentParser(description=__doc__); p.add_argument('--subject',required=True); p.add_argument('--session',default='01'); p.add_argument('--task',default='SpAtt'); p.add_argument('--run',default='01'); p.add_argument('--platform',choices=['mac','bluebear'],default='mac'); p.add_argument('--project-root',default=None); p.add_argument('--n-components',type=int,default=30); p.add_argument('--random-state',type=int,default=97); return p.parse_args()
 def parse_components(text,n):
     vals=sorted(set(int(x) for x in text.replace(',',' ').split())) if text.strip() else []
     if any(x<0 or x>=n for x in vals):raise ValueError(f'components must be 0..{n-1}')
