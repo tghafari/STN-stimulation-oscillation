@@ -29,7 +29,7 @@ def main():
     good=[ch for ch in fit.ch_names if ch not in fit.info['bads']]; n=min(a.n_components,max(2,len(good)-1))
     print(f'Fitting one ICA with {n} components on {len(fit)} concatenated rereferenced stim + no-stim epochs.')
     ica=ICA(method='fastica',random_state=a.random_state,n_components=n,max_iter='auto'); ica.fit(fit,picks='eeg',reject_by_annotation=True)
-    component_figs=ica.plot_components(picks=range(ica.n_components_),show=False); component_figs=component_figs if isinstance(component_figs,(list,tuple)) else [component_figs]
+    component_figs=ica.plot_components(picks=range(ica.n_components_),show=True); component_figs=component_figs if isinstance(component_figs,(list,tuple)) else [component_figs]
     for i,fig in enumerate(component_figs):report.add_figure(fig,str(figs/f'P02_all_ICA_components_{i+1}.png'),f'All ICA components ({i+1}/{len(component_figs)})',f'All {ica.n_components_} fitted component topographies. No component is omitted.','ICA')
     ica.plot_sources(fit,block=True,title=f'sub-{s}: inspect ICA components')
     while True:
