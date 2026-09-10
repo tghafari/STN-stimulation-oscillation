@@ -24,19 +24,12 @@ def parse_args():
 
 
 def welch_psd(epochs):
-    """Use exactly the established posterior-channel epoch-PSD settings."""
     n_fft=min(int(2*epochs.info['sfreq']),len(epochs.times))
     spectrum=epochs.compute_psd(fmin=0.1,fmax=min(100.0,epochs.info['sfreq']/2.0),method='welch',n_fft=n_fft)
     return spectrum,n_fft
 
 
 def mean_linear_psd(spectrum):
-    """Average EpochsSpectrum power over epochs and channels, preserving frequency.
-
-    MNE Epochs.compute_psd returns data shaped (n_epochs, n_channels, n_freqs).
-    For the stimulation-artifact summary we want one spectrum per condition, so
-    average axes 0 and 1 and retain only the final frequency dimension.
-    """
     data=spectrum.get_data()
     if data.ndim != 3:
         raise RuntimeError(f'Expected EpochsSpectrum data with 3 dimensions (epochs, channels, frequencies), got shape {data.shape}.')
@@ -44,7 +37,6 @@ def mean_linear_psd(spectrum):
 
 
 def stimulation_artifact_qc(clean_epochs, report, figs, subject):
-    """Compare final stim/no-stim spectra without modifying the EEG data."""
     stim=clean_epochs['stim']; nostim=clean_epochs['no-stim']
     common=[ch for ch in stim.copy().pick('eeg').ch_names if ch in nostim.ch_names and ch not in stim.info['bads'] and ch not in nostim.info['bads']]
     if not common:
@@ -54,28 +46,23 @@ def stimulation_artifact_qc(clean_epochs, report, figs, subject):
     if not np.allclose(stim_spec.freqs,nostim_spec.freqs):
         raise RuntimeError('Stim and no-stim PSD frequency bins do not match.')
     freqs=stim_spec.freqs
-
-    # EpochsSpectrum.get_data() is (epochs, channels, frequencies). Average over
-    # epochs AND the same common channels, leaving one vector of length n_freqs.
-    # The previous version averaged only epochs, leaving channels x frequencies,
-    # which caused the x/y dimension error seen during plotting.
-    stim_power=mean_linear_psd(stim_spec)
-    nostim_power=mean_linear_psd(nostim_spec)
+    stim_power=mean_linear_psd(stim_spec); nostim_power=mean_linear_psd(nostim_spec)
     eps=np.finfo(float).tiny
-    stim_db=10*np.log10(np.maximum(stim_power,eps))
-    nostim_db=10*np.log10(np.maximum(nostim_power,eps))
+    stim_db=10*np.log10(np.maximum(stim_power,eps)); nostim_db=10*np.log10(np.maximum(nostim_power,eps))
     ratio_db=10*np.log10(np.maximum(stim_power,eps)/np.maximum(nostim_power,eps))
 
     fig,(ax1,ax2)=plt.subplots(2,1,figsize=(10,8),sharex=True)
     ax1.plot(freqs,nostim_db,label='no-stim'); ax1.plot(freqs,stim_db,label='stim')
-    ax1.set_ylabel('Mean EEG PSD (dB)'); ax1.set_title(f'sub-{subject}: stimulation artifact QC')
-    ax1.legend(); ax1.grid(True,alpha=.25)
+    ax1.set_ylabel('Mean EEG PSD (dB)'); ax1.set_title(f'sub-{subject}: stimulation artifact QC'); ax1.legend(); ax1.grid(True,alpha=.25)
     ax2.plot(freqs,ratio_db); ax2.axhline(0,linestyle='--',linewidth=1)
     ax2.set_xlabel('Frequency (Hz)'); ax2.set_ylabel('Stim / no-stim (dB)'); ax2.grid(True,alpha=.25)
+    max_tick=int(np.floor(freqs.max()/10.0)*10)
+    ax2.set_xticks(np.arange(0,max_tick+1,10))
+    ax2.set_xlim(0,min(100.0,float(freqs.max())))
     fig.tight_layout()
-    report.add_figure(fig,str(figs/'P03_stimulation_artifact_QC.png'),'Stimulation artifact QC: stim versus no-stim PSD',f'Top: mean Welch PSD averaged across epochs and the same {len(common)} good EEG channels. Bottom: 10*log10(stim/no-stim power). Values above 0 dB indicate greater power during stimulation. This is diagnostic only; no artifact correction is applied.','Stimulation artifact QC')
+    report.add_figure(fig,str(figs/'P03_stimulation_artifact_QC.png'),'Stimulation artifact QC: stim versus no-stim PSD',f'Top: mean Welch PSD averaged across epochs and the same {len(common)} good EEG channels. Bottom: 10*log10(stim/no-stim power). X-axis ticks are shown every 10 Hz. Values above 0 dB indicate greater power during stimulation. This is diagnostic only; no artifact correction is applied.','Stimulation artifact QC')
     report.add_text('How to interpret this QC','This comparison is intended to locate frequencies affected by stimulation before ERP/TFR analysis. Each condition is first averaged across epochs and the identical set of good EEG channels. The ratio is then computed from linear Welch power using identical frequency bins. Peaks in the ratio indicate stimulation-associated spectral power and should not automatically be interpreted as neural modulation. No notch filter, ICA rejection, interpolation, or other correction is performed by this QC step.','Stimulation artifact QC')
-    return {'common_good_eeg_channels':common,'n_common_good_eeg_channels':len(common),'averaging':'mean across epochs and common good EEG channels before dB conversion','ratio_definition':'10*log10(mean_stim_linear_power / mean_no_stim_linear_power)','qc_only_no_correction':True}
+    return {'common_good_eeg_channels':common,'n_common_good_eeg_channels':len(common),'averaging':'mean across epochs and common good EEG channels before dB conversion','ratio_definition':'10*log10(mean_stim_linear_power / mean_no_stim_linear_power)','x_ticks_hz':list(range(0,max_tick+1,10)),'qc_only_no_correction':True}
 
 
 def main():
