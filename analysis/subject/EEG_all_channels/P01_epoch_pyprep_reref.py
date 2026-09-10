@@ -1,18 +1,18 @@
-"""P01: full-recording PyPREP -> stim segmentation -> epochs -> rereference.
+"""P01: full-recording PyPREP -> PSD/manual channel QC -> stim segmentation -> epochs -> rereference.
 
 Exact order
 -----------
-1. Read the original unsegmented continuous BIDS EEG.
-2. Low-pass the WHOLE continuous recording at 100 Hz.
-3. Run PyPREP noisy-channel detection on that full continuous recording.
-4. Review/edit PyPREP bad-channel suggestions manually.
-5. Segment stimulation and no-stimulation using stimulation_cropped_time.json.
-6. Define cue-locked epochs (-0.5 to +1.6 s) separately in each segment.
-7. Apply average reference to each condition's epochs, excluding marked bad EEG
-   channels. Bad channels stay marked: they are not interpolated or dropped.
+1. Read original unsegmented continuous BIDS EEG and low-pass it at 100 Hz.
+2. Run PyPREP once on the full continuous recording.
+3. Mark PyPREP suggestions and SHOW the continuous-data PSD interactively.
+4. Researcher adds bad channels or rescues PyPREP channels judged to be good.
+5. Segment stim/no-stim using stimulation_cropped_time.json.
+6. Define cue epochs (-0.5 to +1.6 s) separately in each segment.
+7. Average-rereference epochs using good EEG channels; bads remain marked.
 """
 from __future__ import annotations
 import argparse,json
+import matplotlib.pyplot as plt
 import mne
 from mne_bids import read_raw_bids
 from pyprep.find_noisy_channels import NoisyChannels
@@ -47,11 +47,35 @@ def main():
     raw=read_raw_bids(base_bids_path(root,s,a.session,a.task,a.run),verbose=True,extra_params={'preload':True})
     if raw.get_montage() is None:raw.set_montage('standard_1020',on_missing='warn')
     raw.filter(l_freq=None,h_freq=100.0)
-    reasons,errors=pyprep_reasons(raw); suggested=sorted(reasons); raw.info['bads']=sorted(set(raw.info['bads'])|set(suggested))
-    fig=raw.compute_psd(fmin=0.5,fmax=min(100,raw.info['sfreq']/2)).plot(show=False)
-    report.add_figure(fig,str(figs/'P01_full_continuous_PyPREP_PSD.png'),'Full continuous EEG: PyPREP channel QC','Whole unsegmented recording after 100-Hz low-pass. PyPREP suggestions are marked for manual review.','All-channel preprocessing')
-    print('PyPREP suggested:',suggested or 'None'); additions=input('Additional bad EEG channels (space-separated, Enter for none): ').strip().split(); removals=input('PyPREP channels you believe are GOOD (space-separated, Enter for none): ').strip().split()
+
+    reasons,errors=pyprep_reasons(raw); suggested=sorted(reasons)
+    raw.info['bads']=sorted(set(raw.info['bads'])|set(suggested))
+    print('\nPyPREP suggested bad channels:',suggested or 'None')
+    if reasons:
+        print('PyPREP reasons:')
+        for ch,why in sorted(reasons.items()):print(f'  {ch}: {", ".join(why)}')
+    if errors:
+        print('PyPREP detector errors:')
+        for err in errors:print('  '+err)
+
+    # One PSD object is used both for the persistent PDF and the interactive QC.
+    # PyPREP suggestions are already in raw.info["bads"], so MNE marks them in
+    # the PSD display. The interactive figure MUST be inspected before answering.
+    spectrum=raw.compute_psd(fmin=0.5,fmax=min(100.0,raw.info['sfreq']/2.0))
+    fig_report=spectrum.plot(show=False)
+    report.add_figure(fig_report,str(figs/'P01_full_continuous_PyPREP_PSD.png'),'Full continuous EEG: PyPREP channel QC','Whole unsegmented recording after 100-Hz low-pass. PyPREP suggestions were marked bad before this PSD was generated.','All-channel preprocessing')
+    plt.close(fig_report)
+    print('\nOpening PSD for manual bad-channel QC.')
+    print('Inspect the PyPREP-marked channels and all other EEG channels, then close the PSD window.')
+    spectrum.plot(show=True,block=True)
+
+    additions=input('Additional bad EEG channels (space-separated, Enter for none): ').strip().split()
+    removals=input('PyPREP channels you believe are GOOD (space-separated, Enter for none): ').strip().split()
+    unknown_add=[ch for ch in additions if ch not in raw.ch_names]; unknown_remove=[ch for ch in removals if ch not in raw.ch_names]
+    if unknown_add or unknown_remove:raise ValueError(f'Unknown channel name(s): additions={unknown_add}, removals={unknown_remove}')
     final=sorted(((set(raw.info['bads'])|set(additions)|set(suggested))-set(removals))&set(raw.ch_names)); raw.info['bads']=final
+    print('Final bad channels after manual QC:',final or 'None')
+
     table=json.loads(crop_table_path().read_text(encoding='utf-8')); key=f'sub-{s}'
     if key not in table:raise KeyError(f'No stimulation crop times for {key} in {crop_table_path()}')
     audit={'subject':key,'low_pass_hz':100,'pyprep_reasons':reasons,'detector_errors':errors,'manual_additions':additions,'manual_removals':removals,'bad_channels':final,'conditions':{}}
@@ -63,6 +87,6 @@ def main():
         audit['conditions'][condition]={'crop_times_sec':times,'n_epochs':len(epochs)}
         report.add_text(f'{condition}: stimulation segmentation',f'Kept ranges (s): {times}\nWhole recording was low-pass filtered at 100 Hz before segmentation.\nCue epochs: -0.5 to +1.6 s; baseline=None; detrend=1.\nEpochs: {len(epochs)}','Stimulation segmentation')
     reason_text='\n'.join(f'{ch}: {", ".join(v)}' for ch,v in sorted(reasons.items())) or 'None'
-    report.add_text('PyPREP and rereferencing',f'PyPREP was run once on the full unsegmented continuous EEG after 100-Hz low-pass.\nDetectors: deviation, high-frequency noise, correlation, RANSAC.\nSuggestions and reasons:\n{reason_text}\nDetector errors: {errors or "None"}\nManual additions: {fmt_channels(additions)}\nManual removals: {fmt_channels(removals)}\nFinal bad channels: {fmt_channels(final)}\nAfter stim/no-stim segmentation and cue epoching, each condition was average-rereferenced using good EEG channels. Bad channels remained marked and were not interpolated or dropped.','All-channel preprocessing')
+    report.add_text('PyPREP and rereferencing',f'PyPREP was run once on the full unsegmented continuous EEG after 100-Hz low-pass.\nThe PSD was inspected manually after PyPREP suggestions were marked.\nDetectors: deviation, high-frequency noise, correlation, RANSAC.\nSuggestions and reasons:\n{reason_text}\nDetector errors: {errors or "None"}\nManual additions: {fmt_channels(additions)}\nManual removals/rescued PyPREP channels: {fmt_channels(removals)}\nFinal bad channels: {fmt_channels(final)}\nAfter stim/no-stim segmentation and cue epoching, each condition was average-rereferenced using good EEG channels. Bad channels remained marked and were not interpolated or dropped.','All-channel preprocessing')
     (qc_dir(root,s)/'P01_pyprep_segment_epoch_reref.json').write_text(json.dumps(audit,indent=2)+'\n',encoding='utf-8')
 if __name__=='__main__':main()
