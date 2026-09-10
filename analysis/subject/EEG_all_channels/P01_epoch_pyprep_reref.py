@@ -67,7 +67,8 @@ def main():
     plt.close(fig_report)
     print('\nOpening PSD for manual bad-channel QC.')
     print('Inspect the PyPREP-marked channels and all other EEG channels, then close the PSD window.')
-    spectrum.plot(show=True,block=True)
+    fig = spectrum.plot(show=True)
+    plt.show(block=True)
 
     additions=input('Additional bad EEG channels (space-separated, Enter for none): ').strip().split()
     removals=input('PyPREP channels you believe are GOOD (space-separated, Enter for none): ').strip().split()
