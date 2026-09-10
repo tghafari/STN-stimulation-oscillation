@@ -33,7 +33,7 @@ def main():
     for i,fig in enumerate(component_figs):report.add_figure(fig,str(figs/f'P02_all_ICA_components_{i+1}.png'),f'All ICA components ({i+1}/{len(component_figs)})',f'All {ica.n_components_} fitted component topographies. No component is omitted.','ICA')
     ica.plot_sources(fit,block=True,title=f'sub-{s}: inspect ICA components')
     while True:
-        try:excluded=parse_components(input('ICA components to EXCLUDE (space/comma separated, Enter for none): '),ica.n_components_);break
+        try:excluded=parse_components(input('ICA components to EXCLUDE (space/comma separated, for example 0 1, Enter for none): '),ica.n_components_);break
         except ValueError as exc:print(exc)
     if excluded:
         props=ica.plot_properties(fit,picks=excluded,show=False); props=props if isinstance(props,(list,tuple)) else [props]
