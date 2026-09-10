@@ -1,15 +1,27 @@
-"""Stage 0: human inclusion decision based on the existing posterior-channel report.
+"""Stage 0: human inclusion decision based on the existing posterior-channel PDF report.
 
-This stage deliberately does NOT try to decide automatically whether alpha is
-modulated. It opens the participant's most recent HTML report so the researcher
-can inspect the established PO3/PO4/POz analysis, then records an explicit yes/no
-in JSON. The pipeline reads that JSON before any all-channel preprocessing.
+For each participant, this stage looks for the report produced by the existing
+posterior-channel analysis at:
+
+    <project_root>/derivatives/reports/sub-<subject>/
+        sub-<subject>_analysis_report.pdf
+
+For example, sub-102 on Tara's Mac is expected at:
+
+    /Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/BEAR_outage/
+    STN-in-PD/derivatives/reports/sub-102/sub-102_analysis_report.pdf
+
+The PDF is opened in the operating system's default PDF viewer so the researcher
+can inspect the established PO3/PO4/POz alpha-modulation results. The inclusion
+choice remains a HUMAN decision; this script does not impose an automatic alpha
+threshold.
 """
 from __future__ import annotations
 
 import argparse
 import json
-import webbrowser
+import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -31,16 +43,47 @@ def parse_args() -> argparse.Namespace:
 
 
 def find_reports(project_root: Path, subject: str) -> list[Path]:
-    """Find HTML reports in the two report locations used in this repository."""
-    candidates = []
-    for folder in (
-        project_root / "derivatives" / "reports" / f"sub-{subject}",
-        project_root / "derivatives" / "reports",
-    ):
-        if folder.exists():
-            candidates.extend(folder.glob(f"*sub-{subject}*.html"))
-            candidates.extend(folder.glob("*.html") if folder.name == f"sub-{subject}" else [])
+    """Return participant PDF reports, preferring the standard report filename.
+
+    The first candidate is the exact filename produced by the existing report
+    pipeline: ``sub-<subject>_analysis_report.pdf``. If that file is absent, the
+    function searches the same participant report directory for other PDFs and
+    returns the newest one first. This fallback makes the QC stage tolerant of
+    older report naming conventions without accidentally searching another
+    participant's folder.
+    """
+    report_folder = project_root / "derivatives" / "reports" / f"sub-{subject}"
+    expected = report_folder / f"sub-{subject}_analysis_report.pdf"
+
+    if expected.is_file():
+        return [expected]
+
+    if not report_folder.is_dir():
+        return []
+
+    candidates = list(report_folder.glob(f"sub-{subject}*.pdf"))
+    if not candidates:
+        candidates = list(report_folder.glob("*.pdf"))
+
     return sorted(set(candidates), key=lambda p: p.stat().st_mtime, reverse=True)
+
+
+def open_pdf(report_path: Path) -> None:
+    """Open a local PDF with the platform's normal PDF viewer.
+
+    On macOS this uses ``open`` (normally Preview or the user's chosen viewer).
+    Linux/Bluebear uses ``xdg-open`` when available. Windows support is included
+    for completeness when this function is reused interactively.
+    """
+    report_path = report_path.resolve()
+
+    if sys.platform == "darwin":
+        subprocess.run(["open", str(report_path)], check=False)
+    elif sys.platform.startswith("win"):
+        import os
+        os.startfile(str(report_path))  # type: ignore[attr-defined]
+    else:
+        subprocess.run(["xdg-open", str(report_path)], check=False)
 
 
 def main() -> None:
@@ -53,15 +96,25 @@ def main() -> None:
     print(f"SUBJECT SCREENING: sub-{subject}")
     print("Inspect alpha modulation in: " + ", ".join(POSTERIOR_SCREEN_CHANNELS))
     print("This is a HUMAN inclusion decision; no automated threshold is used.")
+    print(f"Project root: {root}")
     print("=" * 72)
 
     report_path = reports[0] if reports else None
     if report_path:
-        print(f"Opening most recent report:\n  {report_path}")
-        webbrowser.open(report_path.as_uri())
+        print(f"Opening participant PDF report:\n  {report_path}")
+        open_pdf(report_path)
     else:
-        print("WARNING: no existing HTML participant report was found automatically.")
-        print("Open the posterior-channel report manually before making the decision.")
+        expected = (
+            root
+            / "derivatives"
+            / "reports"
+            / f"sub-{subject}"
+            / f"sub-{subject}_analysis_report.pdf"
+        )
+        print("WARNING: no participant PDF report was found.")
+        print("Expected the report here:")
+        print(f"  {expected}")
+        print("Check the project root above before making the inclusion decision.")
 
     decision = args.decision
     if decision is None:
@@ -84,6 +137,13 @@ def main() -> None:
         "criterion": "human inspection of alpha modulation in PO3, PO4, POz",
         "screen_channels": list(POSTERIOR_SCREEN_CHANNELS),
         "report_opened": str(report_path) if report_path else None,
+        "expected_report": str(
+            root
+            / "derivatives"
+            / "reports"
+            / f"sub-{subject}"
+            / f"sub-{subject}_analysis_report.pdf"
+        ),
         "timestamp_local": datetime.now().astimezone().isoformat(),
     }
     outfile = qc_dir(root, subject) / "inclusion_decision.json"
