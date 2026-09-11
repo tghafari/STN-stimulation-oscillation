@@ -1,49 +1,181 @@
-"""Manual work on segmented/epoched EEG without changing saved data.
+"""Manual work on segmented/epoched EEG -- deliberately simple copy/paste code.
 
-Run in IPython, for example:
-    %run manual_epoch_exploration.py --subject 103
-
-The script automatically reads whether P01 used no reference or average reference,
-loads the corresponding stim/no-stim P01 epoch files, and creates useful PSD/TFR
-objects. It does not save or overwrite EEG files.
+This file does NOT use pipeline_config, helper functions, argparse, or the automated
+pipeline. Change SUBJECT and REFERENCE below, then run individual sections in
+IPython/VS Code. The examples use direct MNE commands so every analysis step is
+visible. Nothing below overwrites the saved EEG files.
 """
-from __future__ import annotations
-import argparse,sys
-from pathlib import Path
+
+# %% 1. Imports and explicit directory
 import mne
 import numpy as np
-HERE=Path(__file__).resolve().parent; PIPELINE=HERE.parent
-if str(PIPELINE) not in sys.path:sys.path.insert(0,str(PIPELINE))
-from pipeline_config import CONDITIONS,participant_rereference,reference_desc,resolve_project_root,stage_path
-POSTERIOR=['PO3','POz','PO4']
-def parse_args():
- p=argparse.ArgumentParser(description=__doc__);p.add_argument('--subject',required=True);p.add_argument('--session',default='01');p.add_argument('--task',default='SpAtt');p.add_argument('--run',default='01');p.add_argument('--platform',choices=['mac','bluebear'],default='mac');p.add_argument('--project-root',default=None);return p.parse_args()
-def main():
- a=parse_args();s=a.subject.removeprefix('sub-');root=resolve_project_root(a.platform,a.project_root);ref=participant_rereference(root,s);print(f'P01 reference state: {reference_desc(ref)}')
- epochs={}
- for c in CONDITIONS:
-  path=stage_path(root,s,a.session,a.task,a.run,c,'reref','epo')
-  if not path.exists():raise FileNotFoundError(f'Missing P01 epochs: {path}')
-  epochs[c]=mne.read_epochs(path,preload=True);print(f'{c}: {path.name} ({len(epochs[c])} epochs)')
- stim=epochs['stim'];nostim=epochs['no-stim']
- # Welch PSD: same settings as final preprocessing QC.
- psd_stim=stim.compute_psd(method='welch',fmin=0.1,fmax=min(100.,stim.info['sfreq']/2.),n_fft=min(int(2*stim.info['sfreq']),len(stim.times)))
- psd_nostim=nostim.compute_psd(method='welch',fmin=0.1,fmax=min(100.,nostim.info['sfreq']/2.),n_fft=min(int(2*nostim.info['sfreq']),len(nostim.times)))
- posterior=[ch for ch in POSTERIOR if ch in stim.ch_names]
- psd_stim_post=stim.copy().pick(posterior).compute_psd(method='welch',fmin=0.1,fmax=min(100.,stim.info['sfreq']/2.),n_fft=min(int(2*stim.info['sfreq']),len(stim.times))) if posterior else None
- # Multitaper TFR: same settings as A02.
- freqs=np.arange(2.,31.,1.);n_cycles=freqs/2.
- tfr_stim=stim.compute_tfr(method='multitaper',freqs=freqs,n_cycles=n_cycles,time_bandwidth=2.,use_fft=True,return_itc=False,average=True,decim=2,n_jobs=4)
- tfr_nostim=nostim.compute_tfr(method='multitaper',freqs=freqs,n_cycles=n_cycles,time_bandwidth=2.,use_fft=True,return_itc=False,average=True,decim=2,n_jobs=4)
- tfr_stim_percent=tfr_stim.copy().apply_baseline((-0.3,-0.1),mode='percent');tfr_nostim_percent=tfr_nostim.copy().apply_baseline((-0.3,-0.1),mode='percent')
- globals().update(locals())
- print('\nObjects ready for manual work: stim, nostim, psd_stim, psd_nostim, psd_stim_post, tfr_stim, tfr_nostim, tfr_stim_percent, tfr_nostim_percent')
- print('\nExamples:')
- print('  stim.plot()')
- print('  psd_stim.plot()')
- print('  psd_nostim.plot()')
- print('  psd_stim_post.plot()')
- print("  tfr_stim_percent.plot(picks='POz', tmin=-0.3, tmax=1.4)")
- print("  tfr_nostim_percent.plot(picks='PO3', tmin=-0.3, tmax=1.4)")
- print('\nUse tfr_stim/tfr_nostim (unbaselined) for difference or ratio calculations.')
-if __name__=='__main__':main()
+from pathlib import Path
+
+SUBJECT = "103"
+REFERENCE = "noref"          # use "noref" or "avgref"
+
+# This is where participant derivative FIF files are stored on Tara's Mac.
+data_dir = Path(
+    "/Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/BEAR_outage/"
+    "STN-in-PD/data/BIDS/derivatives"
+) / f"sub-{SUBJECT}"
+
+print(data_dir)
+
+# Optional: list the epoch files so you can see exactly what is available.
+for file in sorted(data_dir.glob("*epo.fif")):
+    print(file.name)
+
+
+# %% 2. Open the segmented, cue-locked epochs made by P01
+# These are BEFORE ICA and before manual bad-trial rejection.
+# REFERENCE tells you explicitly whether P01 applied average rereferencing.
+stim_file = data_dir / (
+    f"sub-{SUBJECT}_ses-01_task-SpAtt_run-01_eeg.fif_"
+    f"stim_desc-{REFERENCE}_epo.fif"
+)
+
+nostim_file = data_dir / (
+    f"sub-{SUBJECT}_ses-01_task-SpAtt_run-01_eeg.fif_"
+    f"no-stim_desc-{REFERENCE}_epo.fif"
+)
+
+stim = mne.read_epochs(stim_file, preload=True)
+nostim = mne.read_epochs(nostim_file, preload=True)
+
+print(stim)
+print(nostim)
+print("Stim bad channels:", stim.info["bads"])
+print("No-stim bad channels:", nostim.info["bads"])
+
+
+# %% 3. Look at the epoched EEG time series
+# Scroll through trials and channels interactively.
+stim.plot()
+
+# Or inspect no-stimulation epochs.
+nostim.plot()
+
+
+# %% 4. Welch PSD -- stimulation epochs
+# Same basic Welch settings used in the pipeline final epoch PSD.
+n_fft = min(int(2 * stim.info["sfreq"]), len(stim.times))
+
+psd_stim = stim.compute_psd(
+    method="welch",
+    fmin=0.1,
+    fmax=100,
+    n_fft=n_fft,
+)
+
+psd_stim.plot()
+
+
+# %% 5. Welch PSD -- no-stimulation epochs
+n_fft = min(int(2 * nostim.info["sfreq"]), len(nostim.times))
+
+psd_nostim = nostim.compute_psd(
+    method="welch",
+    fmin=0.1,
+    fmax=100,
+    n_fft=n_fft,
+)
+
+psd_nostim.plot()
+
+
+# %% 6. PSD of only the three posterior channels
+posterior_stim = stim.copy().pick(["PO3", "POz", "PO4"])
+
+n_fft = min(
+    int(2 * posterior_stim.info["sfreq"]),
+    len(posterior_stim.times),
+)
+
+psd_posterior = posterior_stim.compute_psd(
+    method="welch",
+    fmin=0.1,
+    fmax=100,
+    n_fft=n_fft,
+)
+
+psd_posterior.plot()
+
+
+# %% 7. Multitaper TFR -- stimulation
+# Same TFR parameters as the all-channel analysis.
+freqs = np.arange(2.0, 31.0, 1.0)
+n_cycles = freqs / 2.0
+
+tfr_stim = stim.compute_tfr(
+    method="multitaper",
+    freqs=freqs,
+    n_cycles=n_cycles,
+    time_bandwidth=2.0,
+    use_fft=True,
+    return_itc=False,
+    average=True,
+    decim=2,
+    n_jobs=4,
+)
+
+
+# %% 8. Percent baseline correction of stimulation TFR
+# MNE mode="percent" gives fractional change from baseline:
+#  0.20 = 20% increase; -0.20 = 20% decrease.
+tfr_stim_percent = tfr_stim.copy()
+tfr_stim_percent.apply_baseline(
+    baseline=(-0.3, -0.1),
+    mode="percent",
+)
+
+# Plot one channel.
+tfr_stim_percent.plot(
+    picks="POz",
+    tmin=-0.3,
+    tmax=1.4,
+)
+
+
+# %% 9. Multitaper TFR -- no stimulation
+freqs = np.arange(2.0, 31.0, 1.0)
+n_cycles = freqs / 2.0
+
+tfr_nostim = nostim.compute_tfr(
+    method="multitaper",
+    freqs=freqs,
+    n_cycles=n_cycles,
+    time_bandwidth=2.0,
+    use_fft=True,
+    return_itc=False,
+    average=True,
+    decim=2,
+    n_jobs=4,
+)
+
+
+# %% 10. Percent baseline correction of no-stimulation TFR
+tfr_nostim_percent = tfr_nostim.copy()
+tfr_nostim_percent.apply_baseline(
+    baseline=(-0.3, -0.1),
+    mode="percent",
+)
+
+tfr_nostim_percent.plot(
+    picks="POz",
+    tmin=-0.3,
+    tmax=1.4,
+)
+
+
+# %% 11. Plot PO3, POz and PO4 separately
+# You can copy any one of these lines independently.
+tfr_stim_percent.plot(picks="PO3", tmin=-0.3, tmax=1.4)
+tfr_stim_percent.plot(picks="POz", tmin=-0.3, tmax=1.4)
+tfr_stim_percent.plot(picks="PO4", tmin=-0.3, tmax=1.4)
+
+
+# %% 12. Important: unbaselined TFRs are still available
+# Use tfr_stim and tfr_nostim (NOT the *_percent copies) if you want to
+# experiment with stim - no-stim or (stim-no-stim)/(stim+no-stim), because
+# those comparative analyses in the pipeline are intentionally unbaselined.
