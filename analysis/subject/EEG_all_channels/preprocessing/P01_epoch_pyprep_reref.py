@@ -1,19 +1,10 @@
-"""P01: full-recording PyPREP -> interactive raw/PSD channel QC -> segmentation -> epochs -> rereference.
+"""P01: full-recording PyPREP -> manual channel QC -> final good-channel PSD -> segmentation -> epochs -> rereference.
 
-Order
------
-1. Read original unsegmented continuous BIDS EEG; low-pass whole recording at 100 Hz.
-2. Run PyPREP once on that continuous recording.
-3. Open the continuous raw browser. PyPREP suggestions are already marked bad.
-   The researcher may click channel names/traces to toggle additional bad channels.
-4. Record a free-text reason for every channel newly rejected by the researcher.
-5. Plot a PSD containing ONLY the union of PyPREP + manually rejected channels.
-   After inspection, ask whether any of those rejected channels should be rescued.
-6. Finalize the bad-channel list, then segment stim/no-stim from stimulation_cropped_time.json.
-7. Define cue epochs (-0.5 to +1.6 s) separately and average-rereference using good EEG channels.
-
-No bad channel is interpolated or dropped here. Human decisions and reasons are written
-to the participant PDF and JSON audit file.
+PyPREP is run on the 100-Hz low-passed continuous recording. The researcher then
+inspects raw data, documents reasons for manually rejected channels, inspects a PSD
+of all proposed rejected channels and may rescue channels. After the FINAL bad list
+is set, a PSD of REMAINING GOOD EEG CHANNELS is shown and saved to the report before
+stim/no-stim segmentation. Bad channels are never interpolated or dropped here.
 """
 from __future__ import annotations
 import argparse,json
@@ -52,7 +43,7 @@ def ask_reasons(channels):
  for ch in channels:
   while True:
    reason=input(f'Reason for manually rejecting {ch}: ').strip()
-   if reason: out[ch]=reason; break
+   if reason:out[ch]=reason;break
    print('Please enter a reason so the manual decision is auditable.')
  return out
 def main():
@@ -65,51 +56,48 @@ def main():
  for ch,why in sorted(reasons.items()):print(f'  {ch}: {", ".join(why)}')
  for err in errors:print('PyPREP detector error: '+err)
 
- # RAW BROWSER QC: the browser edits raw.info['bads'] when channels are clicked.
  before_browser=set(raw.info['bads'])
  print('\nOpening continuous raw data for manual channel QC.')
- print('PyPREP channels are already marked bad. Click channel names/traces to toggle bad/good channels.')
- print('You may mark additional channels bad here. Close the raw window when finished.')
+ print('PyPREP channels are already marked bad. Click channel names/traces to toggle bad/good channels; close when finished.')
  raw.plot(n_channels=min(30,len(raw.ch_names)),duration=20.0,block=True,title=f'sub-{s}: post-PyPREP manual channel QC')
- after_browser=set(raw.info['bads'])
- manual_additions=sorted(after_browser-before_browser)
- browser_rescues=sorted(before_browser-after_browser)
- manual_reasons=ask_reasons(manual_additions)
- print('Manually added bad channels:',manual_additions or 'None')
- print('PyPREP channels rescued in raw browser:',browser_rescues or 'None')
+ after_browser=set(raw.info['bads']); manual_additions=sorted(after_browser-before_browser); browser_rescues=sorted(before_browser-after_browser); manual_reasons=ask_reasons(manual_additions)
+ print('Manually added bad channels:',manual_additions or 'None'); print('PyPREP channels rescued in raw browser:',browser_rescues or 'None')
 
- # PSD OF REJECTED CHANNELS ONLY, after PyPREP + raw-browser manual decisions.
  rejected_before_psd=sorted(after_browser)
  if rejected_before_psd:
-  rejected_raw=raw.copy().pick(rejected_before_psd)
-  rejected_raw.info['bads']=[]  # ensure MNE actually plots these channels
-  spectrum=rejected_raw.compute_psd(fmin=0.5,fmax=min(100.0,rejected_raw.info['sfreq']/2.0))
-  fig_report=spectrum.plot(show=False)
-  report.add_figure(fig_report,str(figs/'P01_rejected_channels_PSD.png'),'PSD of PyPREP + manually rejected channels',f'PSD restricted to channels currently proposed for rejection after PyPREP and raw-browser QC: {fmt_channels(rejected_before_psd)}. This plot is used to decide whether any rejected channel should be rescued.','All-channel preprocessing')
-  plt.close(fig_report)
-  print('\nOpening PSD of rejected channels ONLY.')
-  print('Inspect whether every proposed bad channel should remain rejected, then close the PSD.')
+  rejected_raw=raw.copy().pick(rejected_before_psd); rejected_raw.info['bads']=[]
+  spectrum=rejected_raw.compute_psd(fmin=0.5,fmax=min(100.0,rejected_raw.info['sfreq']/2.0)); fig_report=spectrum.plot(show=False)
+  report.add_figure(fig_report,str(figs/'P01_rejected_channels_PSD.png'),'PSD of PyPREP + manually rejected channels',f'PSD restricted to channels proposed for rejection after PyPREP and raw-browser QC: {fmt_channels(rejected_before_psd)}. Used to decide whether any rejected channel should be rescued.','All-channel preprocessing'); plt.close(fig_report)
+  print('\nOpening PSD of rejected channels ONLY. Close it after inspection.')
   spectrum.plot(show=True); plt.show(block=True)
   rescue_psd=input('Rejected channels that are actually GOOD and should be rescued (space-separated, Enter for none): ').strip().split()
  else:
-  print('\nNo channels are currently rejected; rejected-channel PSD is skipped.')
-  rescue_psd=[]
+  print('\nNo channels are currently rejected; rejected-channel PSD is skipped.'); rescue_psd=[]
  unknown=[ch for ch in rescue_psd if ch not in rejected_before_psd]
  if unknown:raise ValueError(f'Can only rescue channels shown in rejected-channel PSD. Unknown/not-rejected: {unknown}')
  final=sorted(set(rejected_before_psd)-set(rescue_psd)); raw.info['bads']=final
  print('FINAL bad channels:',final or 'None')
 
+ # FINAL GOOD-CHANNEL PSD: this is deliberately the last channel-QC view before segmentation.
+ good_eeg=[ch for ch in raw.copy().pick('eeg').ch_names if ch not in final]
+ if not good_eeg:raise RuntimeError('No good EEG channels remain after channel QC.')
+ good_raw=raw.copy().pick(good_eeg); good_raw.info['bads']=[]
+ good_spectrum=good_raw.compute_psd(fmin=0.5,fmax=min(100.0,good_raw.info['sfreq']/2.0)); good_fig=good_spectrum.plot(show=False)
+ report.add_figure(good_fig,str(figs/'P01_final_good_channels_PSD.png'),'Final PSD of remaining good EEG channels',f'PSD of the {len(good_eeg)} EEG channels retained after PyPREP, raw-browser review, rejected-channel PSD review, and all channel rescues. This is the final spectral QC immediately before stimulation segmentation. Final rejected channels: {fmt_channels(final)}.','All-channel preprocessing'); plt.close(good_fig)
+ print('\nOpening FINAL PSD of remaining GOOD EEG channels.')
+ print('This is the last channel-quality check before stimulation segmentation. Close the PSD to continue.')
+ good_spectrum.plot(show=True); plt.show(block=True)
+
  table=json.loads(crop_table_path().read_text(encoding='utf-8')); key=f'sub-{s}'
  if key not in table:raise KeyError(f'No stimulation crop times for {key} in {crop_table_path()}')
- audit={'subject':key,'low_pass_hz':100,'pyprep_reasons':reasons,'detector_errors':errors,'pyprep_suggested_bad_channels':suggested,'manual_raw_browser_additions':manual_additions,'manual_raw_browser_reasons':manual_reasons,'raw_browser_rescued_pyprep_channels':browser_rescues,'rejected_channels_shown_in_psd':rejected_before_psd,'channels_rescued_after_rejected_psd':rescue_psd,'bad_channels':final,'conditions':{}}
+ audit={'subject':key,'low_pass_hz':100,'pyprep_reasons':reasons,'detector_errors':errors,'pyprep_suggested_bad_channels':suggested,'manual_raw_browser_additions':manual_additions,'manual_raw_browser_reasons':manual_reasons,'raw_browser_rescued_pyprep_channels':browser_rescues,'rejected_channels_shown_in_psd':rejected_before_psd,'channels_rescued_after_rejected_psd':rescue_psd,'bad_channels':final,'final_good_eeg_channels':good_eeg,'n_final_good_eeg_channels':len(good_eeg),'final_good_channel_psd_before_segmentation':True,'conditions':{}}
  for condition in CONDITIONS:
   times=table[key][condition]; segment=make_segment(raw,times); segment.info['bads']=[ch for ch in final if ch in segment.ch_names]
   epochs=define_epochs(segment); epochs.info['bads']=[ch for ch in final if ch in epochs.ch_names]; epochs.set_eeg_reference(ref_channels='average',projection=False)
   out=stage_path(root,s,a.session,a.task,a.run,condition,'reref','epo'); epochs.save(out,overwrite=True)
   audit['conditions'][condition]={'crop_times_sec':times,'n_epochs':len(epochs)}
   report.add_text(f'{condition}: stimulation segmentation',f'Kept ranges (s): {times}\nWhole recording was low-pass filtered at 100 Hz before segmentation.\nCue epochs: -0.5 to +1.6 s; baseline=None; detrend=1.\nEpochs: {len(epochs)}','Stimulation segmentation')
- reason_text='\n'.join(f'{ch}: {", ".join(v)}' for ch,v in sorted(reasons.items())) or 'None'
- manual_text='\n'.join(f'{ch}: {manual_reasons[ch]}' for ch in manual_additions) or 'None'
- report.add_text('PyPREP and manual channel QC',f'PyPREP was run once on the full unsegmented continuous EEG after 100-Hz low-pass.\nDetectors: deviation, high-frequency noise, correlation, RANSAC.\nPyPREP suggestions and reasons:\n{reason_text}\nDetector errors: {errors or "None"}\n\nManual raw-data inspection: the researcher inspected the continuous EEG and clicked channels judged bad.\nUser-rejected channels and stated reasons:\n{manual_text}\nPyPREP channels rescued during raw inspection: {fmt_channels(browser_rescues)}\n\nPSD confirmation: a PSD was then shown only for all channels proposed for rejection (PyPREP + manual): {fmt_channels(rejected_before_psd)}.\nChannels rescued after rejected-channel PSD inspection: {fmt_channels(rescue_psd)}\nFINAL bad channels: {fmt_channels(final)}\n\nAfter stim/no-stim segmentation and cue epoching, each condition was average-rereferenced using good EEG channels. Bad channels remained marked and were not interpolated or dropped.','All-channel preprocessing')
+ reason_text='\n'.join(f'{ch}: {", ".join(v)}' for ch,v in sorted(reasons.items())) or 'None'; manual_text='\n'.join(f'{ch}: {manual_reasons[ch]}' for ch in manual_additions) or 'None'
+ report.add_text('PyPREP and manual channel QC',f'PyPREP was run once on the full unsegmented continuous EEG after 100-Hz low-pass.\nDetectors: deviation, high-frequency noise, correlation, RANSAC.\nPyPREP suggestions and reasons:\n{reason_text}\nDetector errors: {errors or "None"}\n\nManual raw-data inspection: the researcher inspected continuous EEG and clicked channels judged bad.\nUser-rejected channels and stated reasons:\n{manual_text}\nPyPREP channels rescued during raw inspection: {fmt_channels(browser_rescues)}\n\nRejected-channel PSD: {fmt_channels(rejected_before_psd)}.\nChannels rescued after rejected-channel PSD inspection: {fmt_channels(rescue_psd)}\nFINAL bad channels: {fmt_channels(final)}\nFinal retained good EEG channels: {fmt_channels(good_eeg)}\nA final PSD of the retained good channels was inspected immediately before stimulation segmentation.\n\nAfter segmentation and cue epoching, each condition was average-rereferenced using good EEG channels. Bad channels remained marked and were not interpolated or dropped.','All-channel preprocessing')
  (qc_dir(root,s)/'P01_pyprep_segment_epoch_reref.json').write_text(json.dumps(audit,indent=2)+'\n',encoding='utf-8')
 if __name__=='__main__':main()
