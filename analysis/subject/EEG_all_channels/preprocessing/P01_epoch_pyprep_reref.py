@@ -1,8 +1,7 @@
 """P01: PyPREP/manual channel QC -> segmentation -> epochs -> optional rereference.
 
 Rereferencing is OFF by default. To apply an average EEG reference, run with
-``--rereference avg`` (the misspelled alias ``--rerefrence avg`` is also accepted
-for convenience). All channel-QC decisions occur before stimulation segmentation.
+``--rereference avg``. All channel-QC decisions occur before stimulation segmentation.
 """
 from __future__ import annotations
 import argparse,json
@@ -18,7 +17,7 @@ EVENT_DICT={'cue_onset_right':1,'cue_onset_left':2,'trial_onset':3,'stim_onset':
 def parse_args():
  p=argparse.ArgumentParser(description=__doc__)
  p.add_argument('--subject',required=True); p.add_argument('--session',default='01'); p.add_argument('--task',default='SpAtt'); p.add_argument('--run',default='01'); p.add_argument('--platform',choices=['mac','bluebear'],default='mac'); p.add_argument('--project-root',default=None)
- p.add_argument('--rereference','--rerefrence',dest='rereference',choices=['avg'],default=None,help='Optional rereferencing. Omit for NO rereferencing; use "--rereference avg" for average EEG reference.')
+ p.add_argument('--rereference',choices=['avg'],default=None,help='Optional rereferencing. Omit for NO rereferencing; use "--rereference avg" for average EEG reference.')
  return p.parse_args()
 
 def pyprep_reasons(raw):
