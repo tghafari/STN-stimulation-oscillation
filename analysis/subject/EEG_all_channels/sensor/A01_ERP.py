@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import mne
 from pipeline_config import CONDITIONS,qc_dir,resolve_project_root,stage_path
 from all_channel_report import participant_report,figure_dir,fmt_channels
-ROI_CANDIDATES=('O7','O3','PO3','POz','Oz','PO4','O4','O8')
+ROI_CANDIDATES=('PO3','POz','PO4','O1','Oz','O2','PO7','PO8')
 ERP_BASELINE=(-0.1,0.0);ERP_LP_HZ=30.;ERP_TMIN=-0.1;ERP_TMAX=0.5
 def parse_args():
  p=argparse.ArgumentParser(description=__doc__);p.add_argument('--subject',required=True);p.add_argument('--session',default='01');p.add_argument('--task',default='SpAtt');p.add_argument('--run',default='01');p.add_argument('--platform',choices=['mac','bluebear'],default='mac');p.add_argument('--project-root',default=None);return p.parse_args()
@@ -40,5 +40,5 @@ def main():
  report.add_figure(fm,str(figs/'A01_ERP_stim_vs_no_stim_ROI_mean.png'),'ERP: posterior/occipital ROI mean',f'Final channels contributing to ROI mean: {fmt_channels(roi)}.','ERP analysis')
  for c in CONDITIONS:mne.write_evokeds(stage_path(root,s,a.session,a.task,a.run,c,'erp','ave'),ev[c],overwrite=True)
  details={'subject':f'sub-{s}','epoch_original_window_s':[-0.5,1.6],'erp_display_window_s':[ERP_TMIN,ERP_TMAX],'baseline_s':list(ERP_BASELINE),'evoked_low_pass_hz':ERP_LP_HZ,'roi_candidates_predefined':list(ROI_CANDIDATES),'roi_candidates_available':candidates,'roi_excluded_by_user':excluded,'roi_final':roi,'common_good_eeg_sensors':common};(qc_dir(root,s)/'A01_erp_analysis.json').write_text(json.dumps(details,indent=2)+'\n')
- report.add_text('ERP analysis details',f'Attention-left/right trials combined. Trial-average ERP; 30-Hz low-pass; baseline -0.1 to 0 s; display -0.1 to 0.5 s.\nFinal channels contributing to ROI mean: {fmt_channels(roi)}.','ERP analysis');print(f'ERP complete for sub-{s}.')
+ report.add_text('ERP analysis details',f'Attention-left/right trials combined. Trial-average ERP; 30-Hz low-pass; baseline -0.1 to 0 s; display -0.1 to 0.5 s. Eight separate posterior/occipital channels: {fmt_channels(ROI_CANDIDATES)}.\nFinal channels contributing to ROI mean: {fmt_channels(roi)}.','ERP analysis');print(f'ERP complete for sub-{s}.')
 if __name__=='__main__':main()
