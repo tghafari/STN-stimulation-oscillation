@@ -18,12 +18,11 @@ def common_good(d):return [ch for ch in d['stim'].copy().pick('eeg').ch_names if
 def evoked(ep,picks):
  x=ep.copy().pick(picks).average();x.filter(None,ERP_LP_HZ);x.apply_baseline(ERP_BASELINE);x.crop(ERP_TMIN,ERP_TMAX);return x
 def choose_roi(candidates):
- print('\nThe scalp-layout ERP has been created first. Inspect it before defining the posterior/occipital ROI.')
- print('Available ROI candidates:',', '.join(candidates))
+ print('\nInspect the scalp-layout ERP before defining the posterior/occipital ROI.');print('Available ROI candidates:',', '.join(candidates))
  while True:
   exclude=input('Channels to EXCLUDE from ROI mean (space/comma separated, Enter for none): ').replace(',',' ').split();unknown=[x for x in exclude if x not in candidates]
   if not unknown:return [x for x in candidates if x not in exclude],sorted(set(exclude))
-  print('Only these candidate channels may be excluded:',unknown)
+  print('Invalid candidate(s):',unknown)
 def main():
  a=parse_args();s=a.subject.removeprefix('sub-');root=resolve_project_root(a.platform,a.project_root);report=participant_report(root,s);figs=figure_dir(root,s);eps=load(root,s,a);common=common_good(eps)
  if not common:raise RuntimeError('No common good EEG sensors.')
@@ -34,12 +33,12 @@ def main():
  fig,axes=plt.subplots(2,4,figsize=(16,8),constrained_layout=True);axes=axes.ravel()
  for ax in axes[len(candidates):]:ax.axis('off')
  for ax,ch in zip(axes,candidates):mne.viz.plot_compare_evokeds(compare,picks=ch,combine=None,axes=ax,show=False,ci=False,truncate_xaxis=False,truncate_yaxis=False);ax.axvline(0,color='k',linestyle='--',linewidth=1);ax.set_xlim(ERP_TMIN,ERP_TMAX);ax.set_title(ch)
- report.add_figure(fig,str(figs/'A01_ERP_stim_vs_no_stim_ROI_candidates_separate.png'),'ERP: eight posterior/occipital ROI candidates separately',f'Candidate order: {fmt_channels(candidates)}.','ERP analysis')
+ report.add_figure(fig,str(figs/'A01_ERP_stim_vs_no_stim_ROI_candidates_separate.png'),'ERP: eight posterior/occipital ROI candidates separately',f'Candidate channels displayed separately: {fmt_channels(candidates)}.','ERP analysis')
  roi,excluded=choose_roi(candidates)
  if not roi:raise RuntimeError('ROI cannot be empty.')
  fm=mne.viz.plot_compare_evokeds(compare,picks=roi,combine='mean',show=False,ci=False,truncate_xaxis=False,truncate_yaxis=False);fm=fm[0] if isinstance(fm,list) else fm;fm.axes[0].axvline(0,color='k',linestyle='--',linewidth=1);fm.axes[0].set_xlim(ERP_TMIN,ERP_TMAX);fm.axes[0].set_title(f'sub-{s}: posterior/occipital ROI mean')
- report.add_figure(fm,str(figs/'A01_ERP_stim_vs_no_stim_ROI_mean.png'),'ERP: user-reviewed posterior/occipital ROI mean',f'Initial candidates: {fmt_channels(candidates)}. Excluded after scalp-layout review: {fmt_channels(excluded)}. Final ROI: {fmt_channels(roi)}.','ERP analysis')
+ report.add_figure(fm,str(figs/'A01_ERP_stim_vs_no_stim_ROI_mean.png'),'ERP: posterior/occipital ROI mean',f'Final channels contributing to ROI mean: {fmt_channels(roi)}.','ERP analysis')
  for c in CONDITIONS:mne.write_evokeds(stage_path(root,s,a.session,a.task,a.run,c,'erp','ave'),ev[c],overwrite=True)
  details={'subject':f'sub-{s}','epoch_original_window_s':[-0.5,1.6],'erp_display_window_s':[ERP_TMIN,ERP_TMAX],'baseline_s':list(ERP_BASELINE),'evoked_low_pass_hz':ERP_LP_HZ,'roi_candidates_predefined':list(ROI_CANDIDATES),'roi_candidates_available':candidates,'roi_excluded_by_user':excluded,'roi_final':roi,'common_good_eeg_sensors':common};(qc_dir(root,s)/'A01_erp_analysis.json').write_text(json.dumps(details,indent=2)+'\n')
- report.add_text('ERP analysis details',f'Attention-left/right trials combined. Trial-average ERP; 30-Hz low-pass; baseline -0.1 to 0 s; display -0.1 to 0.5 s. Eight predefined posterior/occipital candidates were {fmt_channels(ROI_CANDIDATES)}. The all-sensor scalp layout was generated before the ROI decision. User exclusions: {fmt_channels(excluded)}. Final ROI mean: {fmt_channels(roi)}.','ERP analysis');print(f'ERP complete for sub-{s}.')
+ report.add_text('ERP analysis details',f'Attention-left/right trials combined. Trial-average ERP; 30-Hz low-pass; baseline -0.1 to 0 s; display -0.1 to 0.5 s.\nFinal channels contributing to ROI mean: {fmt_channels(roi)}.','ERP analysis');print(f'ERP complete for sub-{s}.')
 if __name__=='__main__':main()
