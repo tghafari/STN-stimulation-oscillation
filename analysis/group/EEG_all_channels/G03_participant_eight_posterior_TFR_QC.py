@@ -1,101 +1,77 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""Participant-level posterior TFR QC report: TWO ROI plots per TFR result.
+"""One PDF QC report containing all subjects, organised by TFR result.
 
-There is NO averaging across participants. Each requested participant gets a separate
-PDF quality-control report.
-
-ROI8 = PO3, POz, PO4, O1, Oz, O2, PO7, PO8
-ROI3 = PO3, POz, PO4
-
-For EACH participant and EACH TFR result, exactly two TFR figures are produced:
-  1. within-participant mean of the available ROI8 sensors
-  2. within-participant mean of the available ROI3 sensors
-
-TFR results, in report order:
-  1. no stimulation
-  2. stimulation
-  3. stimulation - no stimulation
-  4. (stimulation - no stimulation) / (stimulation + no stimulation)
-
-Stim/no-stim are percent-baseline corrected (-0.3 to -0.1 s). The difference and
-normalized difference are calculated from ORIGINAL UNBASELINED power and receive no
-baseline correction. This keeps the QC contrasts directly interpretable and avoids
-baseline normalization creating the contrast itself.
-
-TFR settings match the posterior grand-average analysis:
-2-31.5 Hz in 0.5-Hz steps; multitaper; n_cycles=f/2; time-bandwidth=2;
-decim=2; FFT=True; zero_mean=True; ITC=False; trial-average=True.
+For every result, each subject gets two plots only: mean of 8 posterior sensors
+(PO3, POz, PO4, O1, Oz, O2, PO7, PO8) and mean of 3 sensors (PO3, POz, PO4).
+There is no averaging across subjects.
 """
 from __future__ import annotations
-import argparse, json, sys
+import argparse,sys
 from pathlib import Path
 import matplotlib.pyplot as plt
 import mne
 import numpy as np
-HERE=Path(__file__).resolve().parent; ANALYSIS_DIR=HERE.parents[1]
+HERE=Path(__file__).resolve().parent;ANALYSIS_DIR=HERE.parents[1]
 for p in (ANALYSIS_DIR/'subject'/'EEG_all_channels',ANALYSIS_DIR/'utils'):
  if str(p) not in sys.path:sys.path.insert(0,str(p))
 from pipeline_config import CONDITIONS,resolve_project_root,stage_path
 from pdf_report import ParticipantPDF
-ROI8=('PO3','POz','PO4','O1','Oz','O2','PO7','PO8');ROI3=('PO3','POz','PO4')
-BASELINE=(-.3,-.1);FREQS=np.arange(2.,32.,.5);N_CYCLES=FREQS/2.;TIME_BANDWIDTH=2.;DECIM=2;PLOT_TMIN=-.5;PLOT_TMAX=1.5;ROBUST=98.
+ROI8=('PO3','POz','PO4','O1','Oz','O2','PO7','PO8');ROI3=('PO3','POz','PO4');BASELINE=(-.3,-.1);FREQS=np.arange(2.,32.,.5);N_CYCLES=FREQS/2.;TIME_BANDWIDTH=2.;DECIM=2;TMIN=-.5;TMAX=1.5;ROBUST=98.
 def parse_args():
  p=argparse.ArgumentParser(description=__doc__);p.add_argument('--subjects',nargs='+',required=True);p.add_argument('--session',default='01');p.add_argument('--task',default='SpAtt');p.add_argument('--run',default='01');p.add_argument('--platform',choices=['mac','bluebear'],default='mac');p.add_argument('--project-root',default=None);p.add_argument('--n-jobs',type=int,default=4);return p.parse_args()
-def load_epochs(root,s,a):
+def load(root,s,a):
  out={}
  for c in CONDITIONS:
   f=stage_path(root,s,a.session,a.task,a.run,c,'clean','epo')
   if not f.exists():raise FileNotFoundError(f'Missing final cleaned epochs for sub-{s} {c}: {f}')
-  ep=mne.read_epochs(f,preload=True);cue=[x for x in ('cue_onset_right','cue_onset_left') if x in ep.event_id];out[c]=ep[cue] if cue else ep
+  e=mne.read_epochs(f,preload=True);k=[x for x in ('cue_onset_right','cue_onset_left') if x in e.event_id];out[c]=e[k] if k else e
  return out
-def available_roi(pair,roi):
- st,no=pair['stim'],pair['no-stim'];eeg=st.copy().pick('eeg').ch_names
- return[ch for ch in roi if ch in eeg and ch in no.ch_names and ch not in st.info['bads'] and ch not in no.info['bads']]
-def compute(ep,picks,jobs):return ep.copy().pick(picks).compute_tfr(method='multitaper',freqs=FREQS,n_cycles=N_CYCLES,time_bandwidth=TIME_BANDWIDTH,use_fft=True,zero_mean=True,return_itc=False,average=True,decim=DECIM,n_jobs=jobs)
-def contrast(st,no,kind):
- x=st.copy()
- if kind=='difference':x.data=st.data-no.data
- elif kind=='ratio':x.data=(st.data-no.data)/(st.data+no.data+np.finfo(float).eps)
- else:raise ValueError(kind)
- return x
-def roi_mean(tfr,channels,label):
- x=tfr.copy().pick(channels);x.data=x.data.mean(axis=0,keepdims=True);x.info=mne.create_info([label],x.info['sfreq'],'eeg');return x
-def robust_lim(*tfrs):
+def available(ep):
+ st,no=ep['stim'],ep['no-stim'];eeg=st.copy().pick('eeg').ch_names;return[ch for ch in ROI8 if ch in eeg and ch in no.ch_names and ch not in st.info['bads'] and ch not in no.info['bads']]
+def tfr(ep,picks,jobs):return ep.copy().pick(picks).compute_tfr(method='multitaper',freqs=FREQS,n_cycles=N_CYCLES,time_bandwidth=TIME_BANDWIDTH,use_fft=True,zero_mean=True,return_itc=False,average=True,decim=DECIM,n_jobs=jobs)
+def ratio(st,no):
+ x=st.copy();x.data=(st.data-no.data)/(st.data+no.data+np.finfo(float).eps);return x
+def mean_roi(x,roi,name):
+ picks=[ch for ch in roi if ch in x.ch_names]
+ if not picks:return None,[]
+ y=x.copy().pick(picks);y.data=y.data.mean(0,keepdims=True);y.info=mne.pick_info(y.info,[0],copy=True);y.info['chs'][0]['ch_name']=name;y.info['ch_names'][0]=name;return y,picks
+def lim(*xs):
  vals=[]
- for x in tfrs:
-  ti=(x.times>=PLOT_TMIN)&(x.times<=PLOT_TMAX);fi=(x.freqs>=2)&(x.freqs<=31.5);z=np.asarray(x.data)[:,fi][:,:,ti];z=z[np.isfinite(z)]
+ for x in xs:
+  if x is None:continue
+  ti=(x.times>=TMIN)&(x.times<=TMAX);z=np.asarray(x.data)[...,ti];z=z[np.isfinite(z)]
   if z.size:vals.append(z)
  if not vals:return(None,None)
  m=float(np.percentile(np.abs(np.concatenate(vals)),ROBUST));return(-m,m) if np.isfinite(m) and m>0 else(None,None)
-def plot_roi(x,label,title,lim):
- kw=dict(picks=[label],tmin=PLOT_TMIN,tmax=PLOT_TMAX,fmin=2,fmax=31.5,baseline=None,mode=None,show=False,colorbar=True,cmap='RdBu_r')
- if None not in lim:kw['vlim']=lim
- fig=x.plot(**kw);fig=fig[0] if isinstance(fig,list) else fig;fig.set_size_inches(9,6,forward=True);fig.axes[0].axvline(0,color='k',ls='--',lw=.8);fig.axes[0].set_title(title);return fig
-def add_pair(report,figs,s,result8,result3,title,section,caption,av8,av3):
- # Shared scale between the 8-channel and 3-channel mean for the SAME participant/result,
- # making their visual magnitude directly comparable during QC.
- lim=robust_lim(result8,result3);scale=f'Shared robust symmetric scale: {lim[0]:.4g} to {lim[1]:.4g}.' if None not in lim else 'Automatic scale.'
- report.add_text('Analysis details',caption+' '+scale+f' ROI8 uses: {", ".join(av8)}. ROI3 uses: {", ".join(av3)}. Means are within this participant only; no across-subject averaging.',section)
- report.add_figure(plot_roi(result8,'ROI8_mean',f'sub-{s}: {title} — mean 8 posterior sensors',lim),str(figs/f'{section.replace(" ","_")}_mean8.png'),f'{title}: mean of 8 posterior sensors',caption+' '+scale,section)
- report.add_figure(plot_roi(result3,'ROI3_mean',f'sub-{s}: {title} — mean PO3/POz/PO4',lim),str(figs/f'{section.replace(" ","_")}_mean3.png'),f'{title}: mean PO3, POz and PO4',caption+' '+scale,section)
-def build(root,s,a):
- ep=load_epochs(root,s,a);av8=available_roi(ep,ROI8);av3=available_roi(ep,ROI3)
- if not av8:raise RuntimeError(f'sub-{s}: no requested 8-channel posterior ROI sensors available in both conditions.')
- if not av3:raise RuntimeError(f'sub-{s}: none of PO3/POz/PO4 available in both conditions.')
- missing8=[ch for ch in ROI8 if ch not in av8];missing3=[ch for ch in ROI3 if ch not in av3]
- out=root/'derivatives'/'reports'/'QC'/'posterior_ROI_TFR'/f'sub-{s}';figs=out/'figures';figs.mkdir(parents=True,exist_ok=True);report=ParticipantPDF(str(out),f'{s}_posterior_ROI_TFR_QC')
- report.add_text('QC overview',f'Participant: sub-{s}\nNo across-participant averaging.\nStim OFF cue epochs: {len(ep["no-stim"])}\nStim ON cue epochs: {len(ep["stim"])}\nROI8 requested: {", ".join(ROI8)}\nROI8 available: {", ".join(av8)}\nROI8 unavailable/rejected: {", ".join(missing8) if missing8 else "none"}\nROI3 requested: {", ".join(ROI3)}\nROI3 available: {", ".join(av3)}\nROI3 unavailable/rejected: {", ".join(missing3) if missing3 else "none"}','QC summary')
- # Compute only the union needed by the two ROIs, once per condition.
- union=[ch for ch in ROI8 if ch in av8];raw={c:compute(ep[c],union,a.n_jobs) for c in CONDITIONS}
- no_disp=raw['no-stim'].copy().apply_baseline(BASELINE,mode='percent');st_disp=raw['stim'].copy().apply_baseline(BASELINE,mode='percent');diff=contrast(raw['stim'],raw['no-stim'],'difference');ratio=contrast(raw['stim'],raw['no-stim'],'ratio')
- results=[('1 No stimulation','No stimulation TFR',no_disp,f'Percent power change from baseline {BASELINE}.'),('2 Stimulation','Stimulation TFR',st_disp,f'Percent power change from baseline {BASELINE}.'),('3 Difference','Stimulation - no stimulation TFR',diff,'Stimulation minus no stimulation calculated from original unbaselined power; no baseline correction.'),('4 Normalized difference','(Stimulation - no stimulation) / (stimulation + no stimulation)',ratio,'Normalized contrast calculated from original unbaselined power; no baseline correction.')]
- for section,title,x,caption in results:
-  r8=roi_mean(x,av8,'ROI8_mean');r3=roi_mean(x,av3,'ROI3_mean');add_pair(report,figs,s,r8,r3,title,section,caption,av8,av3)
- report.add_text('QC analysis parameters',f'Cue-locked final cleaned epochs only; cue-left/right combined within stimulation condition.\nTFR: multitaper; 2-31.5 Hz in 0.5-Hz steps; n_cycles=f/2; time-bandwidth={TIME_BANDWIDTH:g}; FFT=True; zero_mean=True; ITC=False; trial-average=True; decim={DECIM}.\nCondition baseline: {BASELINE}, percent.\nDifference: raw stim - raw no-stim.\nRatio: (raw stim - raw no-stim)/(raw stim + raw no-stim).\nEach ROI mean is calculated within sub-{s} only. No participant grand average is calculated.','QC summary')
- audit={'subject':f'sub-{s}','purpose':'participant-level posterior TFR QC','no_across_subject_average':True,'ROI8_requested':ROI8,'ROI8_available':av8,'ROI3_requested':ROI3,'ROI3_available':av3,'n_epochs':{'no-stim':len(ep['no-stim']),'stim':len(ep['stim'])},'tfr':{'freq_min_hz':2.0,'freq_max_hz':31.5,'step_hz':0.5,'n_cycles':'frequency/2','time_bandwidth':2.0,'decim':2,'condition_baseline':BASELINE,'difference_baseline':None,'ratio_baseline':None}}
- (out/f'sub-{s}_posterior_ROI_TFR_QC.json').write_text(json.dumps(audit,indent=2)+'\n');print(f'sub-{s}: {report.pdf_fname}')
+def plot(x,title,v):
+ kw=dict(picks=[x.ch_names[0]],tmin=TMIN,tmax=TMAX,fmin=2.,fmax=31.5,baseline=None,mode=None,show=False,colorbar=True,cmap='RdBu_r')
+ if None not in v:kw['vlim']=v
+ f=x.plot(**kw);f=f[0] if isinstance(f,list) else f;f.axes[0].axvline(0,color='k',ls='--',lw=.8);f.axes[0].set_title(title);return f
 def main():
- a=parse_args();root=resolve_project_root(a.platform,a.project_root)
- for s in [x.removeprefix('sub-') for x in a.subjects]:build(root,s,a)
+ a=parse_args();subjects=[s.removeprefix('sub-') for s in a.subjects];root=resolve_project_root(a.platform,a.project_root);out=root/'derivatives'/'reports'/'QC'/'posterior_TFR_all_subjects';figs=out/'figures';figs.mkdir(parents=True,exist_ok=True);report=ParticipantPDF(str(out),'posterior_TFR_QC_'+'_'.join(subjects));eps={s:load(root,s,a) for s in subjects};av={s:available(eps[s]) for s in subjects}
+ report.add_text('Subjects and channel availability','Subjects: '+', '.join('sub-'+s for s in subjects)+'\n\n'+'\n'.join(f"sub-{s}: available={', '.join(av[s]) if av[s] else 'none'}; missing={', '.join(ch for ch in ROI8 if ch not in av[s]) or 'none'}" for s in subjects),'QC overview')
+ report.add_text('Analysis details','One PDF contains all requested subjects. There is NO averaging across subjects. The report is organised by TFR result; within each result every subject is shown in sequence with two plots: within-subject mean of the 8-channel posterior ROI and within-subject mean of PO3/POz/PO4. Missing/rejected sensors are omitted, never interpolated. Multitaper TFR: 2-31.5 Hz in 0.5-Hz steps, n_cycles=f/2, time-bandwidth=2, FFT=True, zero_mean=True, ITC=False, trial-average=True, decim=2. Stim OFF/ON use percent baseline -0.3 to -0.1 s. Difference and normalized difference use original unbaselined power.','QC overview')
+ # Compute each subject once, then reuse for all report sections.
+ raw={}
+ for s in subjects:
+  if not av[s]:continue
+  print(f'Computing TFRs for sub-{s}');raw[s]={c:tfr(eps[s][c],av[s],a.n_jobs) for c in CONDITIONS}
+ sections=[('Stim OFF','no-stim'),('Stim ON','stim'),('Stim ON - Stim OFF','difference'),('(Stim ON - Stim OFF) / (Stim ON + Stim OFF)','ratio')]
+ for title,key in sections:
+  report.add_text('Section details',f'{title}: all subjects are shown below in the requested order. For each subject: first mean of 8 posterior channels, then mean PO3/POz/PO4. No across-subject averaging.',title)
+  for s in subjects:
+   if s not in raw:
+    report.add_text(f'sub-{s}',f'sub-{s}: no requested posterior sensors available.',title);continue
+   st,no=raw[s]['stim'],raw[s]['no-stim']
+   if key=='stim':x=st.copy().apply_baseline(BASELINE,mode='percent');cap='Percent baseline -0.3 to -0.1 s.'
+   elif key=='no-stim':x=no.copy().apply_baseline(BASELINE,mode='percent');cap='Percent baseline -0.3 to -0.1 s.'
+   elif key=='difference':x=st.copy();x.data=st.data-no.data;cap='Stim ON - Stim OFF from unbaselined power.'
+   else:x=ratio(st,no);cap='(Stim ON - Stim OFF)/(Stim ON + Stim OFF) from unbaselined power.'
+   m8,p8=mean_roi(x,ROI8,'Posterior_8_mean');m3,p3=mean_roi(x,ROI3,'Posterior_3_mean');v=lim(m8,m3);scale=f'Shared robust scale {v[0]:.4g} to {v[1]:.4g}.' if None not in v else 'Automatic scale.'
+   report.add_figure(plot(m8,f'sub-{s}: {title} - mean 8 posterior channels',v),str(figs/f'{key}_sub-{s}_mean8.png'),f'sub-{s}: {title} - mean 8 channels',cap+' '+scale+f" Channels used: {', '.join(p8)}.",title)
+   if m3 is not None:report.add_figure(plot(m3,f'sub-{s}: {title} - mean PO3/POz/PO4',v),str(figs/f'{key}_sub-{s}_mean3.png'),f'sub-{s}: {title} - mean PO3/POz/PO4',cap+' '+scale+f" Channels used: {', '.join(p3)}.",title)
+   else:report.add_text(f'sub-{s}: 3-channel mean unavailable','None of PO3, POz, PO4 was available in both conditions.',title)
+   plt.close('all')
+ print(f'QC report complete: {report.pdf_fname}')
 if __name__=='__main__':main()
