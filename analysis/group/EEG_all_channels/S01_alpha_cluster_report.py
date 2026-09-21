@@ -35,7 +35,7 @@ from pdf_report import ParticipantPDF
 DEFAULT_ALPHA=(8.,12.);WINDOW=(.2,1.2)
 FREQS=np.arange(2.,31.,1.);N_CYCLES=FREQS/2.;TIME_BANDWIDTH=2.;DECIM=2
 ROI8=("PO3","POz","PO4","O1","Oz","O2","PO7","PO8");ROI3=("PO3","POz","PO4")
-PTHRESH=.05
+PTHRESH=.05;CLUSTER_FORMING_ALPHA=.10
 
 def args():
  p=argparse.ArgumentParser(description=__doc__)
@@ -94,7 +94,7 @@ def participant_window_effects(diff,subjects,title):
  ax.axhline(0,color="k",linewidth=.8,linestyle=":");ax.scatter(x,values,s=45,zorder=3);ax.plot(x,values,linewidth=.7,alpha=.45);ax.axhline(values.mean(),color="k",linewidth=2,label=f"Group mean = {values.mean():.4g}")
  ax.set_xticks(x);ax.set_xticklabels([f"sub-{z}" for z in subjects],rotation=60,ha="right");ax.set_ylabel(f"Mean stim - no-stim alpha, {WINDOW[0]:g}-{WINDOW[1]:g} s");ax.set_title(title);ax.legend()
  return fig,values
-def cluster_threshold(n): return float(stats.t.ppf(1-.05/2,n-1))
+def cluster_threshold(n): return float(stats.t.ppf(1-CLUSTER_FORMING_ALPHA/2,n-1))
 def summarize_clusters(T,clusters,pvals,t,chs=None):
  out=[]
  for i,(m,pv) in enumerate(zip(clusters,pvals)):
@@ -141,7 +141,7 @@ def main():
   f"Posterior/occipital ROI candidates removed by the intersection: {', '.join(posterior_removed) if posterior_removed else 'None'}"
  )
  report.add_text("Channels surviving whole-sample intersection",survived_text,section)
- details=f"N={len(subs)} paired participants; contrast=stimulation minus no stimulation calculated from UNBASELINED power; selected alpha range={a.alpha[0]:g}-{a.alpha[1]:g} Hz averaged across frequency; inferential window={WINDOW[0]:g}-{WINDOW[1]:g} s. TFR: multitaper, 2-30 Hz in 1-Hz steps, n_cycles=f/2, time-bandwidth={TIME_BANDWIDTH:g}, FFT=True, ITC=False, trial average=True, decimation={DECIM}. No baseline correction is applied before the stimulation-minus-no-stimulation contrast. Two-sided one-sample cluster permutation tests are applied to within-participant differences with all possible sign flips supported by MNE; cluster-forming threshold is MNE's default parametric threshold; family-wise cluster significance p<=0.05. Whole-scalp inference uses temporal adjacency plus EEG sensor adjacency and only sensors good in both conditions for every participant. Sensor-wise cluster p-values are additionally Benjamini-Hochberg FDR corrected across all sensor clusters. ROI channels are averaged within participant before permutation testing."
+ details=f"N={len(subs)} paired participants; contrast=stimulation minus no stimulation calculated from UNBASELINED power; selected alpha range={a.alpha[0]:g}-{a.alpha[1]:g} Hz averaged across frequency; inferential window={WINDOW[0]:g}-{WINDOW[1]:g} s. TFR: multitaper, 2-30 Hz in 1-Hz steps, n_cycles=f/2, time-bandwidth={TIME_BANDWIDTH:g}, FFT=True, ITC=False, trial average=True, decimation={DECIM}. No baseline correction is applied before the stimulation-minus-no-stimulation contrast. Two-sided one-sample cluster permutation tests are applied to within-participant differences with all possible sign flips supported by MNE; cluster-forming threshold uses two-sided pointwise alpha=0.10 (0.05 in each tail); family-wise cluster significance p<=0.05. Whole-scalp inference uses temporal adjacency plus EEG sensor adjacency and only sensors good in both conditions for every participant. Sensor-wise cluster p-values are additionally Benjamini-Hochberg FDR corrected across all sensor clusters. ROI channels are averaged within participant before permutation testing."
  report.add_text("Analysis details",details,section)
  methods=("Alpha-band stimulation effects were assessed using paired cluster-based permutation tests on participant-level stimulation-minus-no-stimulation power. Time-frequency power was estimated with multitaper convolution and alpha power was defined as the mean from the user-specified frequency range ("+f"{a.alpha[0]:g}-{a.alpha[1]:g} Hz). Statistical inference was restricted a priori to 0.2-1.2 s after cue onset. Stimulation-minus-no-stimulation contrasts were calculated from unbaselined power; no baseline correction was applied before contrast formation. The primary whole-scalp analysis clustered samples jointly across time and neighboring EEG sensors. Complementary analyses tested temporal clusters at individual sensors, with false-discovery-rate correction across sensor-level clusters, and a priori posterior averages comprising eight posterior/occipital sensors and PO3/POz/PO4. For ROI tests, sensor values were averaged within each participant before group inference, ensuring participants rather than sensors were the unit of observation.")
  report.add_text("Manuscript-style statistical analysis",methods,section)
@@ -155,7 +155,7 @@ def main():
  all_spatial=summarize_clusters(T,cl,pv,t,common);srows=spatial_rows(T,cl,pv,t,common);top_spatial=sorted(all_spatial,key=lambda r:r["p"])[:10]
  sigtxt="No significant spatio-temporal clusters." if not srows else "\n".join(f"Cluster {r['cluster']}: p={r['p']:.4f}; {r['t_start']:.3f}-{r['t_end']:.3f} s; sensors: {', '.join(r['sensors'])}" for r in srows)
  diagnostic="\n".join(f"Cluster {r['cluster']}: p={r['p']:.4f}; cluster_stat={r['cluster_stat']:.3f}; n_samples={r['n_samples']}; n_sensors={r['n_sensors']}; {r['t_start']:.3f}-{r['t_end']:.3f} s; sensors: {r['sensors']}" for r in top_spatial) if top_spatial else "None"
- report.add_text("Whole-scalp spatio-temporal results",f"Actual cluster-forming threshold: +/-{t_thresh:.4f} (two-sided pointwise p=0.05, df={len(subs)-1}).\n{sigtxt}\n\nStrongest observed clusters, including non-significant clusters:\n{diagnostic}",section)
+ report.add_text("Whole-scalp spatio-temporal results",f"Actual cluster-forming threshold: +/-{t_thresh:.4f} (two-sided pointwise alpha={CLUSTER_FORMING_ALPHA:.2f}; 0.05 in each tail; df={len(subs)-1}).\n{sigtxt}\n\nStrongest observed clusters, including non-significant clusters:\n{diagnostic}",section)
  print(f"Cluster-forming threshold: +/-{t_thresh:.4f}")
  for r in all_spatial: print(f"Spatial cluster {r['cluster']}: stat={r['cluster_stat']:.4f}, p={r['p']:.4f}, samples={r['n_samples']}, sensors={r['n_sensors']}, time={r['t_start']:.3f}-{r['t_end']:.3f}")
  for r in srows:report.add_figure(spatial_topomap(r,T,info,common),str(figs/f"spatial_cluster_{r['cluster']}.png"),f"Significant spatio-temporal cluster {r['cluster']}",f"Black circles mark sensors participating in the cluster at one or more samples. Cluster p={r['p']:.4f}; time extent {r['t_start']:.3f}-{r['t_end']:.3f} s.",section)
@@ -193,7 +193,7 @@ def main():
   roi_results[label]["participant_window_mean_effects"]={f"sub-{sub}":float(v) for sub,v in zip(subs,effect_values)}
   for r in all_roi: print(f"{label} cluster {r['cluster']}: stat={r['cluster_stat']:.4f}, p={r['p']:.4f}, samples={r['n_samples']}, time={r['t_start']:.3f}-{r['t_end']:.3f}")
  # audit
- audit={"subjects":subs,"n_subjects":len(subs),"common_good_channels":common,"posterior_roi_channels_surviving_intersection":posterior_survived,"posterior_roi_channels_removed_by_intersection":posterior_removed,"cluster_forming_threshold_t":t_thresh,"cluster_forming_pointwise_p":0.05,"all_spatiotemporal_clusters":all_spatial,"alpha_hz":list(a.alpha),"window_s":WINDOW,"baseline_s":None,"contrast_power":"unbaselined","ROI8":roi_results.get("8-channel posterior/occipital ROI"),"ROI3":roi_results.get("3-channel posterior ROI"),"significant_sensorwise_fdr":sigsensor,"spatiotemporal":[{k:v for k,v in r.items() if k!="mask"} for r in srows]}
+ audit={"subjects":subs,"n_subjects":len(subs),"common_good_channels":common,"posterior_roi_channels_surviving_intersection":posterior_survived,"posterior_roi_channels_removed_by_intersection":posterior_removed,"cluster_forming_threshold_t":t_thresh,"cluster_forming_alpha_two_sided":CLUSTER_FORMING_ALPHA,"cluster_forming_alpha_each_tail":CLUSTER_FORMING_ALPHA/2,"all_spatiotemporal_clusters":all_spatial,"alpha_hz":list(a.alpha),"window_s":WINDOW,"baseline_s":None,"contrast_power":"unbaselined","ROI8":roi_results.get("8-channel posterior/occipital ROI"),"ROI3":roi_results.get("3-channel posterior ROI"),"significant_sensorwise_fdr":sigsensor,"spatiotemporal":[{k:v for k,v in r.items() if k!="mask"} for r in srows]}
  (out/"alpha_cluster_report_audit.json").write_text(json.dumps(audit,indent=2)+"\n")
  with (out/"sensorwise_clusters_all.csv").open("w",newline="") as f:
   w=csv.DictWriter(f,fieldnames=["sensor","cluster","p_uncorrected","t_start","t_end","significant_fdr","p_fdr"]);w.writeheader();w.writerows(rec)
