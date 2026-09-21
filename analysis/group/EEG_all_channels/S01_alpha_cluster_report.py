@@ -143,7 +143,7 @@ def main():
  report.add_text("Channels surviving whole-sample intersection",survived_text,section)
  details=f"N={len(subs)} paired participants; contrast=stimulation minus no stimulation calculated from UNBASELINED power; selected alpha range={a.alpha[0]:g}-{a.alpha[1]:g} Hz averaged across frequency; inferential window={WINDOW[0]:g}-{WINDOW[1]:g} s. TFR: multitaper, 2-30 Hz in 1-Hz steps, n_cycles=f/2, time-bandwidth={TIME_BANDWIDTH:g}, FFT=True, ITC=False, trial average=True, decimation={DECIM}. No baseline correction is applied before the stimulation-minus-no-stimulation contrast. Two-sided one-sample cluster permutation tests are applied to within-participant differences with all possible sign flips supported by MNE; cluster-forming threshold uses two-sided pointwise alpha=0.10 (0.05 in each tail); family-wise cluster significance p<=0.05. Whole-scalp inference uses temporal adjacency plus EEG sensor adjacency and only sensors good in both conditions for every participant. Sensor-wise cluster p-values are additionally Benjamini-Hochberg FDR corrected across all sensor clusters. ROI channels are averaged within participant before permutation testing."
  report.add_text("Analysis details",details,section)
- methods=("Alpha-band stimulation effects were assessed using paired cluster-based permutation tests on participant-level stimulation-minus-no-stimulation power. Time-frequency power was estimated with multitaper convolution and alpha power was defined as the mean from the user-specified frequency range ("+f"{a.alpha[0]:g}-{a.alpha[1]:g} Hz). Statistical inference was restricted a priori to 0.2-1.2 s after cue onset. Stimulation-minus-no-stimulation contrasts were calculated from unbaselined power; no baseline correction was applied before contrast formation. The primary whole-scalp analysis clustered samples jointly across time and neighboring EEG sensors. Complementary analyses tested temporal clusters at individual sensors, with false-discovery-rate correction across sensor-level clusters, and a priori posterior averages comprising eight posterior/occipital sensors and PO3/POz/PO4. For ROI tests, sensor values were averaged within each participant before group inference, ensuring participants rather than sensors were the unit of observation.")
+ methods=("Alpha-band stimulation effects were assessed using paired cluster-based permutation tests on participant-level stimulation-minus-no-stimulation power. Time-frequency power was estimated with multitaper convolution and alpha power was defined as the mean from the user-specified frequency range ("+f"{a.alpha[0]:g}-{a.alpha[1]:g} Hz). Statistical inference was restricted a priori to 0.2-1.2 s after cue onset. Stimulation-minus-no-stimulation contrasts were calculated from unbaselined power; no baseline correction was applied before contrast formation. The primary whole-scalp analysis clustered samples jointly across time and neighboring EEG sensors. Complementary analyses tested temporal clusters at individual sensors, with false-discovery-rate correction across sensor-level clusters, and a priori posterior averages comprising eight posterior/occipital sensors and PO3/POz/PO4. Each ROI used an ROI-specific complete-case sample: participants were included only if every required ROI channel was retained as good in both stimulation conditions. Sensor values were averaged within each included participant before group inference, ensuring participants rather than sensors were the unit of observation.")
  report.add_text("Manuscript-style statistical analysis",methods,section)
  # spatial
  sadj,names=mne.channels.find_ch_adjacency(info,ch_type="eeg")
@@ -173,25 +173,36 @@ def main():
  for ch in sigsensor:
   rows=[r for r in rec if r["sensor"]==ch and r.get("significant_fdr")]
   report.add_figure(sensor_plot(ST[:,common.index(ch),:],NO[:,common.index(ch),:],t,rows),str(figs/f"sensor_{ch}_significant_clusters.png"),f"{ch}: significant alpha temporal cluster(s)","Lines are group means; shading around lines is SEM; vertical shaded regions are FDR-significant temporal clusters.",section)
- # ROIs
+ # ROI analyses use ROI-specific complete-case subject samples.
+ # A participant contributes only when EVERY channel in that ROI is good in BOTH conditions.
  roi_results={}
  for label,requested in (("8-channel posterior/occipital ROI",ROI8),("3-channel posterior ROI",ROI3)):
-  used=[ch for ch in requested if ch in common];idx=[common.index(ch) for ch in used]
-  if not idx:continue
-  st=ST[:,idx,:].mean(1);no=NO[:,idx,:].mean(1);roi_diff=st-no
-  Tr,cr,pr,_=permutation_cluster_1samp_test(roi_diff,n_permutations="all",threshold=t_thresh,tail=0,adjacency=None,out_type="mask",seed=a.seed,verbose=False)
-  rows=sig_1d(Tr,cr,pr,t);all_roi=summarize_clusters(Tr,cr,pr,t);roi_results[label]={"used":used,"rows":rows,"all_clusters":all_roi}
+  roi_subs=[sub for sub in subs if all(ch in g[sub] for ch in requested)]
+  excluded_subs=[sub for sub in subs if sub not in roi_subs]
+  if len(roi_subs)<2:
+   report.add_text(label+" results",f"Insufficient complete-case participants. Required channels: {', '.join(requested)}. Included: {', '.join('sub-'+x for x in roi_subs) if roi_subs else 'None'}. Excluded because at least one required ROI channel was bad/missing: {', '.join('sub-'+x for x in excluded_subs) if excluded_subs else 'None'}.",section)
+   roi_results[label]={"required_channels":list(requested),"included_subjects":roi_subs,"excluded_subjects":excluded_subs,"rows":[]};continue
+  roi_st=[];roi_no=[]
+  for sub in roi_subs:
+   st_sub,rt,rinfo=alpha(ep[sub]["stim"],list(requested),a);no_sub,rt2,_=alpha(ep[sub]["no-stim"],list(requested),a)
+   if not np.allclose(rt,rt2):raise RuntimeError("ROI time mismatch "+sub)
+   roi_st.append(st_sub.mean(0));roi_no.append(no_sub.mean(0))
+  st=np.asarray(roi_st);no=np.asarray(roi_no);roi_diff=st-no
+  roi_thresh=cluster_threshold(len(roi_subs))
+  Tr,cr,pr,_=permutation_cluster_1samp_test(roi_diff,n_permutations="all",threshold=roi_thresh,tail=0,adjacency=None,out_type="mask",seed=a.seed,verbose=False)
+  rows=sig_1d(Tr,cr,pr,rt);all_roi=summarize_clusters(Tr,cr,pr,rt)
+  roi_results[label]={"required_channels":list(requested),"included_subjects":roi_subs,"excluded_subjects":excluded_subs,"n_subjects":len(roi_subs),"rows":rows,"all_clusters":all_roi}
   top_roi=sorted(all_roi,key=lambda r:r["p"])[:10]
-  text=f"Channels contributing to ROI mean: {', '.join(used)}. "+("No significant temporal clusters." if not rows else " ".join(f"Cluster {r['cluster']}: p={r['p']:.4f}, {r['t_start']:.3f}-{r['t_end']:.3f} s." for r in rows))
-  text+=f"\nActual cluster-forming threshold: +/-{t_thresh:.4f}.\nStrongest observed clusters, including non-significant:\n"+("\n".join(f"Cluster {r['cluster']}: p={r['p']:.4f}; stat={r['cluster_stat']:.3f}; n_samples={r['n_samples']}; {r['t_start']:.3f}-{r['t_end']:.3f} s" for r in top_roi) if top_roi else "None")
+  text=f"Required channels: {', '.join(requested)}. N={len(roi_subs)} complete-case participants. Included: {', '.join('sub-'+x for x in roi_subs)}. Excluded because at least one required ROI channel was bad/missing: {', '.join('sub-'+x for x in excluded_subs) if excluded_subs else 'None'}. "+("No significant temporal clusters." if not rows else " ".join(f"Cluster {r['cluster']}: p={r['p']:.4f}, {r['t_start']:.3f}-{r['t_end']:.3f} s." for r in rows))
+  text+=f"\nActual ROI cluster-forming threshold: +/-{roi_thresh:.4f} (df={len(roi_subs)-1}; two-sided alpha={CLUSTER_FORMING_ALPHA:.2f}, 0.05 each tail).\nStrongest observed clusters, including non-significant:\n"+("\n".join(f"Cluster {r['cluster']}: p={r['p']:.4f}; stat={r['cluster_stat']:.3f}; n_samples={r['n_samples']}; {r['t_start']:.3f}-{r['t_end']:.3f} s" for r in top_roi) if top_roi else "None")
   report.add_text(label+" results",text,section)
   tag="ROI8" if requested==ROI8 else "ROI3"
-  report.add_figure(roi_plot(st,no,t,rows,label,"Alpha power"),str(figs/f"{tag}_alpha_clusters.png"),label+": stimulation vs no stimulation","Lines are participant-group means; ribbons are SEM. Shaded vertical regions denote significant cluster-permutation intervals (p<=0.05).",section)
-  report.add_figure(participant_difference_traces(roi_diff,t,subs,label+": individual participant differences"),str(figs/f"{tag}_individual_difference_traces.png"),label+": individual stim - no-stim traces","Each thin line is one participant's within-participant difference. Thick black line is the group mean and black ribbon is SEM.",section)
-  effect_fig,effect_values=participant_window_effects(roi_diff,subs,label+": participant mean effects")
-  report.add_figure(effect_fig,str(figs/f"{tag}_participant_mean_effects.png"),label+": participant-level mean 0.2-1.2 s effects","Each point is one participant's mean stim - no-stim alpha effect across the inferential window. Negative values indicate alpha reduction with stimulation.",section)
-  roi_results[label]["participant_window_mean_effects"]={f"sub-{sub}":float(v) for sub,v in zip(subs,effect_values)}
-  for r in all_roi: print(f"{label} cluster {r['cluster']}: stat={r['cluster_stat']:.4f}, p={r['p']:.4f}, samples={r['n_samples']}, time={r['t_start']:.3f}-{r['t_end']:.3f}")
+  report.add_figure(roi_plot(st,no,rt,rows,label,"Alpha power"),str(figs/f"{tag}_alpha_clusters.png"),label+": stimulation vs no stimulation",f"Complete-case ROI sample N={len(roi_subs)}. All required ROI channels are retained in every included participant. Lines are group means; ribbons are SEM. Shaded regions are significant clusters.",section)
+  report.add_figure(participant_difference_traces(roi_diff,rt,roi_subs,label+": individual participant differences"),str(figs/f"{tag}_individual_difference_traces.png"),label+": individual stim - no-stim traces",f"Only participants retaining every required ROI channel are shown (N={len(roi_subs)}).",section)
+  effect_fig,effect_values=participant_window_effects(roi_diff,roi_subs,label+": participant mean effects");report.add_figure(effect_fig,str(figs/f"{tag}_participant_mean_effects.png"),label+": participant-level mean 0.2-1.2 s effects",f"Complete-case ROI N={len(roi_subs)}. Each point is one participant's mean stim - no-stim alpha effect.",section)
+  roi_results[label]["participant_window_mean_effects"]={f"sub-{sub}":float(v) for sub,v in zip(roi_subs,effect_values)}
+  print(f"\n{label}: N={len(roi_subs)} included; excluded={excluded_subs}")
+  for r in all_roi:print(f"{label} cluster {r['cluster']}: stat={r['cluster_stat']:.4f}, p={r['p']:.4f}, samples={r['n_samples']}, time={r['t_start']:.3f}-{r['t_end']:.3f}")
  # audit
  audit={"subjects":subs,"n_subjects":len(subs),"common_good_channels":common,"posterior_roi_channels_surviving_intersection":posterior_survived,"posterior_roi_channels_removed_by_intersection":posterior_removed,"cluster_forming_threshold_t":t_thresh,"cluster_forming_alpha_two_sided":CLUSTER_FORMING_ALPHA,"cluster_forming_alpha_each_tail":CLUSTER_FORMING_ALPHA/2,"all_spatiotemporal_clusters":all_spatial,"alpha_hz":list(a.alpha),"window_s":WINDOW,"baseline_s":None,"contrast_power":"unbaselined","ROI8":roi_results.get("8-channel posterior/occipital ROI"),"ROI3":roi_results.get("3-channel posterior ROI"),"significant_sensorwise_fdr":sigsensor,"spatiotemporal":[{k:v for k,v in r.items() if k!="mask"} for r in srows]}
  (out/"alpha_cluster_report_audit.json").write_text(json.dumps(audit,indent=2)+"\n")
