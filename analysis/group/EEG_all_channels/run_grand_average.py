@@ -2,7 +2,7 @@
 """Run G04 with compact MNE plot_topo-style report layouts. Numerical analysis unchanged."""
 import numpy as np
 import matplotlib.pyplot as plt
-import analysis.group.EEG_all_channels.G01_complete_grand_average_report as pipeline
+import G01_complete_grand_average_report as pipeline
 
 def baseline_percent_safe(x):
  data=np.asarray(x.data[0]);mask=(x.times>=pipeline.BASELINE[0])&(x.times<=pipeline.BASELINE[1]);base=data[:,mask].mean(axis=1,keepdims=True);return 100.*(data-base)/np.where(np.abs(base)<np.finfo(float).eps,1.,base)
