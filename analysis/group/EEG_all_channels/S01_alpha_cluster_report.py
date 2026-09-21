@@ -37,7 +37,22 @@ ROI8=("PO3","POz","PO4","O1","Oz","O2","PO7","PO8");ROI3=("PO3","POz","PO4")
 PTHRESH=.05
 
 def args():
- p=argparse.ArgumentParser(description=__doc__);p.add_argument("--subjects",nargs="+",required=True);p.add_argument("--session",default="01");p.add_argument("--task",default="SpAtt");p.add_argument("--run",default="01");p.add_argument("--platform",choices=["mac","bluebear"],default="mac");p.add_argument("--project-root",default=None);p.add_argument("--n-jobs",type=int,default=4);p.add_argument("--alpha",nargs=2,type=float,metavar=("FMIN","FMAX"),default=DEFAULT_ALPHA,help="Frequency range in Hz to average before cluster testing, e.g. --alpha 8 12");p.add_argument("--seed",type=int,default=42);a=p.parse_args();\n if a.alpha[0]>=a.alpha[1]:p.error("--alpha requires FMIN < FMAX")\n if a.alpha[0]<FREQS.min() or a.alpha[1]>FREQS.max():p.error(f"--alpha must lie within {FREQS.min():g}-{FREQS.max():g} Hz")\n return a
+ p=argparse.ArgumentParser(description=__doc__)
+ p.add_argument("--subjects",nargs="+",required=True)
+ p.add_argument("--session",default="01")
+ p.add_argument("--task",default="SpAtt")
+ p.add_argument("--run",default="01")
+ p.add_argument("--platform",choices=["mac","bluebear"],default="mac")
+ p.add_argument("--project-root",default=None)
+ p.add_argument("--n-jobs",type=int,default=4)
+ p.add_argument("--alpha",nargs=2,type=float,metavar=("FMIN","FMAX"),default=DEFAULT_ALPHA,help="Frequency range in Hz to average before cluster testing, e.g. --alpha 8 12")
+ p.add_argument("--seed",type=int,default=42)
+ a=p.parse_args()
+ if a.alpha[0]>=a.alpha[1]:
+  p.error("--alpha requires FMIN < FMAX")
+ if a.alpha[0]<FREQS.min() or a.alpha[1]>FREQS.max():
+  p.error(f"--alpha must lie within {FREQS.min():g}-{FREQS.max():g} Hz")
+ return a
 def load(root,s,a):
  d={}
  for c in CONDITIONS:
@@ -49,8 +64,8 @@ def good(x):
  st,no=x["stim"],x["no-stim"];return[ch for ch in st.copy().pick("eeg").ch_names if ch in no.ch_names and ch not in st.info["bads"] and ch not in no.info["bads"]]
 def alpha(ep,chs,a):
  t=ep.copy().pick(chs).compute_tfr(method="multitaper",freqs=FREQS,n_cycles=N_CYCLES,time_bandwidth=TIME_BANDWIDTH,use_fft=True,return_itc=False,average=True,decim=DECIM,n_jobs=a.n_jobs,verbose=False)
- if a.power_mode=="percent":t.apply_baseline(BASELINE,mode="percent")
- fi=(t.freqs>=ALPHA[0])&(t.freqs<=ALPHA[1]);ti=(t.times>=WINDOW[0])&(t.times<=WINDOW[1])
+ fi=(t.freqs>=a.alpha[0])&(t.freqs<=a.alpha[1])
+ ti=(t.times>=WINDOW[0])&(t.times<=WINDOW[1])
  return t.data[:,fi][:,:,ti].mean(1),t.times[ti],t.info
 def one_d(X,seed):
  return permutation_cluster_1samp_test(X,n_permutations="all",threshold=None,tail=0,adjacency=None,out_type="mask",seed=seed,verbose=False)
