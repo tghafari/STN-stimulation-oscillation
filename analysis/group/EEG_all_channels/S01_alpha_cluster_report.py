@@ -23,6 +23,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import mne
 import numpy as np
+from scipy import stats
 from mne.stats import permutation_cluster_1samp_test,combine_adjacency,fdr_correction
 
 HERE=Path(__file__).resolve().parent; ANALYSIS_DIR=HERE.parents[1]
@@ -81,6 +82,32 @@ def roi_plot(st,no,t,rows,title,ylabel):
  fig,ax=plt.subplots(figsize=(10,5),constrained_layout=True);ms=st.mean(0);mn=no.mean(0);sem_s=st.std(0,ddof=1)/np.sqrt(len(st));sem_n=no.std(0,ddof=1)/np.sqrt(len(no));ax.plot(t,mn,label="No stimulation");ax.fill_between(t,mn-sem_n,mn+sem_n,alpha=.15);ax.plot(t,ms,label="Stimulation");ax.fill_between(t,ms-sem_s,ms+sem_s,alpha=.15);shade(ax,rows);ax.axvline(0,color="k",ls="--",lw=.8);ax.set_xlabel("Time (s)");ax.set_ylabel(ylabel);ax.set_title(title);ax.legend();return fig
 def sensor_plot(st,no,t,ch,rows):
  return roi_plot(st,no,t,rows,f"{ch}: alpha power, stimulation vs no stimulation","Alpha power")
+def participant_difference_traces(diff,t,subjects,title):
+ fig,ax=plt.subplots(figsize=(11,6),constrained_layout=True)
+ for sub,y in zip(subjects,diff): ax.plot(t,y,linewidth=.9,alpha=.55,label=f"sub-{sub}")
+ mean=diff.mean(0);sem=diff.std(0,ddof=1)/np.sqrt(len(diff))
+ ax.plot(t,mean,color="k",linewidth=3,label="Group mean");ax.fill_between(t,mean-sem,mean+sem,color="k",alpha=.12)
+ ax.axhline(0,color="k",linewidth=.8,linestyle=":");ax.set_xlabel("Time (s)");ax.set_ylabel("Stim - no-stim alpha power");ax.set_title(title);ax.legend(ncol=4,fontsize=7)
+ return fig
+def participant_window_effects(diff,subjects,title):
+ values=diff.mean(1);fig,ax=plt.subplots(figsize=(10,5),constrained_layout=True);x=np.arange(len(subjects))
+ ax.axhline(0,color="k",linewidth=.8,linestyle=":");ax.scatter(x,values,s=45,zorder=3);ax.plot(x,values,linewidth=.7,alpha=.45);ax.axhline(values.mean(),color="k",linewidth=2,label=f"Group mean = {values.mean():.4g}")
+ ax.set_xticks(x);ax.set_xticklabels([f"sub-{z}" for z in subjects],rotation=60,ha="right");ax.set_ylabel(f"Mean stim - no-stim alpha, {WINDOW[0]:g}-{WINDOW[1]:g} s");ax.set_title(title);ax.legend()
+ return fig,values
+def cluster_threshold(n): return float(stats.t.ppf(1-.05/2,n-1))
+def summarize_clusters(T,clusters,pvals,t,chs=None):
+ out=[]
+ for i,(m,pv) in enumerate(zip(clusters,pvals)):
+  mask=np.asarray(m,bool)
+  if chs is None:
+   ix=np.where(mask)[0]
+   if not ix.size: continue
+   vals=T[ix];out.append(dict(cluster=i,p=float(pv),cluster_stat=float(vals.sum()),n_samples=int(ix.size),n_sensors=1,t_start=float(t[ix].min()),t_end=float(t[ix].max()),sensors="ROI"))
+  else:
+   ti,ci=np.where(mask)
+   if not ti.size: continue
+   vals=T[mask];used=[chs[j] for j in sorted(set(ci))];out.append(dict(cluster=i,p=float(pv),cluster_stat=float(vals.sum()),n_samples=int(mask.sum()),n_sensors=len(used),t_start=float(t[ti].min()),t_end=float(t[ti].max()),sensors=", ".join(used)))
+ return out
 def spatial_rows(T,clusters,pvals,t,chs):
  out=[]
  for i,(m,p) in enumerate(zip(clusters,pvals)):
@@ -122,8 +149,15 @@ def main():
  sadj,names=mne.channels.find_ch_adjacency(info,ch_type="eeg")
  if list(names)!=list(common):
   ix=[names.index(ch) for ch in common];sadj=sadj[ix][:,ix]
- X=D.transpose(0,2,1);T,cl,pv,_=permutation_cluster_1samp_test(X,n_permutations="all",threshold=None,tail=0,adjacency=combine_adjacency(len(t),sadj),out_type="mask",seed=a.seed,n_jobs=a.n_jobs,verbose=True);srows=spatial_rows(T,cl,pv,t,common)
- report.add_text("Whole-scalp spatio-temporal results",("No significant spatio-temporal clusters." if not srows else "\n".join(f"Cluster {r['cluster']}: p={r['p']:.4f}; {r['t_start']:.3f}-{r['t_end']:.3f} s; sensors: {', '.join(r['sensors'])}" for r in srows)),section)
+ t_thresh=cluster_threshold(len(subs))
+ X=D.transpose(0,2,1)
+ T,cl,pv,_=permutation_cluster_1samp_test(X,n_permutations="all",threshold=t_thresh,tail=0,adjacency=combine_adjacency(len(t),sadj),out_type="mask",seed=a.seed,n_jobs=a.n_jobs,verbose=True)
+ all_spatial=summarize_clusters(T,cl,pv,t,common);srows=spatial_rows(T,cl,pv,t,common);top_spatial=sorted(all_spatial,key=lambda r:r["p"])[:10]
+ sigtxt="No significant spatio-temporal clusters." if not srows else "\n".join(f"Cluster {r['cluster']}: p={r['p']:.4f}; {r['t_start']:.3f}-{r['t_end']:.3f} s; sensors: {', '.join(r['sensors'])}" for r in srows)
+ diagnostic="\n".join(f"Cluster {r['cluster']}: p={r['p']:.4f}; cluster_stat={r['cluster_stat']:.3f}; n_samples={r['n_samples']}; n_sensors={r['n_sensors']}; {r['t_start']:.3f}-{r['t_end']:.3f} s; sensors: {r['sensors']}" for r in top_spatial) if top_spatial else "None"
+ report.add_text("Whole-scalp spatio-temporal results",f"Actual cluster-forming threshold: +/-{t_thresh:.4f} (two-sided pointwise p=0.05, df={len(subs)-1}).\n{sigtxt}\n\nStrongest observed clusters, including non-significant clusters:\n{diagnostic}",section)
+ print(f"Cluster-forming threshold: +/-{t_thresh:.4f}")
+ for r in all_spatial: print(f"Spatial cluster {r['cluster']}: stat={r['cluster_stat']:.4f}, p={r['p']:.4f}, samples={r['n_samples']}, sensors={r['n_sensors']}, time={r['t_start']:.3f}-{r['t_end']:.3f}")
  for r in srows:report.add_figure(spatial_topomap(r,T,info,common),str(figs/f"spatial_cluster_{r['cluster']}.png"),f"Significant spatio-temporal cluster {r['cluster']}",f"Black circles mark sensors participating in the cluster at one or more samples. Cluster p={r['p']:.4f}; time extent {r['t_start']:.3f}-{r['t_end']:.3f} s.",section)
  # sensorwise
  rec=[];allp=[];raw_store={}
@@ -144,11 +178,22 @@ def main():
  for label,requested in (("8-channel posterior/occipital ROI",ROI8),("3-channel posterior ROI",ROI3)):
   used=[ch for ch in requested if ch in common];idx=[common.index(ch) for ch in used]
   if not idx:continue
-  st=ST[:,idx,:].mean(1);no=NO[:,idx,:].mean(1);Tr,cr,pr,_=one_d(st-no,a.seed);rows=sig_1d(Tr,cr,pr,t);roi_results[label]={"used":used,"rows":rows}
+  st=ST[:,idx,:].mean(1);no=NO[:,idx,:].mean(1);roi_diff=st-no
+  Tr,cr,pr,_=permutation_cluster_1samp_test(roi_diff,n_permutations="all",threshold=t_thresh,tail=0,adjacency=None,out_type="mask",seed=a.seed,verbose=False)
+  rows=sig_1d(Tr,cr,pr,t);all_roi=summarize_clusters(Tr,cr,pr,t);roi_results[label]={"used":used,"rows":rows,"all_clusters":all_roi}
+  top_roi=sorted(all_roi,key=lambda r:r["p"])[:10]
   text=f"Channels contributing to ROI mean: {', '.join(used)}. "+("No significant temporal clusters." if not rows else " ".join(f"Cluster {r['cluster']}: p={r['p']:.4f}, {r['t_start']:.3f}-{r['t_end']:.3f} s." for r in rows))
-  report.add_text(label+" results",text,section);report.add_figure(roi_plot(st,no,t,rows,label,"Alpha power"),str(figs/("ROI8_alpha_clusters.png" if requested==ROI8 else "ROI3_alpha_clusters.png")),label+": stimulation vs no stimulation","Lines are participant-group means; ribbons are SEM. Shaded vertical regions denote significant cluster-permutation intervals (p<=0.05).",section)
+  text+=f"\nActual cluster-forming threshold: +/-{t_thresh:.4f}.\nStrongest observed clusters, including non-significant:\n"+("\n".join(f"Cluster {r['cluster']}: p={r['p']:.4f}; stat={r['cluster_stat']:.3f}; n_samples={r['n_samples']}; {r['t_start']:.3f}-{r['t_end']:.3f} s" for r in top_roi) if top_roi else "None")
+  report.add_text(label+" results",text,section)
+  tag="ROI8" if requested==ROI8 else "ROI3"
+  report.add_figure(roi_plot(st,no,t,rows,label,"Alpha power"),str(figs/f"{tag}_alpha_clusters.png"),label+": stimulation vs no stimulation","Lines are participant-group means; ribbons are SEM. Shaded vertical regions denote significant cluster-permutation intervals (p<=0.05).",section)
+  report.add_figure(participant_difference_traces(roi_diff,t,subs,label+": individual participant differences"),str(figs/f"{tag}_individual_difference_traces.png"),label+": individual stim - no-stim traces","Each thin line is one participant's within-participant difference. Thick black line is the group mean and black ribbon is SEM.",section)
+  effect_fig,effect_values=participant_window_effects(roi_diff,subs,label+": participant mean effects")
+  report.add_figure(effect_fig,str(figs/f"{tag}_participant_mean_effects.png"),label+": participant-level mean 0.2-1.2 s effects","Each point is one participant's mean stim - no-stim alpha effect across the inferential window. Negative values indicate alpha reduction with stimulation.",section)
+  roi_results[label]["participant_window_mean_effects"]={f"sub-{sub}":float(v) for sub,v in zip(subs,effect_values)}
+  for r in all_roi: print(f"{label} cluster {r['cluster']}: stat={r['cluster_stat']:.4f}, p={r['p']:.4f}, samples={r['n_samples']}, time={r['t_start']:.3f}-{r['t_end']:.3f}")
  # audit
- audit={"subjects":subs,"n_subjects":len(subs),"common_good_channels":common,"posterior_roi_channels_surviving_intersection":posterior_survived,"posterior_roi_channels_removed_by_intersection":posterior_removed,"alpha_hz":list(a.alpha),"window_s":WINDOW,"baseline_s":None,"contrast_power":"unbaselined","ROI8":roi_results.get("8-channel posterior/occipital ROI"),"ROI3":roi_results.get("3-channel posterior ROI"),"significant_sensorwise_fdr":sigsensor,"spatiotemporal":[{k:v for k,v in r.items() if k!="mask"} for r in srows]}
+ audit={"subjects":subs,"n_subjects":len(subs),"common_good_channels":common,"posterior_roi_channels_surviving_intersection":posterior_survived,"posterior_roi_channels_removed_by_intersection":posterior_removed,"cluster_forming_threshold_t":t_thresh,"cluster_forming_pointwise_p":0.05,"all_spatiotemporal_clusters":all_spatial,"alpha_hz":list(a.alpha),"window_s":WINDOW,"baseline_s":None,"contrast_power":"unbaselined","ROI8":roi_results.get("8-channel posterior/occipital ROI"),"ROI3":roi_results.get("3-channel posterior ROI"),"significant_sensorwise_fdr":sigsensor,"spatiotemporal":[{k:v for k,v in r.items() if k!="mask"} for r in srows]}
  (out/"alpha_cluster_report_audit.json").write_text(json.dumps(audit,indent=2)+"\n")
  with (out/"sensorwise_clusters_all.csv").open("w",newline="") as f:
   w=csv.DictWriter(f,fieldnames=["sensor","cluster","p_uncorrected","t_start","t_end","significant_fdr","p_fdr"]);w.writeheader();w.writerows(rec)
