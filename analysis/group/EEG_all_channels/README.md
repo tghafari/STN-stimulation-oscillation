@@ -4,7 +4,7 @@ This folder contains the grand-average group analysis for the final cleaned all-
 
 ## Analysis implemented
 
-`G01_grand_average_report.py` uses the final `desc-clean_epo.fif` files produced by `analysis/subject/EEG_all_channels/preprocessing` and analyses **cue-onset epochs only**. Attention-left and attention-right cue trials are combined within stimulation condition.
+`G01_complete_grand_average_report.py` uses the final `desc-clean_epo.fif` files produced by `analysis/subject/EEG_all_channels/preprocessing` and analyses **cue-onset epochs only**. Attention-left and attention-right cue trials are combined within stimulation condition.
 
 There is deliberately **no concatenated-epochs group analysis**. Each subject is averaged first. For each EEG channel, only subjects for whom that channel is available and good in both stimulation and no-stimulation cleaned datasets contribute to that channel's grand average. Missing channels are not interpolated at group level.
 
@@ -38,24 +38,21 @@ For interpretability, every TFR result gets a robust symmetric scale based on th
 
 ## Run
 
-Mac example:
+The supported entry point is `run_grand_average.py`. From inside this folder:
 
 ```bash
-python analysis/group/EEG_all_channels/G01_grand_average_report.py \
-  --subjects 115 116 118 119 \
-  --platform mac
+python run_grand_average.py --subjects 102 103 104 107
 ```
 
-BlueBEAR example:
+From the repository root:
 
 ```bash
-python analysis/group/EEG_all_channels/G01_grand_average_report.py \
-  --subjects 115 116 118 119 \
-  --platform bluebear \
-  --n-jobs 8
+python analysis/group/EEG_all_channels/run_grand_average.py --subjects 102 103 104 107
 ```
 
-You can override the project root with `--project-root`.
+Mac is the default platform. Add `--platform bluebear --n-jobs 8` on BlueBEAR. You can override the project root with `--project-root`.
+
+Do not run obsolete G04/G05 filenames; the final analysis module is `G01_complete_grand_average_report.py`, invoked through `run_grand_average.py`.
 
 ## Outputs
 
