@@ -112,9 +112,13 @@ def sig_1d(T,cl,p,t):
    ix=np.where(np.asarray(m,bool))[0];out.append({"cluster":i,"p":float(pv),"t_start":float(t[ix].min()),"t_end":float(t[ix].max()),"peak_t":float(t[ix[np.argmax(np.abs(T[ix]))]]),"peak_stat":float(T[ix][np.argmax(np.abs(T[ix]))])})
  return out
 def shade(ax,rows):
- for r in rows:ax.axvspan(r["t_start"],r["t_end"],alpha=.18)
+ ymin,ymax=ax.get_ylim()
+ for r in rows:
+  ax.axvspan(r["t_start"],r["t_end"],facecolor="0.72",edgecolor="0.25",alpha=.5,zorder=0)
+  mid=(r["t_start"]+r["t_end"])/2;p=r.get("p_cluster",r.get("p",np.nan))
+  ax.text(mid,ymax-(ymax-ymin)*.04,f"cluster p={p:.4f}\n{r['t_start']:.3f}-{r['t_end']:.3f} s",ha="center",va="top",fontsize=8,bbox=dict(facecolor="white",alpha=.85,edgecolor="0.4"))
 def roi_plot(st,no,t,rows,title,ylabel):
- fig,ax=plt.subplots(figsize=(10,5),constrained_layout=True);ms=st.mean(0);mn=no.mean(0);sem_s=st.std(0,ddof=1)/np.sqrt(len(st));sem_n=no.std(0,ddof=1)/np.sqrt(len(no));ax.plot(t,mn,label="No stimulation");ax.fill_between(t,mn-sem_n,mn+sem_n,alpha=.15);ax.plot(t,ms,label="Stimulation");ax.fill_between(t,ms-sem_s,ms+sem_s,alpha=.15);shade(ax,rows);ax.axvline(0,color="k",ls="--",lw=.8);ax.set_xlabel("Time (s)");ax.set_ylabel(ylabel);ax.set_title(title);ax.legend();return fig
+ fig,ax=plt.subplots(figsize=(10,5),constrained_layout=True);ms=st.mean(0);mn=no.mean(0);sem_s=st.std(0,ddof=1)/np.sqrt(len(st));sem_n=no.std(0,ddof=1)/np.sqrt(len(no));ax.plot(t,mn,label="No stimulation");ax.fill_between(t,mn-sem_n,mn+sem_n,alpha=.15);ax.plot(t,ms,label="Stimulation");ax.fill_between(t,ms-sem_s,ms+sem_s,alpha=.15);ax.axvline(0,color="k",ls="--",lw=.8);ax.set_xlabel("Time (s)");ax.set_ylabel(ylabel);ax.set_title(title);ax.legend();ax.relim();ax.autoscale_view();shade(ax,rows);return fig
 def sensor_plot(st,no,t,ch,rows):
  return roi_plot(st,no,t,rows,f"{ch}: alpha power, stimulation vs no stimulation","Alpha power")
 def participant_difference_traces(diff,t,subjects,title):
@@ -200,11 +204,15 @@ def main():
  sensor_text+=("\nOptional BH-FDR was applied. FDR-significant sensors: "+(", ".join(sig_fdr) if sig_fdr else "None")) if a.sensor_fdr else "\nNo across-sensor FDR was applied. Use --sensor-fdr to request it."
  report.add_text("Single-sensor cluster-permutation results",sensor_text,section)
  for ch in sig_uncorrected:
+  dat=sensor_results[ch];sig=dat["significant_clusters"]
+  detail=f"{ch}: N={dat['n_subjects']}; cluster-forming threshold=+/-{dat['cluster_forming_threshold_t']:.4f}.\n"+("\n".join(f"Significant cluster {r['cluster']}: {r['t_start']:.3f}-{r['t_end']:.3f} s; cluster statistic={r['cluster_stat']:.4f}; cluster p={r['p']:.4f}; n_samples={r['n_samples']}." for r in sig) if sig else "No significant clusters.")
+  report.add_text(f"{ch}: significant single-sensor cluster details",detail,section)
+ for ch in sig_uncorrected:
   dat=sensor_results[ch];ch_subs=dat["included_subjects"];st=[];no=[]
   for sub in ch_subs:
    xs,ct,_=alpha(ep[sub]["stim"],[ch],a);xn,_,_=alpha(ep[sub]["no-stim"],[ch],a);st.append(xs[0]);no.append(xn[0])
   rows=[r for r in sensor_cluster_records if r["sensor"]==ch and r["p_cluster"]<=PTHRESH]
-  report.add_figure(sensor_plot(np.asarray(st),np.asarray(no),ct,ch,rows),str(figs/f"sensor_{ch}_significant_clusters.png"),f"{ch}: single-sensor alpha cluster(s)",f"Sensor-specific N={len(ch_subs)}. Shading marks within-sensor cluster p<=0.05. Across-sensor FDR is not implied.",section)
+  report.add_figure(sensor_plot(np.asarray(st),np.asarray(no),ct,ch,rows),str(figs/f"sensor_{ch}_significant_clusters.png"),f"{ch}: single-sensor alpha cluster(s)",f"Sensor-specific N={len(ch_subs)}. Gray vertical bands mark significant within-sensor cluster-permutation intervals and are labelled with cluster p-value and time range. Across-sensor FDR is not implied.",section)
  # ROI analyses use ROI-specific complete-case subject samples.
  # A participant contributes only when EVERY channel in that ROI is good in BOTH conditions.
  roi_results={}
@@ -229,7 +237,7 @@ def main():
   text+=f"\nActual ROI cluster-forming threshold: +/-{roi_thresh:.4f} (df={len(roi_subs)-1}; two-sided alpha={CLUSTER_FORMING_ALPHA:.2f}, 0.05 each tail).\nStrongest observed clusters, including non-significant:\n"+("\n".join(f"Cluster {r['cluster']}: p={r['p']:.4f}; stat={r['cluster_stat']:.3f}; n_samples={r['n_samples']}; {r['t_start']:.3f}-{r['t_end']:.3f} s" for r in top_roi) if top_roi else "None")
   report.add_text(label+" results",text,section)
   tag="ROI8" if requested==ROI8 else "ROI3"
-  report.add_figure(roi_plot(st,no,rt,rows,label,"Alpha power"),str(figs/f"{tag}_alpha_clusters.png"),label+": stimulation vs no stimulation",f"Complete-case ROI sample N={len(roi_subs)}. All required ROI channels are retained in every included participant. Lines are group means; ribbons are SEM. Shaded regions are significant clusters.",section)
+  report.add_figure(roi_plot(st,no,rt,rows,label,"Alpha power"),str(figs/f"{tag}_alpha_clusters.png"),label+": stimulation vs no stimulation",f"Complete-case ROI sample N={len(roi_subs)}. All required ROI channels are retained in every included participant. Lines are group means; ribbons are SEM. Gray vertical bands mark significant cluster-permutation intervals and are labelled with cluster p-value and time range.",section)
   report.add_figure(participant_difference_traces(roi_diff,rt,roi_subs,label+": individual participant differences"),str(figs/f"{tag}_individual_difference_traces.png"),label+": individual stim - no-stim traces",f"Only participants retaining every required ROI channel are shown (N={len(roi_subs)}).",section)
   effect_fig,effect_values=participant_window_effects(roi_diff,roi_subs,label+": participant mean effects");report.add_figure(effect_fig,str(figs/f"{tag}_participant_mean_effects.png"),label+": participant-level mean 0.2-1.2 s effects",f"Complete-case ROI N={len(roi_subs)}. Each point is one participant's mean stim - no-stim alpha effect.",section)
   roi_results[label]["participant_window_mean_effects"]={f"sub-{sub}":float(v) for sub,v in zip(roi_subs,effect_values)}
