@@ -10,7 +10,7 @@ For each included participant/condition:
 - attention-left/right trials are combined;
 - multitaper TFR: 2-30 Hz, 1-Hz steps, n_cycles=f/2, time-bandwidth=2,
   FFT=True, ITC=False, trial-average=True, decim=2;
-- NO baseline correction;
+- percent baseline correction (-0.3 to -0.1 s) is applied separately to each condition;
 - user-selected alpha frequencies are averaged;
 - stimulation and no-stimulation alpha time courses are retained.
 
@@ -30,7 +30,7 @@ if str(SUBJECT_DIR) not in sys.path:sys.path.insert(0,str(SUBJECT_DIR))
 from pipeline_config import CONDITIONS,resolve_project_root,stage_path
 
 FREQS=np.arange(2.,31.,1.);N_CYCLES=FREQS/2.;TIME_BANDWIDTH=2.;DECIM=2
-PLOT_WINDOW=(-.3,1.4);DEFAULT_ALPHA=(8.,12.)
+PLOT_WINDOW=(-.3,1.4);BASELINE=(-.3,-.1);DEFAULT_ALPHA=(8.,12.)
 
 def args():
  p=argparse.ArgumentParser(description=__doc__);p.add_argument("--subjects",nargs="+",required=True);p.add_argument("--session",default="01");p.add_argument("--task",default="SpAtt");p.add_argument("--run",default="01");p.add_argument("--platform",choices=["mac","bluebear"],default="mac");p.add_argument("--project-root",default=None);p.add_argument("--n-jobs",type=int,default=4);p.add_argument("--alpha",nargs=2,type=float,metavar=("FMIN","FMAX"),default=DEFAULT_ALPHA);a=p.parse_args()
@@ -89,9 +89,9 @@ def main():
   st=np.asarray(st);no=np.asarray(no);n=len(st);ms=st.mean(0);mn=no.mean(0);ss=st.std(0,ddof=1)/np.sqrt(n) if n>1 else np.zeros_like(ms);sn=no.std(0,ddof=1)/np.sqrt(n) if n>1 else np.zeros_like(mn)
   ax=axs[cells[ch]];ax.axis("on");ax.plot(times,mn,label="No stim",linewidth=1);ax.fill_between(times,mn-sn,mn+sn,alpha=.18);ax.plot(times,ms,label="Stim",linewidth=1);ax.fill_between(times,ms-ss,ms+ss,alpha=.18);ax.axvline(0,color="k",ls="--",lw=.5);ax.set_title(f"{ch} (n={n})",fontsize=8);ax.tick_params(labelsize=5);ax.set_xlim(*PLOT_WINDOW)
   rows.append({"channel":ch,"n_subjects":n,"subjects":";".join("sub-"+s for s in by_ch[ch])})
- fig.suptitle(f"Alpha power QC: stimulation vs no stimulation, {a.alpha[0]:g}-{a.alpha[1]:g} Hz, mean +/- SEM\nNo baseline correction; sensor-specific participant N",fontsize=17)
+ fig.suptitle(f"Alpha power QC: stimulation vs no stimulation, {a.alpha[0]:g}-{a.alpha[1]:g} Hz, mean +/- SEM\nPercent baseline -0.3 to -0.1 s applied separately within each condition; sensor-specific participant N",fontsize=17)
  handles=[plt.Line2D([],[],label="No stimulation"),plt.Line2D([],[],label="Stimulation")];fig.legend(handles=handles,loc="upper right");fig.subplots_adjust(left=.025,right=.97,bottom=.03,top=.93,wspace=.55,hspace=.65)
- png=out/f"alpha_{a.alpha[0]:g}-{a.alpha[1]:g}Hz_all_sensors_scalp_mean_SEM.png";fig.savefig(png,dpi=200,bbox_inches="tight");plt.close(fig)
+ png=out/f"alpha_{a.alpha[0]:g}-{a.alpha[1]:g}Hz_percent_baseline_all_sensors_scalp_mean_SEM.png";fig.savefig(png,dpi=200,bbox_inches="tight");plt.close(fig)
  with (out/f"alpha_{a.alpha[0]:g}-{a.alpha[1]:g}Hz_subjects_by_sensor.csv").open("w",newline="",encoding="utf-8") as f:
   w=csv.DictWriter(f,fieldnames=["channel","n_subjects","subjects"]);w.writeheader();w.writerows(rows)
  print("\nSaved QC figure:",png);print("Each panel uses all participants retaining that sensor in both conditions.")
