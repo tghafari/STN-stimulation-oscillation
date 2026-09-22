@@ -16,6 +16,40 @@ Report includes:
 
 ROI inference is participant-level: channels are averaged WITHIN participant
 before the paired one-sample permutation test.
+
+STATISTICAL DESIGN
+------------------
+All inferential contrasts use UNBASELINED power. For every included participant,
+alpha power is averaged across the user-selected frequency range and stimulation
+minus no-stimulation is formed. Tests are paired one-sample cluster permutation
+tests of these within-participant differences against zero, with tail=0.
+
+Cluster formation uses two-sided pointwise alpha=.10 (.05 in each tail). Final
+cluster significance is p<=.05 from the permutation maximum-cluster null.
+
+Single sensors:
+  Each sensor gets its own complete-case sample. A participant is included for a
+  sensor whenever that sensor is present and good in BOTH stim and no-stim. A bad
+  different sensor does not exclude that participant. Temporal clustering corrects
+  across time within that sensor. By default there is NO correction across sensors.
+
+Optional single-sensor FDR:
+  Add --sensor-fdr to apply Benjamini-Hochberg FDR across all single-sensor cluster
+  p-values after the cluster permutation tests. This is optional secondary analysis.
+
+ROI3:
+  PO3, POz, PO4 must ALL be good in both conditions. Only those complete-case
+  participants enter ROI3. Channels are averaged within participant before testing.
+
+ROI8:
+  PO3, POz, PO4, O1, Oz, O2, PO7, PO8 must ALL be good in both conditions. Only
+  those complete-case participants enter ROI8. Channels are averaged within
+  participant before testing.
+
+Whole-scalp sensor x time test:
+  Intentionally NOT performed. Requiring a common sensor set across every participant
+  removed many posterior sensors and answered a different question from the desired
+  channel-specific/ROI-specific analyses.
 """
 from __future__ import annotations
 import argparse,csv,json,sys
@@ -123,42 +157,19 @@ def spatial_topomap(row,T,info,chs):
  fig,ax=plt.subplots(figsize=(7,6));im,_=mne.viz.plot_topomap(vals,info,axes=ax,show=False,contours=0,mask=active,mask_params=dict(marker="o",markerfacecolor="none",markeredgecolor="k",linewidth=0,markersize=8));ax.set_title(f"Spatial cluster p={row['p']:.4f}, {row['t_start']:.3f}-{row['t_end']:.3f} s");fig.colorbar(im,ax=ax,label="Mean cluster t statistic");return fig
 
 def main():
- a=args();subs=[s.removeprefix("sub-") for s in a.subjects];root=resolve_project_root(a.platform,a.project_root);ep={s:load(root,s,a) for s in subs};g={s:good(ep[s]) for s in subs};order=ep[subs[0]]["stim"].copy().pick("eeg").ch_names;common=[ch for ch in order if all(ch in g[s] for s in subs)]
- if not common:raise RuntimeError("No EEG sensor is good in both conditions for every participant.")
- ST=[];NO=[]
- for s in subs:
-  st,t,info=alpha(ep[s]["stim"],common,a);no,t2,_=alpha(ep[s]["no-stim"],common,a)
-  if not np.allclose(t,t2):raise RuntimeError("Time mismatch "+s)
-  ST.append(st);NO.append(no)
- ST=np.asarray(ST);NO=np.asarray(NO);D=ST-NO
+ a=args();subs=[s.removeprefix("sub-") for s in a.subjects];root=resolve_project_root(a.platform,a.project_root);ep={s:load(root,s,a) for s in subs};g={s:good(ep[s]) for s in subs}
  out=root/"derivatives"/"reports"/"group"/"EEG_all_channels_alpha_cluster";figs=out/"figures";figs.mkdir(parents=True,exist_ok=True);report=ParticipantPDF(str(out),"alpha_cluster_"+"_".join(subs))
  section="Alpha cluster permutation"
- posterior_survived=[ch for ch in ROI8 if ch in common]
- posterior_removed=[ch for ch in ROI8 if ch not in common]
- survived_text=(
-  f"For the WHOLE-SCALP sensor x time test only, a sensor must be good in BOTH stimulation conditions for EVERY participant.\n"
-  f"Sensors included in that whole-scalp test (n={len(common)}): {', '.join(common)}\n"
-  f"This intersection does NOT determine the ROI3, ROI8, or single-sensor samples. ROI analyses use ROI-specific complete-case participants; each single-sensor analysis uses all participants retaining that sensor in both conditions."
- )
- report.add_text("Channels surviving whole-sample intersection",survived_text,section)
- details=f"N={len(subs)} paired participants; contrast=stimulation minus no stimulation calculated from UNBASELINED power; selected alpha range={a.alpha[0]:g}-{a.alpha[1]:g} Hz averaged across frequency; inferential window={WINDOW[0]:g}-{WINDOW[1]:g} s. TFR: multitaper, 2-30 Hz in 1-Hz steps, n_cycles=f/2, time-bandwidth={TIME_BANDWIDTH:g}, FFT=True, ITC=False, trial average=True, decimation={DECIM}. No baseline correction is applied before the stimulation-minus-no-stimulation contrast. Two-sided one-sample cluster permutation tests are applied to within-participant differences with all possible sign flips supported by MNE; cluster-forming threshold uses two-sided pointwise alpha=0.10 (0.05 in each tail); family-wise cluster significance p<=0.05. Whole-scalp inference uses temporal adjacency plus EEG sensor adjacency and only sensors good in both conditions for every participant. Single-sensor tests use sensor-specific participant samples. Across-sensor FDR is optional and is applied only when --sensor-fdr is supplied. ROI channels are averaged within participant before permutation testing."
+ report.add_text("Analysis structure","This report intentionally contains NO whole-scalp sensor x time cluster test. Single sensors are tested separately using every participant retaining that sensor in both stimulation conditions. ROI3 uses participants retaining PO3, POz and PO4 in both conditions. ROI8 uses participants retaining PO3, POz, PO4, O1, Oz, O2, PO7 and PO8 in both conditions. Thus a bad channel excludes a participant only from analyses that require that channel.",section)
+ details=f"N={len(subs)} paired participants; contrast=stimulation minus no stimulation calculated from UNBASELINED power; selected alpha range={a.alpha[0]:g}-{a.alpha[1]:g} Hz averaged across frequency; inferential window={WINDOW[0]:g}-{WINDOW[1]:g} s. TFR: multitaper, 2-30 Hz in 1-Hz steps, n_cycles=f/2, time-bandwidth={TIME_BANDWIDTH:g}, FFT=True, ITC=False, trial average=True, decimation={DECIM}. No baseline correction is applied before the stimulation-minus-no-stimulation contrast. Two-sided one-sample cluster permutation tests are applied to within-participant differences with all possible sign flips supported by MNE; cluster-forming threshold uses two-sided pointwise alpha=0.10 (0.05 in each tail); family-wise cluster significance p<=0.05. Single-sensor tests use sensor-specific complete-case participant samples and cluster across time. Across-sensor FDR is optional and is applied only when --sensor-fdr is supplied. ROI3 and ROI8 use separate ROI-specific complete-case participant samples; ROI channels are averaged within participant before temporal cluster permutation testing. No whole-scalp sensor x time cluster test is run."
  report.add_text("Analysis details",details,section)
- methods=("Alpha-band stimulation effects were assessed using paired cluster-based permutation tests on participant-level stimulation-minus-no-stimulation power. Time-frequency power was estimated with multitaper convolution and alpha power was defined as the mean from the user-specified frequency range ("+f"{a.alpha[0]:g}-{a.alpha[1]:g} Hz). Statistical inference was restricted a priori to 0.2-1.2 s after cue onset. Stimulation-minus-no-stimulation contrasts were calculated from unbaselined power; no baseline correction was applied before contrast formation. The primary whole-scalp analysis clustered samples jointly across time and neighboring EEG sensors. Complementary analyses tested temporal clusters at individual sensors using a separate complete-case participant sample for each sensor; across-sensor FDR was optional, and a priori posterior averages comprising eight posterior/occipital sensors and PO3/POz/PO4. Each ROI used an ROI-specific complete-case sample: participants were included only if every required ROI channel was retained as good in both stimulation conditions. Sensor values were averaged within each included participant before group inference, ensuring participants rather than sensors were the unit of observation.")
+ methods=("Alpha-band stimulation effects were assessed using paired cluster-based permutation tests on participant-level stimulation-minus-no-stimulation power. Time-frequency power was estimated with multitaper convolution and alpha power was defined as the mean from the user-specified frequency range ("+f"{a.alpha[0]:g}-{a.alpha[1]:g} Hz). Statistical inference was restricted a priori to 0.2-1.2 s after cue onset. Stimulation-minus-no-stimulation contrasts were calculated from unbaselined power; no baseline correction was applied before contrast formation. Temporal cluster tests were performed separately for each EEG sensor using all participants retaining that sensor in both stimulation conditions. Across-sensor false-discovery-rate correction was optional and was not applied unless explicitly requested with --sensor-fdr. A priori ROI analyses tested averages comprising eight posterior/occipital sensors and PO3/POz/PO4. Each ROI used an ROI-specific complete-case sample: participants were included only if every required ROI channel was retained as good in both stimulation conditions. Sensor values were averaged within each included participant before group inference, ensuring participants rather than sensors were the unit of observation.")
  report.add_text("Manuscript-style statistical analysis",methods,section)
- # spatial
- sadj,names=mne.channels.find_ch_adjacency(info,ch_type="eeg")
- if list(names)!=list(common):
-  ix=[names.index(ch) for ch in common];sadj=sadj[ix][:,ix]
- t_thresh=cluster_threshold(len(subs))
- X=D.transpose(0,2,1)
- T,cl,pv,_=permutation_cluster_1samp_test(X,n_permutations="all",threshold=t_thresh,tail=0,adjacency=combine_adjacency(len(t),sadj),out_type="mask",seed=a.seed,n_jobs=a.n_jobs,verbose=True)
- all_spatial=summarize_clusters(T,cl,pv,t,common);srows=spatial_rows(T,cl,pv,t,common);top_spatial=sorted(all_spatial,key=lambda r:r["p"])[:10]
- sigtxt="No significant spatio-temporal clusters." if not srows else "\n".join(f"Cluster {r['cluster']}: p={r['p']:.4f}; {r['t_start']:.3f}-{r['t_end']:.3f} s; sensors: {', '.join(r['sensors'])}" for r in srows)
- diagnostic="\n".join(f"Cluster {r['cluster']}: p={r['p']:.4f}; cluster_stat={r['cluster_stat']:.3f}; n_samples={r['n_samples']}; n_sensors={r['n_sensors']}; {r['t_start']:.3f}-{r['t_end']:.3f} s; sensors: {r['sensors']}" for r in top_spatial) if top_spatial else "None"
- report.add_text("Whole-scalp spatio-temporal results",f"Actual cluster-forming threshold: +/-{t_thresh:.4f} (two-sided pointwise alpha={CLUSTER_FORMING_ALPHA:.2f}; 0.05 in each tail; df={len(subs)-1}).\n{sigtxt}\n\nStrongest observed clusters, including non-significant clusters:\n{diagnostic}",section)
- print(f"Cluster-forming threshold: +/-{t_thresh:.4f}")
- for r in all_spatial: print(f"Spatial cluster {r['cluster']}: stat={r['cluster_stat']:.4f}, p={r['p']:.4f}, samples={r['n_samples']}, sensors={r['n_sensors']}, time={r['t_start']:.3f}-{r['t_end']:.3f}")
- for r in srows:report.add_figure(spatial_topomap(r,T,info,common),str(figs/f"spatial_cluster_{r['cluster']}.png"),f"Significant spatio-temporal cluster {r['cluster']}",f"Black circles mark sensors participating in the cluster at one or more samples. Cluster p={r['p']:.4f}; time extent {r['t_start']:.3f}-{r['t_end']:.3f} s.",section)
+ # Whole-scalp sensor x time testing is intentionally NOT run here.
+ # Reason: it requires a common sensor set across all participants, which in this
+ # dataset discards many posterior/occipital sensors because one bad channel in
+ # one participant removes that sensor from the entire whole-scalp test.
+ # The inferential analyses below instead use channel/ROI-specific complete cases.
  # Single-sensor tests: sensor-specific complete-case participants.
  sensor_results={};sensor_cluster_records=[];sensor_pvals=[];all_sensor_names=[]
  for sub in subs:
@@ -225,14 +236,14 @@ def main():
   print(f"\n{label}: N={len(roi_subs)} included; excluded={excluded_subs}")
   for r in all_roi:print(f"{label} cluster {r['cluster']}: stat={r['cluster_stat']:.4f}, p={r['p']:.4f}, samples={r['n_samples']}, time={r['t_start']:.3f}-{r['t_end']:.3f}")
  # audit
- audit={"subjects":subs,"n_subjects":len(subs),"common_good_channels":common,"posterior_roi_channels_surviving_intersection":posterior_survived,"posterior_roi_channels_removed_by_intersection":posterior_removed,"cluster_forming_threshold_t":t_thresh,"cluster_forming_alpha_two_sided":CLUSTER_FORMING_ALPHA,"cluster_forming_alpha_each_tail":CLUSTER_FORMING_ALPHA/2,"all_spatiotemporal_clusters":all_spatial,"alpha_hz":list(a.alpha),"window_s":WINDOW,"baseline_s":None,"contrast_power":"unbaselined","ROI8":roi_results.get("8-channel posterior/occipital ROI"),"ROI3":roi_results.get("3-channel posterior ROI"),"single_sensor_results":sensor_results,"sensor_fdr_requested":a.sensor_fdr,"sensor_fdr_significant_sensors":sig_fdr,"spatiotemporal":[{k:v for k,v in r.items() if k!="mask"} for r in srows]}
+ audit={"subjects":subs,"n_subjects_requested":len(subs),"alpha_hz":list(a.alpha),"window_s":WINDOW,"baseline_s":None,"contrast_power":"unbaselined","cluster_forming_alpha_two_sided":CLUSTER_FORMING_ALPHA,"cluster_forming_alpha_each_tail":CLUSTER_FORMING_ALPHA/2,"cluster_level_significance":PTHRESH,"tail":0,"single_sensor_sampling":"sensor-specific complete cases: sensor good in stim and no-stim","single_sensor_results":sensor_results,"sensor_fdr_requested":a.sensor_fdr,"sensor_fdr_significant_sensors":sig_fdr,"ROI8":roi_results.get("8-channel posterior/occipital ROI"),"ROI3":roi_results.get("3-channel posterior ROI"),"whole_scalp_spatiotemporal_test":"not run"} 
  (out/"alpha_cluster_report_audit.json").write_text(json.dumps(audit,indent=2)+"\n")
  with (out/"sensorwise_clusters_all.csv").open("w",newline="") as f:
   fields=["sensor","n_subjects","cluster","p_cluster","cluster_stat","n_samples","t_start","t_end"]
   if a.sensor_fdr:fields+=["p_fdr","significant_fdr"]
   w=csv.DictWriter(f,fieldnames=fields);w.writeheader();w.writerows(sensor_cluster_records)
  print("\nPDF report:",report.pdf_fname)
- print("Significant spatial clusters:",len(srows));print("Single sensors with cluster p<=.05:",sig_uncorrected or "none");print("Optional sensor FDR:",("applied; significant="+str(sig_fdr) if a.sensor_fdr else "not applied"))
+ print("Whole-scalp sensor x time test: not run");print("Single sensors with cluster p<=.05:",sig_uncorrected or "none");print("Optional sensor FDR:",("applied; significant="+str(sig_fdr) if a.sensor_fdr else "not applied"))
  for k,v in roi_results.items():print(k,":",len(v["rows"]),"significant cluster(s)")
 
 if __name__=="__main__":main()
