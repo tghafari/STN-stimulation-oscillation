@@ -48,6 +48,7 @@ def args():
  p.add_argument("--n-jobs",type=int,default=4)
  p.add_argument("--alpha",nargs=2,type=float,metavar=("FMIN","FMAX"),default=DEFAULT_ALPHA,help="Frequency range in Hz to average before cluster testing, e.g. --alpha 8 12")
  p.add_argument("--seed",type=int,default=42)
+ p.add_argument("--sensor-fdr",action="store_true",help="Optionally apply BH-FDR across single-sensor cluster p-values; default is no FDR.")
  a=p.parse_args()
  if a.alpha[0]>=a.alpha[1]:
   p.error("--alpha requires FMIN < FMAX")
@@ -135,15 +136,14 @@ def main():
  posterior_survived=[ch for ch in ROI8 if ch in common]
  posterior_removed=[ch for ch in ROI8 if ch not in common]
  survived_text=(
-  f"Whole-sample cluster tests require a sensor to be good in BOTH stimulation conditions for EVERY participant.\n"
-  f"All surviving EEG channels (n={len(common)}): {', '.join(common)}\n"
-  f"Posterior/occipital ROI candidates surviving: {', '.join(posterior_survived) if posterior_survived else 'None'}\n"
-  f"Posterior/occipital ROI candidates removed by the intersection: {', '.join(posterior_removed) if posterior_removed else 'None'}"
+  f"For the WHOLE-SCALP sensor x time test only, a sensor must be good in BOTH stimulation conditions for EVERY participant.\n"
+  f"Sensors included in that whole-scalp test (n={len(common)}): {', '.join(common)}\n"
+  f"This intersection does NOT determine the ROI3, ROI8, or single-sensor samples. ROI analyses use ROI-specific complete-case participants; each single-sensor analysis uses all participants retaining that sensor in both conditions."
  )
  report.add_text("Channels surviving whole-sample intersection",survived_text,section)
- details=f"N={len(subs)} paired participants; contrast=stimulation minus no stimulation calculated from UNBASELINED power; selected alpha range={a.alpha[0]:g}-{a.alpha[1]:g} Hz averaged across frequency; inferential window={WINDOW[0]:g}-{WINDOW[1]:g} s. TFR: multitaper, 2-30 Hz in 1-Hz steps, n_cycles=f/2, time-bandwidth={TIME_BANDWIDTH:g}, FFT=True, ITC=False, trial average=True, decimation={DECIM}. No baseline correction is applied before the stimulation-minus-no-stimulation contrast. Two-sided one-sample cluster permutation tests are applied to within-participant differences with all possible sign flips supported by MNE; cluster-forming threshold uses two-sided pointwise alpha=0.10 (0.05 in each tail); family-wise cluster significance p<=0.05. Whole-scalp inference uses temporal adjacency plus EEG sensor adjacency and only sensors good in both conditions for every participant. Sensor-wise cluster p-values are additionally Benjamini-Hochberg FDR corrected across all sensor clusters. ROI channels are averaged within participant before permutation testing."
+ details=f"N={len(subs)} paired participants; contrast=stimulation minus no stimulation calculated from UNBASELINED power; selected alpha range={a.alpha[0]:g}-{a.alpha[1]:g} Hz averaged across frequency; inferential window={WINDOW[0]:g}-{WINDOW[1]:g} s. TFR: multitaper, 2-30 Hz in 1-Hz steps, n_cycles=f/2, time-bandwidth={TIME_BANDWIDTH:g}, FFT=True, ITC=False, trial average=True, decimation={DECIM}. No baseline correction is applied before the stimulation-minus-no-stimulation contrast. Two-sided one-sample cluster permutation tests are applied to within-participant differences with all possible sign flips supported by MNE; cluster-forming threshold uses two-sided pointwise alpha=0.10 (0.05 in each tail); family-wise cluster significance p<=0.05. Whole-scalp inference uses temporal adjacency plus EEG sensor adjacency and only sensors good in both conditions for every participant. Single-sensor tests use sensor-specific participant samples. Across-sensor FDR is optional and is applied only when --sensor-fdr is supplied. ROI channels are averaged within participant before permutation testing."
  report.add_text("Analysis details",details,section)
- methods=("Alpha-band stimulation effects were assessed using paired cluster-based permutation tests on participant-level stimulation-minus-no-stimulation power. Time-frequency power was estimated with multitaper convolution and alpha power was defined as the mean from the user-specified frequency range ("+f"{a.alpha[0]:g}-{a.alpha[1]:g} Hz). Statistical inference was restricted a priori to 0.2-1.2 s after cue onset. Stimulation-minus-no-stimulation contrasts were calculated from unbaselined power; no baseline correction was applied before contrast formation. The primary whole-scalp analysis clustered samples jointly across time and neighboring EEG sensors. Complementary analyses tested temporal clusters at individual sensors, with false-discovery-rate correction across sensor-level clusters, and a priori posterior averages comprising eight posterior/occipital sensors and PO3/POz/PO4. Each ROI used an ROI-specific complete-case sample: participants were included only if every required ROI channel was retained as good in both stimulation conditions. Sensor values were averaged within each included participant before group inference, ensuring participants rather than sensors were the unit of observation.")
+ methods=("Alpha-band stimulation effects were assessed using paired cluster-based permutation tests on participant-level stimulation-minus-no-stimulation power. Time-frequency power was estimated with multitaper convolution and alpha power was defined as the mean from the user-specified frequency range ("+f"{a.alpha[0]:g}-{a.alpha[1]:g} Hz). Statistical inference was restricted a priori to 0.2-1.2 s after cue onset. Stimulation-minus-no-stimulation contrasts were calculated from unbaselined power; no baseline correction was applied before contrast formation. The primary whole-scalp analysis clustered samples jointly across time and neighboring EEG sensors. Complementary analyses tested temporal clusters at individual sensors using a separate complete-case participant sample for each sensor; across-sensor FDR was optional, and a priori posterior averages comprising eight posterior/occipital sensors and PO3/POz/PO4. Each ROI used an ROI-specific complete-case sample: participants were included only if every required ROI channel was retained as good in both stimulation conditions. Sensor values were averaged within each included participant before group inference, ensuring participants rather than sensors were the unit of observation.")
  report.add_text("Manuscript-style statistical analysis",methods,section)
  # spatial
  sadj,names=mne.channels.find_ch_adjacency(info,ch_type="eeg")
@@ -159,20 +159,41 @@ def main():
  print(f"Cluster-forming threshold: +/-{t_thresh:.4f}")
  for r in all_spatial: print(f"Spatial cluster {r['cluster']}: stat={r['cluster_stat']:.4f}, p={r['p']:.4f}, samples={r['n_samples']}, sensors={r['n_sensors']}, time={r['t_start']:.3f}-{r['t_end']:.3f}")
  for r in srows:report.add_figure(spatial_topomap(r,T,info,common),str(figs/f"spatial_cluster_{r['cluster']}.png"),f"Significant spatio-temporal cluster {r['cluster']}",f"Black circles mark sensors participating in the cluster at one or more samples. Cluster p={r['p']:.4f}; time extent {r['t_start']:.3f}-{r['t_end']:.3f} s.",section)
- # sensorwise
- rec=[];allp=[];raw_store={}
- for ci,ch in enumerate(common):
-  Ts,cs,ps,_=one_d(D[:,ci,:],a.seed);raw_store[ch]=(Ts,cs,ps)
-  for k,(m,p) in enumerate(zip(cs,ps)):
-   ix=np.where(np.asarray(m,bool))[0];rec.append({"sensor":ch,"cluster":k,"p_uncorrected":float(p),"t_start":float(t[ix].min()),"t_end":float(t[ix].max())});allp.append(float(p))
- if allp:
-  rej,q=fdr_correction(np.asarray(allp),alpha=PTHRESH,method="indep")
-  for r,z,qq in zip(rec,rej,q):r["significant_fdr"]=bool(z);r["p_fdr"]=float(qq)
- sigsensor=sorted({r["sensor"] for r in rec if r.get("significant_fdr")})
- report.add_text("Sensors with significant temporal clusters",("None after FDR correction." if not sigsensor else ", ".join(sigsensor)),section)
- for ch in sigsensor:
-  rows=[r for r in rec if r["sensor"]==ch and r.get("significant_fdr")]
-  report.add_figure(sensor_plot(ST[:,common.index(ch),:],NO[:,common.index(ch),:],t,rows),str(figs/f"sensor_{ch}_significant_clusters.png"),f"{ch}: significant alpha temporal cluster(s)","Lines are group means; shading around lines is SEM; vertical shaded regions are FDR-significant temporal clusters.",section)
+ # Single-sensor tests: sensor-specific complete-case participants.
+ sensor_results={};sensor_cluster_records=[];sensor_pvals=[];all_sensor_names=[]
+ for sub in subs:
+  for ch in g[sub]:
+   if ch not in all_sensor_names:all_sensor_names.append(ch)
+ for ch in all_sensor_names:
+  ch_subs=[sub for sub in subs if ch in g[sub]]
+  excluded=[sub for sub in subs if sub not in ch_subs]
+  if len(ch_subs)<2:continue
+  ch_st=[];ch_no=[]
+  for sub in ch_subs:
+   xs,ct,_=alpha(ep[sub]["stim"],[ch],a);xn,ct2,_=alpha(ep[sub]["no-stim"],[ch],a)
+   if not np.allclose(ct,ct2):raise RuntimeError(f"Sensor time mismatch sub-{sub} {ch}")
+   ch_st.append(xs[0]);ch_no.append(xn[0])
+  ch_st=np.asarray(ch_st);ch_no=np.asarray(ch_no);ch_thresh=cluster_threshold(len(ch_subs))
+  Ts,cs,ps,_=permutation_cluster_1samp_test(ch_st-ch_no,n_permutations="all",threshold=ch_thresh,tail=0,adjacency=None,out_type="mask",seed=a.seed,verbose=False)
+  all_ch=summarize_clusters(Ts,cs,ps,ct);sig_ch=[r for r in all_ch if r["p"]<=PTHRESH]
+  sensor_results[ch]={"n_subjects":len(ch_subs),"included_subjects":ch_subs,"excluded_subjects":excluded,"cluster_forming_threshold_t":ch_thresh,"significant_clusters":sig_ch,"all_clusters":all_ch}
+  for r in all_ch:
+   rec={"sensor":ch,"n_subjects":len(ch_subs),"cluster":r["cluster"],"p_cluster":float(r["p"]),"cluster_stat":r["cluster_stat"],"n_samples":r["n_samples"],"t_start":r["t_start"],"t_end":r["t_end"]};sensor_cluster_records.append(rec);sensor_pvals.append(rec["p_cluster"])
+ if a.sensor_fdr and sensor_pvals:
+  reject,qvals=fdr_correction(np.asarray(sensor_pvals),alpha=PTHRESH,method="indep")
+  for rec,rej,q in zip(sensor_cluster_records,reject,qvals):rec["p_fdr"]=float(q);rec["significant_fdr"]=bool(rej)
+ sig_uncorrected=sorted({r["sensor"] for r in sensor_cluster_records if r["p_cluster"]<=PTHRESH})
+ sig_fdr=sorted({r["sensor"] for r in sensor_cluster_records if r.get("significant_fdr")})
+ sensor_text=("No single-sensor clusters had cluster p<=0.05." if not sig_uncorrected else "Sensors with at least one cluster p<=0.05 (not corrected across sensors): "+", ".join(sig_uncorrected))
+ sensor_text+="\nEach sensor uses all participants for whom that sensor is good in BOTH stim and no-stim; missing another channel does not exclude that participant."
+ sensor_text+=("\nOptional BH-FDR was applied. FDR-significant sensors: "+(", ".join(sig_fdr) if sig_fdr else "None")) if a.sensor_fdr else "\nNo across-sensor FDR was applied. Use --sensor-fdr to request it."
+ report.add_text("Single-sensor cluster-permutation results",sensor_text,section)
+ for ch in sig_uncorrected:
+  dat=sensor_results[ch];ch_subs=dat["included_subjects"];st=[];no=[]
+  for sub in ch_subs:
+   xs,ct,_=alpha(ep[sub]["stim"],[ch],a);xn,_,_=alpha(ep[sub]["no-stim"],[ch],a);st.append(xs[0]);no.append(xn[0])
+  rows=[r for r in sensor_cluster_records if r["sensor"]==ch and r["p_cluster"]<=PTHRESH]
+  report.add_figure(sensor_plot(np.asarray(st),np.asarray(no),ct,ch,rows),str(figs/f"sensor_{ch}_significant_clusters.png"),f"{ch}: single-sensor alpha cluster(s)",f"Sensor-specific N={len(ch_subs)}. Shading marks within-sensor cluster p<=0.05. Across-sensor FDR is not implied.",section)
  # ROI analyses use ROI-specific complete-case subject samples.
  # A participant contributes only when EVERY channel in that ROI is good in BOTH conditions.
  roi_results={}
@@ -204,12 +225,14 @@ def main():
   print(f"\n{label}: N={len(roi_subs)} included; excluded={excluded_subs}")
   for r in all_roi:print(f"{label} cluster {r['cluster']}: stat={r['cluster_stat']:.4f}, p={r['p']:.4f}, samples={r['n_samples']}, time={r['t_start']:.3f}-{r['t_end']:.3f}")
  # audit
- audit={"subjects":subs,"n_subjects":len(subs),"common_good_channels":common,"posterior_roi_channels_surviving_intersection":posterior_survived,"posterior_roi_channels_removed_by_intersection":posterior_removed,"cluster_forming_threshold_t":t_thresh,"cluster_forming_alpha_two_sided":CLUSTER_FORMING_ALPHA,"cluster_forming_alpha_each_tail":CLUSTER_FORMING_ALPHA/2,"all_spatiotemporal_clusters":all_spatial,"alpha_hz":list(a.alpha),"window_s":WINDOW,"baseline_s":None,"contrast_power":"unbaselined","ROI8":roi_results.get("8-channel posterior/occipital ROI"),"ROI3":roi_results.get("3-channel posterior ROI"),"significant_sensorwise_fdr":sigsensor,"spatiotemporal":[{k:v for k,v in r.items() if k!="mask"} for r in srows]}
+ audit={"subjects":subs,"n_subjects":len(subs),"common_good_channels":common,"posterior_roi_channels_surviving_intersection":posterior_survived,"posterior_roi_channels_removed_by_intersection":posterior_removed,"cluster_forming_threshold_t":t_thresh,"cluster_forming_alpha_two_sided":CLUSTER_FORMING_ALPHA,"cluster_forming_alpha_each_tail":CLUSTER_FORMING_ALPHA/2,"all_spatiotemporal_clusters":all_spatial,"alpha_hz":list(a.alpha),"window_s":WINDOW,"baseline_s":None,"contrast_power":"unbaselined","ROI8":roi_results.get("8-channel posterior/occipital ROI"),"ROI3":roi_results.get("3-channel posterior ROI"),"single_sensor_results":sensor_results,"sensor_fdr_requested":a.sensor_fdr,"sensor_fdr_significant_sensors":sig_fdr,"spatiotemporal":[{k:v for k,v in r.items() if k!="mask"} for r in srows]}
  (out/"alpha_cluster_report_audit.json").write_text(json.dumps(audit,indent=2)+"\n")
  with (out/"sensorwise_clusters_all.csv").open("w",newline="") as f:
-  w=csv.DictWriter(f,fieldnames=["sensor","cluster","p_uncorrected","t_start","t_end","significant_fdr","p_fdr"]);w.writeheader();w.writerows(rec)
+  fields=["sensor","n_subjects","cluster","p_cluster","cluster_stat","n_samples","t_start","t_end"]
+  if a.sensor_fdr:fields+=["p_fdr","significant_fdr"]
+  w=csv.DictWriter(f,fieldnames=fields);w.writeheader();w.writerows(sensor_cluster_records)
  print("\nPDF report:",report.pdf_fname)
- print("Significant spatial clusters:",len(srows));print("FDR-significant sensors:",sigsensor or "none")
+ print("Significant spatial clusters:",len(srows));print("Single sensors with cluster p<=.05:",sig_uncorrected or "none");print("Optional sensor FDR:",("applied; significant="+str(sig_fdr) if a.sensor_fdr else "not applied"))
  for k,v in roi_results.items():print(k,":",len(v["rows"]),"significant cluster(s)")
 
 if __name__=="__main__":main()
