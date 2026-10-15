@@ -1,103 +1,40 @@
-# STN stimulation and EEG oscillation analysis
+# STN stimulation and EEG oscillations
 
-Analysis code for the effect of STN stimulation on EEG oscillatory activity.
+## Subject processing: run these two pipelines in order
 
-## Choose the subject pipeline
+**For every participant, first run the posterior-channel pipeline; then run the all-channel pipeline.** Run on Mac for interactive QC.
 
-There are two distinct single-subject EEG workflows. They are not interchangeable.
-
-### 1. Posterior-channel workflow (PO3, PO4, POz)
-
-This is the older workflow. It converts the organised BrainVision recording to BIDS, segments stimulation and no-stimulation periods, epochs the data, and runs the three-channel ERP/TFR analyses.
-
-From the repository root, run one subject:
+From the repository root, for subject 101:
 
 ```bash
 python analysis/subject/EEG_posterior_channels/run_subject_pipeline.py --subjects 101
-```
-
-The script asks whether you are running on BlueBEAR or Mac. It then runs the full posterior-channel workflow, including interactive steps. To process several subjects:
-
-```bash
-python analysis/subject/EEG_posterior_channels/run_subject_pipeline.py --subjects 101 102 103
-```
-
-Or an inclusive numeric range:
-
-```bash
-python analysis/subject/EEG_posterior_channels/run_subject_pipeline.py --range 101 110
-```
-
-**BIDS output:** the first stage, `preprocessing/P01_first_look_BIDS_conversion.py`, reads the BrainVision data from `data/data-organised`, adds/corrects event annotations, and calls MNE-BIDS to write the raw recording into `data/BIDS`. The runner then continues with segmentation, epoching, ERP and TFR. This workflow runs the entire sequence; the runner does not provide a command-line option to run P01 alone.
-
-### 2. All-channel workflow
-
-Use this workflow for analysis across the full EEG montage, with PyPREP/manual bad-channel review, rereferencing, ICA, manual bad-epoch rejection, and all-channel ERP/TFR analysis.
-
-**Prerequisite:** a readable raw EEG recording must already exist in the BIDS dataset at `data/BIDS`. The all-channel pipeline reads the BIDS recording; it does **not** perform the original BrainVision-to-BIDS conversion itself. If subject 101 has not been converted to BIDS yet, run the posterior-channel workflow above first, or otherwise create/verify the subject's BIDS raw recording before starting this workflow. The all-channel workflow also starts with an inclusion-screening step that opens the existing participant report.
-
-From the repository root on Mac:
-
-```bash
 python analysis/subject/EEG_all_channels/run_subject_pipeline.py --subjects 101 --platform mac
 ```
 
-On BlueBEAR:
+The posterior runner prompts for Mac/BlueBEAR and runs **BrainVision → BIDS → stimulation segmentation → cue epochs/manual rejection (PO3/PO4/POz) → ERP → TFR**. It establishes the raw BIDS data and participant report needed by the all-channel workflow.
+
+The all-channel runner reads **existing raw BIDS**, then runs **posterior-alpha inclusion screening → continuous 1–100 Hz filtering/PyPREP/manual channel QC → stimulation segmentation/cue epochs → optional average reference → ICA → manual trial rejection → all-channel ERP/TFR → methods report**. It saves intermediate and cleaned FIF derivatives and JSON QC decisions. Bad channels remain marked, not interpolated.
+
+For multiple subjects, replace `101` with e.g. `101 102 103` after `--subjects` in **both commands**. Do not start the all-channel pipeline for a subject until the posterior pipeline has finished successfully. If a participant is excluded at all-channel screening, subsequent all-channel stages are skipped.
+
+Default all-channel reference is average; use `--rereference none` to keep the original reference. Mac is the default; `--platform bluebear` selects server paths, but interactive QC needs a working GUI.
+
+## Group analyses
+
+Run after subject processing is complete:
 
 ```bash
-python analysis/subject/EEG_all_channels/run_subject_pipeline.py --subjects 101 --platform bluebear
-```
-
-Several subjects:
-
-```bash
-python analysis/subject/EEG_all_channels/run_subject_pipeline.py --subjects 101 102 103 --platform mac
-```
-
-Inclusive numeric range:
-
-```bash
-python analysis/subject/EEG_all_channels/run_subject_pipeline.py --range 101 110 --platform mac
-```
-
-Average rereferencing is the default. To keep the reference from acquisition, pass `--rereference none`:
-
-```bash
-python analysis/subject/EEG_all_channels/run_subject_pipeline.py --subjects 101 --platform mac --rereference none
-```
-
-The stages are:
-0. Inspect the participant report and record the inclusion decision.
-1. Filter the continuous BIDS EEG, run PyPREP and interactive channel/PSD review, segment using `analysis/subject/stimulation_cropped_time.json`, create cue-locked epochs, and optionally average-reference.
-2. Fit one ICA solution across stimulation and no-stimulation epochs, inspect components, and apply the same exclusions to both conditions.
-3. Manually reject bad trials, optionally mark additional bad channels, and save final cleaned epochs.
-4. Calculate participant ERP.
-5. Calculate participant TFR and the raw-power stimulation/no-stimulation normalized ratio.
-6. Add the participant analysis overview to the report.
-
-Resume at a stage only after the required previous-stage outputs and the saved `include` decision exist. For example, resume at ICA:
-
-```bash
-python analysis/subject/EEG_all_channels/run_subject_pipeline.py --subjects 101 --platform mac --from-stage 2
-```
-
-Stage numbers are 0–6 as listed above. To continue to later subjects after a subject fails, add `--continue-on-error`.
-
-The all-channel outputs are written under the project's `data/BIDS/derivatives/sub-101/` folder and participant reports/figures under `derivatives/reports/sub-101/` and `derivatives/figures/sub-101/EEG_all_channels/`. Rejected channels are recorded as bad and are not interpolated, so the later group analysis can calculate each channel using the subjects in whom that channel is good.
-
-## Group analysis
-
-The all-channel group report entry point is:
-
-```bash
+python analysis/group/EEG_posterior_channels/G02_grand_average_report.py --subjects 101 102 103
 python analysis/group/EEG_all_channels/run_grand_average.py --subjects 101 102 103 --platform mac
 ```
 
-Use `--platform bluebear` on BlueBEAR. Check `analysis/group/EEG_all_channels/README.md` for current group outputs and interpretation.
+The posterior group folder also provides `G01_concatenated_epochs_report.py` (trial-weighted rather than subject-weighted). The all-channel grand average uses only participants with each EEG sensor present and good in both conditions; per-sensor sample sizes may differ.
 
-## Notes
+## Locations and details
 
-- Run the scripts from the repository root unless a README specifies otherwise.
-- The workflows contain interactive QC; they are not fully unattended batch jobs.
-- Keep the JSON QC/audit files and the chosen subject list with the outputs for reproducibility.
-- Verify the subject's BIDS raw files and stimulation crop-time entry before running either workflow.
+- Raw organised recordings: `<PROJECT_ROOT>/data/data-organised/`
+- BIDS raw and processed EEG: `<PROJECT_ROOT>/data/BIDS/` and `data/BIDS/derivatives/`
+- Participant reports: `<PROJECT_ROOT>/derivatives/reports/sub-XXX/`
+- Stimulation timing table: `analysis/subject/stimulation_cropped_time.json`
+
+See the README in each subject/group analysis folder for commands, processing details and outputs. The workflows require interactive review; do not treat them as unattended batch jobs.

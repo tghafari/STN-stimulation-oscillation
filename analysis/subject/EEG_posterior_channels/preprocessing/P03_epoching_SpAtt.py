@@ -1,30 +1,14 @@
 # -*- coding: utf-8 -*-
 # -*- coding: utf-8 -*-
+"""P03_epoching_SpAtt.py: processing and analysis overview
+
+Read condition raw FIF, filter 0.1-100 Hz, create cue epochs -0.5..1.6 s, inspect PSD/PyPREP suggestions and manually reject trials while displaying PO3/PO4/POz. Rejected epochs are removed across all channels. Save cleaned epochs and QC.
+
+Workflow order: run this posterior-channel pipeline FIRST for each subject;
+then run EEG_all_channels/run_subject_pipeline.py on its raw BIDS output.
+See the posterior README for commands and required input files.
 """
-===============================================
-05_epoching_SpAtt
-    1. this code reads the stim on and stim off
-    segmented files
-    2. filters the data between 0.1 and 100 Hz
-    3. epochs the cue onsets from -0.5 to 1.6 sec
-    4. computes the PSD of the epochs
-    5. finds bad channels using pyprep and
-    writes the reasons into the PDF report
-    6. opens a plot that shows only three posterior
-    channels ('PO3', 'PO4', 'POz') so the user can manually 
-    reject bad trials
-    7. saves the cleaned epochs for later analysis
 
-    note that the manual rejection should be based
-    only on the three posterior channels chosen for
-    this step, while the rejected trial is removed
-    from all channels in the epoch.
-
-written by Tara Ghafari
-tara.ghafari@gmail.com
-==============================================
-
-"""
 
 import json
 import warnings

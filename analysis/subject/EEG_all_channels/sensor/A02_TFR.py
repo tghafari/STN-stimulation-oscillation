@@ -1,4 +1,14 @@
-"""A02: TFR analysis; ROI chosen first from eight-channel stim/no-stim TFRs only."""
+"""A02_TFR.py: processing and analysis overview
+
+Run posterior-channel preprocessing first for this participant to create raw
+BIDS data and the participant report. This script belongs to the second,
+all-channel workflow.
+
+Loads final clean cue epochs; combines attention directions; multitaper TFR at 2-30 Hz in 1-Hz steps, n_cycles=f/2, time-bandwidth=2, decim=2. Condition plots use percent baseline -0.3..-0.1 s. Difference stim-no-stim and ratio (stim-no-stim)/(stim+no-stim) use unbaselined power. Saves raw TFRs, ROI decisions, plots and QC JSON.
+
+See the all-channel README for exact commands, inputs and saved derivatives.
+"""
+
 from __future__ import annotations
 import argparse,json
 import matplotlib.pyplot as plt

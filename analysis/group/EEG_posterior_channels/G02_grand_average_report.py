@@ -1,60 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""G02_grand_average_report.py: group analysis overview
+
+Requires posterior subject-level outputs. Reads selected subjects, computes channel/ROI ERP and TFR grand averages with equal participant weighting, and compares stim/no-stim. Cue/grating ERP views and condition/contrast TFR figures are reported. Condition TFR displays use percent baseline -0.3..-0.1 s; ratio uses unbaselined power.
+
+Prepare subject inputs by running the posterior-channel subject pipeline first,
+then the all-channel pipeline when analysing the full montage.
+See this group's README for commands and output locations.
 """
-==============================================================
-G02. Grand-average analysis across subjects
-==============================================================
 
-This script performs descriptive group-level ERP and TFR analyses in
-which each participant is averaged separately before the group average
-is calculated. Therefore, unlike G01, every participant contributes
-equally regardless of the number of retained trials.
-
-Posterior-channel handling
---------------------------
-Analyses use PO3, PO4 and POz. For each channel, only subjects in whom
-that channel remains after subject-level cleaning contribute to its
-grand average. Missing channels are not interpolated.
-
-A combined posterior ROI is also calculated. For each subject, the
-available posterior channels are averaged first, so subjects with a
-missing posterior channel can still contribute to the ROI.
-
-Outputs
--------
-The report contains:
-    - cue-locked ERP (cue onset = 0 s)
-    - grating-locked ERP (grating onset = 0 s)
-    - cue-locked TFR for combined left/right attention
-    - no-stim, stim, difference and ratio TFRs
-    - separate PO3, PO4 and POz results
-    - combined posterior-ROI results
-    - subjects contributing to each channel
-    - analysis notes
-
-TFR settings match G01:
-    2-31.5 Hz, 0.5-Hz steps, multitaper,
-    n_cycles = frequency / 2, time-bandwidth = 2,
-    decimation = 2, baseline = -0.3 to -0.1 s (percent).
-
-Difference and ratio handling
------------------------------
-The stimulation and no-stimulation TFRs are baseline corrected
-for plotting.
-
-The difference TFR is optionally baseline corrected according to
-user input at runtime.
-
-The ratio TFR is always calculated from the original,
-non-baseline-corrected TFRs.
-    
-    
-No PAF, MI or statistical testing is performed here.
-
-written by Tara Ghafari
-tara.ghafari@gmail.com
-==============================================================
-"""
 
 
 from __future__ import annotations

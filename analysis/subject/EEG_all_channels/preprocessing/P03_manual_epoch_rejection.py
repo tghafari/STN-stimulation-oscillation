@@ -1,4 +1,14 @@
-"""P03: manual bad-trial rejection, optional final bad-channel marking, and final PSD QC."""
+"""P03_manual_epoch_rejection.py: detailed processing overview
+
+Prerequisite: complete posterior-channel pipeline first to create raw BIDS and
+participant report. Then run this all-channel subject pipeline.
+
+Opens ICA-cleaned epochs for manual bad-trial rejection, optionally marks further bad EEG channels, saves final clean epochs, epoch counts, Welch PSD and stimulation artifact QC. Both conditions share the final bad-channel list.
+
+Inputs and outputs use pipeline_config.py; inspect the QC JSON and report for
+participant-specific decisions and actual retained channel/epoch counts.
+"""
+
 from __future__ import annotations
 import argparse,json
 import matplotlib.pyplot as plt

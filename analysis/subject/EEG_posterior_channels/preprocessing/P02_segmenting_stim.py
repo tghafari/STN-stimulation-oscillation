@@ -1,27 +1,14 @@
 # -*- coding: utf-8 -*-
 # -*- coding: utf-8 -*-
-"""
-===============================================
-04_segmenting_stim
-    1. this code reads the BIDS raw file
-    2. crops the continuous recording into stim on
-    and stim off sections
-    3. removes the part in between the kept segments
-    4. plots the PSD for each part separately to
-    double check if the 130Hz peak exists or not
-    5. saves the cropped stim and no-stim files
-    6. adds the segmentation details and PSD figures
-    to the participant PDF report
+"""P02_segmenting_stim.py: processing and analysis overview
 
-    note that the crop times are kept in the code
-    for each participant, because these values are
-    checked manually from the raw data.
+Read raw BIDS EEG, crop stimulation/no-stimulation intervals (one or two kept pieces), concatenate retained pieces, inspect condition PSDs and save condition-specific raw FIF and participant report figures. The runner stores timing decisions in analysis/subject/stimulation_cropped_time.json.
 
-written by Tara Ghafari
-tara.ghafari@gmail.com
-adapted from flux pipeline
-==============================================
+Workflow order: run this posterior-channel pipeline FIRST for each subject;
+then run EEG_all_channels/run_subject_pipeline.py on its raw BIDS output.
+See the posterior README for commands and required input files.
 """
+
 
 import os
 import os.path as op

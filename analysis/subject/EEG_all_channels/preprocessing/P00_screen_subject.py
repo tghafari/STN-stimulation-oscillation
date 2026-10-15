@@ -1,9 +1,14 @@
-"""P00: human posterior-alpha inclusion QC.
+"""P00_screen_subject.py: detailed processing overview
 
-This stage only opens the existing participant PDF and records the human
-include/exclude decision based on PO3, PO4 and POz. Signal preprocessing starts
-in P01. Keeping P00 separate makes the inclusion decision easy to audit.
+Prerequisite: complete posterior-channel pipeline first to create raw BIDS and
+participant report. Then run this all-channel subject pipeline.
+
+Opens the existing posterior participant report, asks for human inclusion based on PO3/PO4/POz alpha modulation, and writes inclusion_decision.json. No automatic inclusion threshold.
+
+Inputs and outputs use pipeline_config.py; inspect the QC JSON and report for
+participant-specific decisions and actual retained channel/epoch counts.
 """
+
 from __future__ import annotations
 import argparse, json, subprocess, sys
 from datetime import datetime

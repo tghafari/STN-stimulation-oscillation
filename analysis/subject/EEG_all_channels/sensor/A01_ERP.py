@@ -1,4 +1,14 @@
-"""A01: ERP analysis with eight-channel interactive ROI selection followed by full report plots."""
+"""A01_ERP.py: processing and analysis overview
+
+Run posterior-channel preprocessing first for this participant to create raw
+BIDS data and the participant report. This script belongs to the second,
+all-channel workflow.
+
+Loads final cleaned cue epochs, combines left/right attention, selects EEG sensors good in both conditions, calculates trial-mean ERP with 30-Hz low-pass and -0.1..0 s baseline, plots all-channel and posterior ROI comparisons, and saves evoked FIF, ROI decisions and report figures.
+
+See the all-channel README for exact commands, inputs and saved derivatives.
+"""
+
 from __future__ import annotations
 import argparse,json
 import matplotlib.pyplot as plt

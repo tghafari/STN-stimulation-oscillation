@@ -1,28 +1,14 @@
 # -*- coding: utf-8 -*-
 # -*- coding: utf-8 -*-
+"""A02_three_channel_TFR.py: processing and analysis overview
+
+Read cleaned cue epochs; combine left/right attention; multitaper TFR 2-30 Hz in 1-Hz steps, n_cycles=f/2; compare stimulation conditions in PO3/PO4/POz; save TFR and participant report. Condition display baseline -0.3..-0.1 s.
+
+Workflow order: run this posterior-channel pipeline FIRST for each subject;
+then run EEG_all_channels/run_subject_pipeline.py on its raw BIDS output.
+See the posterior README for commands and required input files.
 """
-===============================================
-A02_three_channel_TFR
-    1. this code reads the cleaned cue epochs
-    2. combines attention right and attention left
-    epochs together for each stimulation condition
-    3. calculates the TFR separately for stim on and
-    stim off
-    4. compares stim on minus stim off for the three
-    posterior channels
-    5. adds the TFR figures and saved outputs to the
-    participant PDF report
 
-    note that the analysis is restricted to the same
-    three posterior channels used for manual epoch
-    rejection, so the comparison stays consistent
-    across the whole pipeline.
-
-written by Tara Ghafari
-tara.ghafari@gmail.com
-==============================================
-
-"""
 
 import json
 import os

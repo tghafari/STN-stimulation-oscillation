@@ -1,4 +1,14 @@
-"""A03: manuscript-style summary derived from participant audit files."""
+"""A03_analysis_overview.py: processing and analysis overview
+
+Run posterior-channel preprocessing first for this participant to create raw
+BIDS data and the participant report. This script belongs to the second,
+all-channel workflow.
+
+Reads saved channel QC, reference, ICA, manual epoch rejection, ERP and TFR audit files; appends manuscript-style methods and parameter summary to the participant PDF. Does not change signal data.
+
+See the all-channel README for exact commands, inputs and saved derivatives.
+"""
+
 from __future__ import annotations
 import argparse,json
 from pipeline_config import qc_dir,resolve_project_root

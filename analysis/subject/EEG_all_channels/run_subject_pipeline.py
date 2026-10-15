@@ -1,4 +1,14 @@
-"""Semi-automatic all-channel EEG runner: preprocessing -> ERP -> TFR -> report summary."""
+"""run_subject_pipeline.py: processing and analysis overview
+
+Run posterior-channel preprocessing first for this participant to create raw
+BIDS data and the participant report. This script belongs to the second,
+all-channel workflow.
+
+Runs stages 0 screening, 1 PyPREP/manual channel QC/segmentation/epoching/reference, 2 ICA, 3 manual trial rejection, 4 ERP, 5 TFR, 6 methods overview. Accepts --subjects or --range, --platform (default mac), --rereference avg|none (default avg), --from-stage and --continue-on-error. Requires raw BIDS from posterior workflow and interactive QC.
+
+See the all-channel README for exact commands, inputs and saved derivatives.
+"""
+
 from __future__ import annotations
 import argparse, json, subprocess, sys
 from pathlib import Path

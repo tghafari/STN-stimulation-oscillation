@@ -1,5 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""G01_concatenated_epochs_report.py: group analysis overview
+
+Requires cleaned posterior subject epochs from the first pipeline. Loads selected subjects, concatenates retained cue epochs separately by available posterior channel, computes trial-weighted ERP/TFR and stimulation contrasts, and saves figures and group report. Subjects with more epochs contribute more trials. Check runtime difference baseline choice and ratio captions.
+
+Prepare subject inputs by running the posterior-channel subject pipeline first,
+then the all-channel pipeline when analysing the full montage.
+See this group's README for commands and output locations.
+"""
+
 
 """
 ==============================================================

@@ -1,5 +1,13 @@
 #!/usr/bin/env python
-"""Run G04 with compact MNE plot_topo-style report layouts. Numerical analysis unchanged."""
+"""run_grand_average.py: group analysis overview
+
+Imports G01_complete_grand_average_report.py and adds compact scalp and posterior sensor plots without changing group contrast formulas. Accepts --subjects and --platform via the imported main. Run after every selected subject has completed both subject pipelines.
+
+Prepare subject inputs by running the posterior-channel subject pipeline first,
+then the all-channel pipeline when analysing the full montage.
+See this group's README for commands and output locations.
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 import G01_complete_grand_average_report as pipeline

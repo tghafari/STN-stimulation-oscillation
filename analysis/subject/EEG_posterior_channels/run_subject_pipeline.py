@@ -1,31 +1,13 @@
 # -*- coding: utf-8 -*-
+"""run_subject_pipeline.py: processing and analysis overview
+
+Runs P01 BrainVision-to-BIDS, P02 stimulation segmentation, P03 cue epochs/manual QC, A01 ERP, A02 posterior TFR for --subjects or --range. Prompts for Mac/BlueBEAR; uses saved stimulation_cropped_time.json when available. Finish this runner before starting the all-channel subject runner.
+
+Workflow order: run this posterior-channel pipeline FIRST for each subject;
+then run EEG_all_channels/run_subject_pipeline.py on its raw BIDS output.
+See the posterior README for commands and required input files.
 """
-==============================================
-Run the five active single-subject EEG scripts in sequence.
 
-Pipeline order
---------------
-1. preprocessing/P01_first_look_BIDS_conversion.py
-2. preprocessing/P02_segmenting_stim.py
-3. preprocessing/P03_epoching_SpAtt.py
-4. sensor/A01_ERP.py
-5. sensor/A02_three_channel_TFR.py
-
-The original scripts are executed from source, but their subject/path variables are
-patched in memory. The original files are not rewritten. This keeps this runner
-compatible with the analysis code you already test line by line.
-
-Stimulation crop times are stored persistently in
-``analysis/subject/stimulation_cropped_time.json``. If both stim and no-stim crop
-ranges already exist for a subject, the raw browser is skipped and the runnerAz
-prints the requested message. If they are missing, the BIDS raw data is opened,
-the user enters 2 or 4 crop times for each condition, and the table is saved
-before P02 is run.
-
-P03 remains interactive. Its existing MNE epoch browser opens with PO3, PO4 and
-POz only; bad epochs marked there are saved by P03 before ERP and TFR continue.
-==============================================
-"""
 
 from __future__ import annotations
 

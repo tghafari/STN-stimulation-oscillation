@@ -1,17 +1,13 @@
 #!/usr/bin/env python
-"""Single authoritative complete all-channel grand-average report.
+"""G01_complete_grand_average_report.py: group analysis overview
 
-FINAL TFR CONTRAST ORDER
-1. Stim and No-stim TFR power separately for each participant and sensor.
-2. From ORIGINAL UNBASELINED power for that same participant/sensor:
-   Difference = Pstim - Pnostim
-   Ratio = (Pstim-Pnostim)/(Pstim+Pnostim)
-3. Average participant contrasts independently for each sensor.
-4. LAST: average channel-level group contrasts over ROI3 or ROI8.
+Requires final clean all-channel epochs from each subject after the posterior-first, all-channel-second sequence. Computes per-subject/per-good-sensor ERP (30-Hz low-pass, baseline -0.1..0 s) and multitaper TFR (2-31.5 Hz, 0.5-Hz steps, cycles=f/2, bandwidth=2, decim=2). Stim/no-stim plots use percent baseline -0.3..-0.1 s; both stim-no-stim difference and normalized ratio use unbaselined participant power. Group averaging is separately weighted per sensor, excluding bad/missing channels; saves PDF and JSON.
 
-Percent baseline (-0.3,-0.1 s) is used ONLY for descriptive Stim/No-stim TFRs.
-It never enters Difference or Ratio.
+Prepare subject inputs by running the posterior-channel subject pipeline first,
+then the all-channel pipeline when analysing the full montage.
+See this group's README for commands and output locations.
 """
+
 import argparse,json,sys
 from pathlib import Path
 import matplotlib.pyplot as plt

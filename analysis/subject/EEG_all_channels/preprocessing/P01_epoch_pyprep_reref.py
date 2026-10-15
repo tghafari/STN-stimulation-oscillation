@@ -1,11 +1,14 @@
-"""P01: 1-100 Hz filtering -> PyPREP/manual channel QC -> PSD review -> segmentation -> epochs -> reference.
+"""P01_epoch_pyprep_reref.py: detailed processing overview
 
-Continuous EEG is band-pass filtered 1-100 Hz before PyPREP. After PyPREP and
-manual raw-browser channel QC, rejected-channel PSDs can be used to rescue channels.
-The PSD of the remaining good channels is then displayed and the user gets one final
-opportunity to mark additional channels bad based on that PSD before segmentation.
-Average EEG rereferencing is ON by default; use --rereference none to retain original reference.
+Prerequisite: complete posterior-channel pipeline first to create raw BIDS and
+participant report. Then run this all-channel subject pipeline.
+
+Reads raw BIDS EEG, filters 1-100 Hz, runs PyPREP and manual channel/PSD QC, segments using stimulation_cropped_time.json, creates -0.5..1.6 s cue epochs (no baseline; detrend=1), optionally average-references good EEG channels, and saves reference-labelled epochs and QC JSON. Bad channels are marked, not interpolated.
+
+Inputs and outputs use pipeline_config.py; inspect the QC JSON and report for
+participant-specific decisions and actual retained channel/epoch counts.
 """
+
 from __future__ import annotations
 import argparse,json
 import matplotlib.pyplot as plt

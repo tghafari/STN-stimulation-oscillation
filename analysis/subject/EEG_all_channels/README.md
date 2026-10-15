@@ -1,111 +1,42 @@
-# All-channel EEG preprocessing and subject analysis
+# All-channel subject pipeline (run second)
 
-This folder contains the full-montage EEG workflow. It is separate from the three-posterior-channel workflow in `analysis/subject/EEG_posterior_channels/`.
+**Prerequisite:** finish the posterior-channel subject pipeline for the same participant first. That pipeline performs BrainVision-to-BIDS conversion and creates the participant report. This pipeline reopens the raw BIDS recording; it does **not** reuse posterior-only cleaned epochs or perform BIDS conversion.
 
-## Required input and BIDS behaviour
-
-Stage 1 (`preprocessing/P01_epoch_pyprep_reref.py`) reads the subject's **existing raw EEG recording from BIDS** via MNE-BIDS. It does not read directly from `data/data-organised` and does not perform BrainVision-to-BIDS conversion.
-
-The expected raw BIDS recording is organised under:
-
-```text
-data/BIDS/
-  sub-XXX/
-    ses-01/
-      eeg/
-        sub-XXX_ses-01_task-SpAtt_run-01_eeg.vhdr
-        sub-XXX_ses-01_task-SpAtt_run-01_eeg.vmrk
-        sub-XXX_ses-01_task-SpAtt_run-01_eeg.eeg
-```
-
-The exact extensions depend on the BrainVision recording, and the sidecar BIDS metadata files must also be present. If a participant has not yet been converted to BIDS, first run the posterior-channel runner documented in the repository-root README (that runner includes the original `P01_first_look_BIDS_conversion.py` stage), or convert and validate the raw recording with MNE-BIDS. The all-channel runner itself starts at QC/epoching, not raw BIDS conversion.
-
-Stage 1 uses the crop times for `sub-XXX` in `analysis/subject/stimulation_cropped_time.json`. It filters the continuous data from 1 to 100 Hz before PyPREP, performs interactive channel review and PSD review, segments the conditions, creates cue-locked epochs (-0.5 to 1.6 s), and optionally average-references them.
-
-## Processing order
-
-1. **Screening (`P00_screen_subject.py`)**
-   - Opens the existing participant PDF report for human inspection of posterior alpha modulation in PO3, PO4 and POz.
-   - Saves the include/exclude decision to `data/BIDS/derivatives/sub-XXX/qc_all_channels/inclusion_decision.json`.
-   - There is no automatic alpha threshold. The report needs to exist for useful screening.
-
-2. **Filtering, PyPREP, manual channel review, segmentation, epoching and reference (`P01_epoch_pyprep_reref.py`)**
-   - Reads the raw recording from BIDS with MNE-BIDS.
-   - Filters continuous EEG from 1 to 100 Hz before PyPREP.
-   - Shows suggested bad channels, allows manual edits, displays PSDs of rejected channels for possible rescue, and then displays the remaining-good-channel PSD for a final rejection decision.
-   - Records the union of final bad channels and applies that same bad-channel list to the stimulation and no-stimulation conditions.
-   - Creates cue-locked epochs from -0.5 to 1.6 s with `baseline=None`, `detrend=1`, and no automatic amplitude rejection.
-   - Average-rereferences by default; pass `--rereference none` to retain the original reference.
-   - Saves reference-aware epoch files and a JSON audit. This stage does not save new continuous stim/no-stim FIF files.
-
-3. **ICA (`P02_ica.py`)**
-   - Concatenates copies of the rereferenced stim and no-stim epochs.
-   - Fits one ICA using an analysis copy resampled to 200 Hz and filtered 1–40 Hz.
-   - Displays component maps and source time series for manual review.
-   - Applies the same ICA solution and accepted component exclusions to both conditions.
-   - Saves the ICA solution and component-decision JSON.
-
-4. **Manual epoch and channel QC (`P03_manual_epoch_rejection.py`)**
-   - Opens epochs for interactive bad-trial marking.
-   - Allows additional channels to be marked bad with a recorded reason.
-   - Saves final cleaned epochs and a JSON audit of epoch counts and final bad channels.
-
-5. **Subject ERP/TFR (`sensor/A01_ERP.py`, `sensor/A02_TFR.py`, `sensor/A03_analysis_overview.py`)**
-   - Calculates ERP and TFR analyses for the available good EEG channels.
-   - Stim and no-stim TFR visualisations use percent baseline correction from -0.3 to -0.1 s.
-   - The TFR difference and normalized ratio use the original un-baselined power: difference = stim - no-stim; ratio = (stim - no-stim) / (stim + no-stim).
-   - The participant chooses the ERP/TFR ROI from available posterior/occipital candidate channels; this choice affects ROI summaries, not whether the other channels are computed.
-
-## Run one subject
-
-From the repository root on Mac:
+From the repository root:
 
 ```bash
 python analysis/subject/EEG_all_channels/run_subject_pipeline.py --subjects 101 --platform mac
 ```
 
-On BlueBEAR:
+Use `--subjects 101 102 103` for several subjects or `--range 101 110` for an inclusive range. `--platform bluebear` uses BlueBEAR paths, but interactive QC needs a functioning GUI. Average reference is the default; add `--rereference none` to preserve the acquisition reference.
 
-```bash
-python analysis/subject/EEG_all_channels/run_subject_pipeline.py --subjects 101 --platform bluebear
-```
+## Stages (0–6)
 
-The runner's subject input is plural: use `--subjects`, even for one subject. You can include several subjects:
+0. **P00 screening:** open the existing participant report, visually assess PO3/PO4/POz alpha modulation, and save the human include/exclude decision.
+1. **P01 PyPREP/epochs/reference:** read raw BIDS, filter continuous data 1–100 Hz, detect/review noisy channels with PyPREP and PSDs, use `stimulation_cropped_time.json` to segment stim/no-stim, epoch cue onset (-0.5 to 1.6 s; no baseline; detrend=1), mark the same bad channels in both conditions and optionally average-reference. Save epochs and QC JSON.
+2. **P02 ICA:** concatenate condition epochs for a shared FastICA fit (200-Hz, 1–40-Hz fitting copy; up to 30 components by default), inspect maps/sources, choose excluded components, apply the same ICA to both conditions, and save ICA/audit.
+3. **P03 manual epoch QC:** reject bad trials interactively, optionally mark further bad channels, inspect PSD and save final cleaned epochs and counts.
+4. **A01 ERP:** combine attention-left/right within condition; average good EEG channels, 30-Hz low-pass, baseline -0.1 to 0 s; inspect/select posterior ROI and save evokeds/figures.
+5. **A02 TFR:** multitaper 2–30 Hz in 1-Hz steps, cycles = frequency/2, time-bandwidth=2, decim=2; percent baseline (-0.3 to -0.1 s) for stim/no-stim plots; raw-power stim-minus-no-stim difference and normalized ratio; save TFRs and ROI decisions.
+6. **A03 overview:** append an auditable methods summary to the participant PDF.
 
-```bash
-python analysis/subject/EEG_all_channels/run_subject_pipeline.py --subjects 101 102 103 --platform mac
-```
-
-or an inclusive range:
-
-```bash
-python analysis/subject/EEG_all_channels/run_subject_pipeline.py --range 101 110 --platform mac
-```
-
-Average reference is the default. Choose no rereferencing with:
-
-```bash
-python analysis/subject/EEG_all_channels/run_subject_pipeline.py --subjects 101 --platform mac --rereference none
-```
-
-Resume at ICA (stage 2) only if screening and stage-1 outputs are already saved:
+Resume at ICA only after stages 0–1 succeeded:
 
 ```bash
 python analysis/subject/EEG_all_channels/run_subject_pipeline.py --subjects 101 --platform mac --from-stage 2
 ```
 
-Stage numbers are 0 screening, 1 PyPREP/segmentation/epoching/reference, 2 ICA, 3 manual trial/channel QC, 4 ERP, 5 TFR and 6 analysis overview. Add `--continue-on-error` to continue to later subjects if one fails.
+Use `--continue-on-error` to move to later subjects after a failure.
 
-## Outputs and QC audit
+## Outputs
 
-- Final cleaned epochs: `data/BIDS/derivatives/sub-XXX/`, using names such as `..._no-stim_desc-avgref-clean_epo.fif` or `..._stim_desc-avgref-clean_epo.fif`. If `--rereference none` is used, the filenames identify `noref` instead.
-- QC/audit JSON: `data/BIDS/derivatives/sub-XXX/qc_all_channels/`.
-- ICA solution: `data/BIDS/derivatives/sub-XXX/qc_all_channels/sub-XXX_ica.fif`.
-- Figures: `derivatives/figures/sub-XXX/EEG_all_channels/`.
-- Participant PDF/report: `derivatives/reports/sub-XXX/`.
+- Raw BIDS input: `<PROJECT_ROOT>/data/BIDS/sub-XXX/ses-01/eeg/`
+- Cleaned epochs/ERP/TFR: `<PROJECT_ROOT>/data/BIDS/derivatives/sub-XXX/`
+- QC JSON and ICA: `.../derivatives/sub-XXX/qc_all_channels/`
+- PDF: `<PROJECT_ROOT>/derivatives/reports/sub-XXX/`
 
-Bad channels are retained in the metadata and are not interpolated. Group analysis must skip each participant separately for each channel listed as bad or absent. That allows different electrodes to have different participant counts.
+Bad channels remain marked (not interpolated). The group pipeline averages each sensor over only participants in whom it is good in both conditions. Group command:
 
-## Recommended validation before a large run
-
-Run a participant whose data and artifacts you know well. Check the cue event counts and timing, PyPREP suggestions and PSDs, final bad-channel list, reference state, ICA component selection, epoch counts before/after manual rejection, and retained channel/bad-channel metadata. The pipeline is interactive; review and document each manual choice before processing the full cohort.
+```bash
+python analysis/group/EEG_all_channels/run_grand_average.py --subjects 101 102 103 --platform mac
+```

@@ -1,11 +1,14 @@
-"""P02: ICA on concatenated stim + no-stim epochs.
+"""P02_ica.py: detailed processing overview
 
-One shared ICA is fitted on concatenated condition epochs using a 1-40 Hz, 200-Hz
-fitting copy. Manual ICA QC is sequential: first inspect and close all component
-scalp maps, then inspect and close the component source time-series browser, then
-enter the components to exclude. The fitted solution is applied separately to the
-original full-resolution stimulation and no-stimulation epochs.
+Prerequisite: complete posterior-channel pipeline first to create raw BIDS and
+participant report. Then run this all-channel subject pipeline.
+
+Reads stimulation/no-stimulation epochs, concatenates fitting copies, resamples to 200 Hz and filters 1-40 Hz, fits shared FastICA (up to 30 components), asks for manual exclusions, applies one ICA solution to both conditions, and saves ICA, epochs and audit JSON.
+
+Inputs and outputs use pipeline_config.py; inspect the QC JSON and report for
+participant-specific decisions and actual retained channel/epoch counts.
 """
+
 from __future__ import annotations
 import argparse,json
 import matplotlib.pyplot as plt

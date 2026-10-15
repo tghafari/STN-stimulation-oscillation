@@ -1,34 +1,12 @@
+"""P01_first_look_BIDS_conversion.py: processing and analysis overview
+
+Read organised BrainVision files; inspect EEG and triggers; correct/standardise annotations and event IDs; write raw EEG to BIDS with MNE-BIDS; add recording/event/impedance QC to participant report. Input: data/data-organised. Output: data/BIDS and participant report. Verify participant-specific BrainVision filenames.
+
+Workflow order: run this posterior-channel pipeline FIRST for each subject;
+then run EEG_all_channels/run_subject_pipeline.py on its raw BIDS output.
+See the posterior README for commands and required input files.
 """
-===============================================
-01_first_look_and_BIDS_conversion
-    1. this code opens .eeg file
-    and plot raw eeg data.
-    2. the user then crops large breaks in data
-     (more cropping comes in segmenting the data later on)
-    3. reads the events from annotations of
-    brainvision data.
-    4. corrects the annotation and event_ids
-    5. adds annotations to the raw
-    6. saves the raw with annotations as .fif
-    7. converts the raw data to bids
-    8. adds channel impedances from the BrainVision
-    .vhdr header to the PDF report
-    9. plots triggers / events and checks event counts
-   10. adds the behaviour figure from the separate
-    folder to the same PDF report
 
-    note that this code will save two eeg files,
-    one .fif in the original folder and one .fif
-    bids in the bids folder.
-
-    note also that the comments about annotations
-    are kept in the code so that it is easier to
-    follow the trigger correction steps later on.
-
-written by Tara Ghafari
-tara.ghafari@gmail.com
-==============================================  
-"""
 
 import os.path as op
 import os

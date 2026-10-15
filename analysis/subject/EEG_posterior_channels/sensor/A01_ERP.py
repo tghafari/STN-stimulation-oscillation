@@ -1,29 +1,14 @@
 # -*- coding: utf-8 -*-
 # -*- coding: utf-8 -*-
+"""A01_ERP.py: processing and analysis overview
+
+Read cleaned epochs, combine left/right attention, average stim/no-stim trials, low-pass evokeds at 30 Hz, generate cue- and grating-aligned ERP views with configured crop/baseline, save evoked FIF and participant report figures.
+
+Workflow order: run this posterior-channel pipeline FIRST for each subject;
+then run EEG_all_channels/run_subject_pipeline.py on its raw BIDS output.
+See the posterior README for commands and required input files.
 """
-===============================================
-A01_ERP
-    1. this code reads the cleaned cue epochs
-    2. combines attention right and attention left
-    epochs together
-    3. makes evoked responses for stim on and stim off
-    separately
-    4. plots the comparison between stim on and stim
-    off in one figure with different colours
-    5. plots evoked responses for the posterior
-    channels separately
-    6. saves the evoked files and adds all figures to
-    the participant PDF report
 
-    note that this script keeps the comparison focused
-    on the cue-locked epochs that survived manual
-    cleaning in the previous step.
-
-written by Tara Ghafari
-tara.ghafari@gmail.com
-==============================================
-
-"""
 
 import json
 import os
