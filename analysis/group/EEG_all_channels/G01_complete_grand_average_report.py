@@ -75,24 +75,48 @@ def main():
    print(f'Computing TFR sub-{s} {c}')
    for ch in good[s]:tfr[s][c][ch]=make_tfr(ep[s][c],ch,a.n_jobs)
  first=next(tfr[s]['stim'][c] for s in subs for c in tfr[s]['stim']);times=first.times;display={'stim':{},'no-stim':{}};diff={};rat={}
+ absolute_checks={}
+ fm=(FREQS>=8)&(FREQS<=12)
+ tm=(times>=0.3)&(times<=0.8)
+ if not fm.any() or not tm.any():raise RuntimeError('Alpha QC window absent from TFR axes.')
  for ch in chs:
-  eligible=[s for s in subs if ch in tfr[s]['stim'] and ch in tfr[s]['no-stim']]
-  display['stim'][ch]=(np.mean([baseline_percent(tfr[s]['stim'][ch]) for s in eligible],0),eligible);display['no-stim'][ch]=(np.mean([baseline_percent(tfr[s]['no-stim'][ch]) for s in eligible],0),eligible)
-  # These two lines are the authoritative contrast definitions. NO baseline arrays are referenced.
-  d=[tfr[s]['stim'][ch].data[0]-tfr[s]['no-stim'][ch].data[0] for s in eligible];r=[ratio(tfr[s]['stim'][ch].data[0],tfr[s]['no-stim'][ch].data[0]) for s in eligible];diff[ch]=(np.mean(d,0),eligible);rat[ch]=(np.mean(r,0),eligible)
-   for sub,di,ra in zip(eligible,d,r):
-    st=tfr[sub]['stim'][ch].data[0];no=tfr[sub]['no-stim'][ch].data[0]
-    np.testing.assert_allclose(di,st-no)
-    np.testing.assert_allclose(ra,ratio(st,no))
-    if 8<=FREQS.max() and 0.8<=times.max():
-     fm=(FREQS>=8)&(FREQS<=12);tm=(times>=0.3)&(times<=0.8)
-     sm=float(st[np.ix_(fm,tm)].mean());nm=float(no[np.ix_(fm,tm)].mean())
-     print(f'sub-{sub} {ch}: alpha absolute stim={sm:.6e}, no-stim={nm:.6e}, diff={sm-nm:.6e}')
+  eligible=[sub for sub in subs if ch in tfr[sub]['stim'] and ch in tfr[sub]['no-stim']]
+  display['stim'][ch]=(np.mean([baseline_percent(tfr[sub]['stim'][ch]) for sub in eligible],0),eligible)
+  display['no-stim'][ch]=(np.mean([baseline_percent(tfr[sub]['no-stim'][ch]) for sub in eligible],0),eligible)
+  d=[tfr[sub]['stim'][ch].data[0]-tfr[sub]['no-stim'][ch].data[0] for sub in eligible]
+  r=[ratio(tfr[sub]['stim'][ch].data[0],tfr[sub]['no-stim'][ch].data[0]) for sub in eligible]
+  diff[ch]=(np.mean(d,0),eligible)
+  rat[ch]=(np.mean(r,0),eligible)
+  per_subject={}
+  for sub,di,ra in zip(eligible,d,r):
+   st=tfr[sub]['stim'][ch].data[0]
+   no=tfr[sub]['no-stim'][ch].data[0]
+   np.testing.assert_allclose(di,st-no)
+   np.testing.assert_allclose(ra,ratio(st,no))
+   st_mean=float(st[np.ix_(fm,tm)].mean())
+   no_mean=float(no[np.ix_(fm,tm)].mean())
+   per_subject['sub-'+sub]={'stim':st_mean,'no_stim':no_mean,'difference':st_mean-no_mean}
+   print(f'sub-{sub} {ch}: alpha absolute stim={st_mean:.6e}, no-stim={no_mean:.6e}, diff={st_mean-no_mean:.6e}')
+  st_group=float(np.mean([v['stim'] for v in per_subject.values()]))
+  no_group=float(np.mean([v['no_stim'] for v in per_subject.values()]))
+  absolute_checks[ch]={'n_subjects':len(eligible),'stim':st_group,'no_stim':no_group,'difference':st_group-no_group,'per_subject':per_subject}
+ report.add_text(
+  'Absolute alpha power: stimulation vs no stimulation',
+  'Unbaselined multitaper power; 8-12 Hz, 0.3-0.8 s after cue. '
+  'Each channel uses eligible participants with equal weight. '
+  'Difference = stimulation - no stimulation.\\n\\n'
+  + '\\n'.join(
+   f"{ch} (n={v['n_subjects']}): stim={v['stim']:.6e}, "
+   f"no-stim={v['no_stim']:.6e}, diff={v['difference']:.6e}"
+   for ch,v in absolute_checks.items()
+  ),
+  'TFR absolute-power QC'
+ )
  results=[('no-stim','No stimulation',display['no-stim'],True),('stim','Stimulation',display['stim'],True),('difference','Stimulation - no stimulation',diff,False),('ratio','(Stimulation - no stimulation)/(Stimulation + no stimulation)',rat,False)]
  for key,title,d,bl in results:
   data={c:(x[0],times) for c,x in d.items()};v=scale([x[0] for x in d.values()]);detail=('Percent baseline -0.3 to -0.1 s; descriptive condition only.' if bl else 'NO BASELINE CORRECTION. Contrast formed from raw participant/sensor power before participant averaging.');report.add_text('Analysis details',detail,'TFR - '+title);report.add_figure(scalp(data,info,title,v),str(figs/f'TFR_{key}_scalp.png'),title+' scalp','Montage-informed unique-cell layout; panels cannot overlap; colorbar is outside the grid. '+detail,'TFR - '+title)
   for R,name,n in ((ROI3,'PO3/POz/PO4',3),(ROI8,'8 posterior channels',8)):
    x,av=roi(d,R)
    if x is not None:report.add_figure(roi_fig(x,times,title+' mean '+name,scale([x])),str(figs/f'TFR_{key}_mean{n}.png'),title+' mean '+name,'LAST STEP: mean of channel-level group results across '+', '.join(av)+'. '+detail,'TFR - '+title)
- manuscript=f'Cue-locked TFR power was estimated separately for each participant and retained EEG sensor in stimulation and no-stimulation conditions. For each participant and sensor, the absolute difference P_stim-P_no-stim and normalized difference (P_stim-P_no-stim)/(P_stim+P_no-stim) were calculated directly from original unbaselined power. Participant-level sensor contrasts were then averaged across eligible participants independently for each sensor. Posterior ROI summaries were calculated only after sensor-level group averaging, across PO3, POz and PO4 (ROI3) or PO3, POz, PO4, O1, Oz, O2, PO7 and PO8 (ROI8). No baseline correction was applied to either difference or ratio. Percent baseline correction from -0.3 to -0.1 s was used only for descriptive Stim and No-stim plots.';report.add_text('Analysis report - manuscript style',manuscript,'Analysis');(deriv/f'{rid}_analysis.json').write_text(json.dumps({'subjects':subs,'subjects_by_channel':by,'contrast_order':'raw power participant/sensor -> contrast participant/sensor -> mean participants/sensor -> mean sensors','difference_baseline':'none','ratio_baseline':'none','stim_nostim_baseline':'percent -0.3 to -0.1 s'},indent=2)+'\n');print(report.pdf_fname)
+ manuscript=f'Cue-locked TFR power was estimated separately for each participant and retained EEG sensor in stimulation and no-stimulation conditions. For each participant and sensor, the absolute difference P_stim-P_no-stim and normalized difference (P_stim-P_no-stim)/(P_stim+P_no-stim) were calculated directly from original unbaselined power. Participant-level sensor contrasts were then averaged across eligible participants independently for each sensor. Posterior ROI summaries were calculated only after sensor-level group averaging, across PO3, POz and PO4 (ROI3) or PO3, POz, PO4, O1, Oz, O2, PO7 and PO8 (ROI8). No baseline correction was applied to either difference or ratio. Percent baseline correction from -0.3 to -0.1 s was used only for descriptive Stim and No-stim plots.';report.add_text('Analysis report - manuscript style',manuscript,'Analysis');(deriv/f'{rid}_analysis.json').write_text(json.dumps({'subjects':subs,'subjects_by_channel':by,'contrast_order':'raw power participant/sensor -> contrast participant/sensor -> mean participants/sensor -> mean sensors','difference_baseline':'none','ratio_baseline':'none','stim_nostim_baseline':'percent -0.3 to -0.1 s','absolute_alpha_power_checks':absolute_checks},indent=2)+'\n');print(report.pdf_fname)
 if __name__=='__main__':main()
