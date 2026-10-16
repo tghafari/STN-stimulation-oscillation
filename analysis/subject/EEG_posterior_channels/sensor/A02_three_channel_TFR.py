@@ -118,17 +118,37 @@ for label in ['no-stim', 'stim']:
 difference = tfrs_raw['stim'].copy()
 difference.data = tfrs_raw['stim'].data - tfrs_raw['no-stim'].data
 
+# Validate absolute power and signed contrasts in the alpha analysis window.
+np.testing.assert_allclose(difference.data, tfrs_raw['stim'].data - tfrs_raw['no-stim'].data)
+alpha_f = (difference.freqs >= 8) & (difference.freqs <= 12)
+alpha_t = (difference.times >= 0.3) & (difference.times <= 0.8)
+power_checks = {}
+for ch in posterior_channels:
+    idx = difference.ch_names.index(ch)
+    st = float(tfrs_raw['stim'].data[idx][np.ix_(alpha_f, alpha_t)].mean())
+    no = float(tfrs_raw['no-stim'].data[idx][np.ix_(alpha_f, alpha_t)].mean())
+    power_checks[ch] = {'stim': st, 'no_stim': no, 'stim_minus_no_stim': st - no}
+    print(f'{ch} | 8-12 Hz, 0.3-0.8 s | stim={st:.6e}, no-stim={no:.6e}, difference={st-no:.6e}')
+report.add_text('Absolute TFR power checks (8-12 Hz, 0.3-0.8 s)',
+                '\\n'.join(f'{ch}: stim={v["stim"]:.6e}, no-stim={v["no_stim"]:.6e}, stim-no-stim={v["stim_minus_no_stim"]:.6e}' for ch, v in power_checks.items()),
+                'Time-frequency analysis')
+
+def symmetric_limits(tfr):
+    vmax = float(np.nanmax(np.abs(tfr.data)))
+    return (-vmax, vmax) if np.isfinite(vmax) and vmax > 0 else (-1., 1.)
+
 fig_diff, axes = plt.subplots(1, 3, figsize=(15, 4), constrained_layout=True)
 for ax, ch in zip(axes, posterior_channels):
     difference.plot(picks=ch, tmin=-0.3, tmax=1.4, baseline=None,
-                    mode=None, axes=ax, show=False, colorbar=True)
+                    mode=None, axes=ax, show=False, colorbar=True,
+                    cmap='RdBu_r', vlim=symmetric_limits(difference))
     ax.set_title(f'Stim - no-stim: {ch}')
 
 report.add_figure(
     fig_diff,
     op.join(fig_folder, 'A02_stim_minus_no_stim_TFR.png'),
     'TFR difference: stimulation minus no stimulation',
-    'Difference computed from unbaselined TFR data and shown separately for each posterior channel.',
+    'Difference = stim - no-stim from unbaselined power; RdBu_r symmetric colour limits, blue negative and red positive.',
     'Time-frequency analysis'
 )
 
@@ -137,18 +157,20 @@ ratio = tfrs_raw['stim'].copy()
 denom = tfrs_raw['stim'].data + tfrs_raw['no-stim'].data
 eps = np.finfo(float).eps
 ratio.data = (tfrs_raw['stim'].data - tfrs_raw['no-stim'].data) / (denom + eps)
+np.testing.assert_allclose(ratio.data, difference.data / (denom + eps))
 
 fig_ratio, axes = plt.subplots(1, 3, figsize=(15, 4), constrained_layout=True)
 for ax, ch in zip(axes, posterior_channels):
     ratio.plot(picks=ch, tmin=-0.3, tmax=1.4, baseline=None,
-               mode=None, axes=ax, show=False, colorbar=True)
+               mode=None, axes=ax, show=False, colorbar=True,
+               cmap='RdBu_r', vlim=symmetric_limits(ratio))
     ax.set_title(f'Ratio: {ch}')
 
 report.add_figure(
     fig_ratio,
     op.join(fig_folder, 'A02_stim_ratio_no_stim_TFR.png'),
     'TFR ratio: (stimulation - no stimulation) / (stimulation + no stimulation)',
-    'Ratio computed from unbaselined TFR data and shown separately for each posterior channel.',
+    'Ratio = (stim-no-stim)/(stim+no-stim) from unbaselined power; RdBu_r symmetric colour limits, blue negative and red positive.',
     'Time-frequency analysis'
 )
 

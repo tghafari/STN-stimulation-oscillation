@@ -56,6 +56,16 @@ def main():
  a=parse_args();s=a.subject.removeprefix('sub-');root=resolve_project_root(a.platform,a.project_root);report=participant_report(root,s);figs=figure_dir(root,s);deriv=subject_deriv_dir(root,s);eps=load(root,s,a);common=common_good(eps);candidates=[x for x in ROI_CANDIDATES if x in common]
  if not candidates:raise RuntimeError('No predefined ROI candidates are good in both conditions.')
  raw={c:compute(eps[c].copy().pick(common),a.n_jobs) for c in CONDITIONS};display={c:raw[c].copy().apply_baseline(BASELINE,mode='percent') for c in CONDITIONS}
+ # Absolute power QC (original unbaselined power; 8-12 Hz, 0.3-0.8 s).
+ freq_mask=(FREQS>=8)&(FREQS<=12);time_mask=(raw['stim'].times>=0.3)&(raw['stim'].times<=0.8)
+ power_checks={}
+ for ch in common:
+  i=raw['stim'].ch_names.index(ch)
+  st=float(raw['stim'].data[i][np.ix_(freq_mask,time_mask)].mean())
+  no=float(raw['no-stim'].data[i][np.ix_(freq_mask,time_mask)].mean())
+  power_checks[ch]={'stim':st,'no_stim':no,'stim_minus_no_stim':st-no}
+  print(f'{ch} | 8-12 Hz, 0.3-0.8 s | stim={st:.6e}, no-stim={no:.6e}, difference={st-no:.6e}')
+ report.add_text('Absolute TFR power checks (8-12 Hz, 0.3-0.8 s)', '\\n'.join(f'{ch}: stim={v["stim"]:.6e}, no-stim={v["no_stim"]:.6e}, stim-no-stim={v["stim_minus_no_stim"]:.6e}' for ch,v in power_checks.items()),'Time-frequency analysis')
  # FIRST: only stim and no-stim eight-channel TFRs. No scalp layout, difference, or ratio is made before ROI selection.
  selection_figs=[];selection_scales={}
  for c in CONDITIONS:
@@ -65,11 +75,13 @@ def main():
  if not roi:raise RuntimeError('ROI cannot be empty.')
  # AFTER ROI decision: calculate comparative TFRs and generate all report/result plots.
  diff=raw['stim'].copy();diff.data=raw['stim'].data-raw['no-stim'].data;ratio=raw['stim'].copy();ratio.data=(raw['stim'].data-raw['no-stim'].data)/(raw['stim'].data+raw['no-stim'].data+np.finfo(float).eps)
+ np.testing.assert_allclose(diff.data,raw['stim'].data-raw['no-stim'].data)
+ np.testing.assert_allclose(ratio.data,diff.data/(raw['stim'].data+raw['no-stim'].data+np.finfo(float).eps))
  scales={'no-stim':selection_scales['no-stim'],'stim':selection_scales['stim'],'difference':vlim(diff),'ratio':vlim(ratio)}
  for c in CONDITIONS:
   name='Stimulation' if c=='stim' else 'No stimulation';add_report_views(report,figs,display[c],f'A02_{c}_TFR',f'{name}: combined attention-left/right TFR',f'Percent baseline {BASELINE}; multitaper 2-30 Hz.',candidates,scales[c])
  add_report_views(report,figs,diff,'A02_stim_minus_no_stim_TFR','TFR: stimulation - no stimulation','Unbaselined power; NO baseline correction.',candidates,scales['difference']);add_report_views(report,figs,ratio,'A02_stim_normalized_difference_TFR','TFR: (stim - no-stim) / (stim + no-stim)','Unbaselined power; NO baseline correction.',candidates,scales['ratio'])
  for key,t,title in [('no-stim',display['no-stim'],'No stimulation: combined attention-left/right TFR'),('stim',display['stim'],'Stimulation: combined attention-left/right TFR'),('difference',diff,'TFR: stimulation - no stimulation'),('ratio',ratio,'TFR: (stim - no-stim) / (stim + no-stim)')]:report.add_figure(roi_mean(t,roi,f'{title}: ROI mean',scales[key]),str(figs/f'A02_{key}_TFR_ROI_mean.png'),f'{title}: posterior/occipital ROI mean',f'Final channels contributing to ROI mean: {fmt_channels(roi)}.','Time-frequency analysis')
  for c in CONDITIONS:raw[c].save(deriv/f'sub-{s}_ses-{a.session}_task-{a.task}_run-{a.run}_{c}_desc-allchannels_tfr.h5',overwrite=True)
- details={'subject':f'sub-{s}','method':'multitaper','frequencies_hz':FREQS.tolist(),'n_cycles':'frequency / 2','time_bandwidth':2,'decim':2,'condition_baseline_s':list(BASELINE),'condition_baseline_mode':'percent','comparative_baseline':None,'roi_candidates_predefined':list(ROI_CANDIDATES),'roi_candidates_available':candidates,'roi_excluded_by_user':excluded,'roi_final':roi,'roi_decision_view':'eight sensors only, stimulation and no-stimulation TFRs; scalp layouts/difference/ratio generated after ROI decision','vlims':scales};(qc_dir(root,s)/'A02_tfr_analysis.json').write_text(json.dumps(details,indent=2)+'\n');report.add_text('TFR analysis details',f'Multitaper power: 2-30 Hz in 1-Hz steps; n_cycles=frequency/2; time-bandwidth=2; FFT=True; ITC=False; trial average=True; decim=2. Stim/no-stim use percent baseline {BASELINE}; comparative TFRs use no baseline correction. ROI selection occurred before other result plots, using only stim and no-stim TFRs for {fmt_channels(candidates)}.\nFinal channels contributing to ROI mean: {fmt_channels(roi)}.','Time-frequency analysis')
+ details={'absolute_power_checks_alpha_8_12hz_0p3_0p8s':power_checks,'contrast_colourmap':'RdBu_r','contrast_colour_limits':'symmetric about zero, independently scaled per contrast','subject':f'sub-{s}','method':'multitaper','frequencies_hz':FREQS.tolist(),'n_cycles':'frequency / 2','time_bandwidth':2,'decim':2,'condition_baseline_s':list(BASELINE),'condition_baseline_mode':'percent','comparative_baseline':None,'roi_candidates_predefined':list(ROI_CANDIDATES),'roi_candidates_available':candidates,'roi_excluded_by_user':excluded,'roi_final':roi,'roi_decision_view':'eight sensors only, stimulation and no-stimulation TFRs; scalp layouts/difference/ratio generated after ROI decision','vlims':scales};(qc_dir(root,s)/'A02_tfr_analysis.json').write_text(json.dumps(details,indent=2)+'\n');report.add_text('TFR analysis details',f'Multitaper power: 2-30 Hz in 1-Hz steps; n_cycles=frequency/2; time-bandwidth=2; FFT=True; ITC=False; trial average=True; decim=2. Stim/no-stim use percent baseline {BASELINE}; comparative TFRs use no baseline correction. ROI selection occurred before other result plots, using only stim and no-stim TFRs for {fmt_channels(candidates)}.\nFinal channels contributing to ROI mean: {fmt_channels(roi)}.','Time-frequency analysis')
 if __name__=='__main__':main()

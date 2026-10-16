@@ -80,6 +80,14 @@ def main():
   display['stim'][ch]=(np.mean([baseline_percent(tfr[s]['stim'][ch]) for s in eligible],0),eligible);display['no-stim'][ch]=(np.mean([baseline_percent(tfr[s]['no-stim'][ch]) for s in eligible],0),eligible)
   # These two lines are the authoritative contrast definitions. NO baseline arrays are referenced.
   d=[tfr[s]['stim'][ch].data[0]-tfr[s]['no-stim'][ch].data[0] for s in eligible];r=[ratio(tfr[s]['stim'][ch].data[0],tfr[s]['no-stim'][ch].data[0]) for s in eligible];diff[ch]=(np.mean(d,0),eligible);rat[ch]=(np.mean(r,0),eligible)
+   for sub,di,ra in zip(eligible,d,r):
+    st=tfr[sub]['stim'][ch].data[0];no=tfr[sub]['no-stim'][ch].data[0]
+    np.testing.assert_allclose(di,st-no)
+    np.testing.assert_allclose(ra,ratio(st,no))
+    if 8<=FREQS.max() and 0.8<=times.max():
+     fm=(FREQS>=8)&(FREQS<=12);tm=(times>=0.3)&(times<=0.8)
+     sm=float(st[np.ix_(fm,tm)].mean());nm=float(no[np.ix_(fm,tm)].mean())
+     print(f'sub-{sub} {ch}: alpha absolute stim={sm:.6e}, no-stim={nm:.6e}, diff={sm-nm:.6e}')
  results=[('no-stim','No stimulation',display['no-stim'],True),('stim','Stimulation',display['stim'],True),('difference','Stimulation - no stimulation',diff,False),('ratio','(Stimulation - no stimulation)/(Stimulation + no stimulation)',rat,False)]
  for key,title,d,bl in results:
   data={c:(x[0],times) for c,x in d.items()};v=scale([x[0] for x in d.values()]);detail=('Percent baseline -0.3 to -0.1 s; descriptive condition only.' if bl else 'NO BASELINE CORRECTION. Contrast formed from raw participant/sensor power before participant averaging.');report.add_text('Analysis details',detail,'TFR - '+title);report.add_figure(scalp(data,info,title,v),str(figs/f'TFR_{key}_scalp.png'),title+' scalp','Montage-informed unique-cell layout; panels cannot overlap; colorbar is outside the grid. '+detail,'TFR - '+title)
