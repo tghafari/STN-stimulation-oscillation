@@ -17,14 +17,17 @@ import mne
 from mne_bids import (BIDSPath, write_raw_bids, read_raw_bids)
 import matplotlib.pyplot as plt
 from copy import deepcopy
+from pathlib import Path
 
-GITHUB_ROOT = r'/Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/BEAR_outage/GitHub/STN-stimulation-oscillation'
-UTILS_DIR = os.path.join(GITHUB_ROOT, 'analysis', 'utils')
+# Automatically locate the repository and shared utilities.
+GITHUB_ROOT = Path(__file__).resolve().parents[4]
+UTILS_DIR = GITHUB_ROOT / "analysis" / "utils"
 
-if GITHUB_ROOT not in sys.path:
-    sys.path.insert(0, GITHUB_ROOT)
-if UTILS_DIR not in sys.path:
-    sys.path.insert(0, UTILS_DIR)
+if str(GITHUB_ROOT) not in sys.path:
+    sys.path.insert(0, str(GITHUB_ROOT))
+
+if str(UTILS_DIR) not in sys.path:
+    sys.path.insert(0, str(UTILS_DIR))
 
 from pdf_report import ParticipantPDF, impedance_text
 
