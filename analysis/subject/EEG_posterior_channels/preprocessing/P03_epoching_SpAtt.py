@@ -183,6 +183,41 @@ for label in ['no-stim', 'stim']:
     )
 
     events, events_id = mne.events_from_annotations(raw, event_id=event_dict)
+    # ----------------------------------------------------------
+    # Check cue events BEFORE epoching
+    # ----------------------------------------------------------
+
+    print(f"\n{'=' * 55}")
+    print(f"TRIAL COUNT CHECK: sub-{subject}, {label}")
+    print(f"{'=' * 55}")
+
+    for event_name in ["cue_onset_right", "cue_onset_left"]:
+
+        if event_name in events_id:
+            count = np.sum(
+                events[:, 2] == events_id[event_name]
+            )
+        else:
+            count = 0
+
+        print(f"{event_name}: {count}")
+
+    cue_codes = [
+        events_id[name]
+        for name in ["cue_onset_right", "cue_onset_left"]
+        if name in events_id
+    ]
+
+    print(
+        "Total cue events before epoching:",
+        np.isin(events[:, 2], cue_codes).sum()
+    )
+
+    print(
+        "Segment duration (seconds):",
+        raw.times[-1]
+    )
+
     cue_id = {
         k: events_id[k]
         for k in ['cue_onset_right', 'cue_onset_left']
@@ -204,6 +239,33 @@ for label in ['no-stim', 'stim']:
         preload=True,
         event_repeated='merge',
     )
+
+    # ----------------------------------------------------------
+    # Check epochs created and automatic drops
+    # ----------------------------------------------------------
+
+    print("\nEPOCHING RESULTS")
+
+    print("Epochs retained before manual rejection:", len(epochs))
+
+    print("\nDrop reasons:")
+    print(epochs.drop_log_stats())
+
+    from collections import Counter
+
+    drop_reasons = Counter(
+        reason
+        for entry in epochs.drop_log
+        for reason in entry
+    )
+
+    print(dict(drop_reasons))
+
+    print("\nRetained event types:")
+    for name in ["cue_onset_right", "cue_onset_left"]:
+        if name in epochs.event_id:
+            print(name, len(epochs[name]))
+            
 
     n_fft = min(int(2 * epochs.info['sfreq']), len(epochs.times))
     fig_psd = epochs.compute_psd(
