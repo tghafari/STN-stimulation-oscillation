@@ -97,7 +97,46 @@ beh_fig_fname = op.join(project_root, 'derivatives/figures/beh_figures', f'sub-{
 print(f'Running subject: {subject}')
 
 # Read raw file in BrainVision (.vhdr, .vmrk, .eeg) format
-if subject == '110':
+if subject == '106':
+    # Four independent recordings; order by acquisition timestamp, not Mac
+    # file creation time. Preserve the original block boundaries in MNE.
+    candidates = [
+        Path(base_fpath) / (brainVision_basename + suffix)
+        for suffix in (
+            '_nostimleft.vhdr',
+            '_nostimright.vhdr',
+            '_stim_left.vhdr',
+            '_stimright.vhdr',
+        )
+    ]
+    missing = [str(f) for f in candidates if not f.is_file()]
+    if missing:
+        raise FileNotFoundError(f'Missing sub-106 BrainVision files: {missing}')
+    recordings = [
+        (f, mne.io.read_raw_brainvision(str(f), preload=True))
+        for f in candidates
+    ]
+    if any(r.info['meas_date'] is None for _, r in recordings):
+        raise RuntimeError('sub-106 acquisition dates are missing; cannot safely sort.')
+    recordings.sort(key=lambda item: item[1].info['meas_date'])
+    dates = [r.info['meas_date'] for _, r in recordings]
+    if len(set(dates)) != len(dates):
+        raise RuntimeError('sub-106 recording timestamps are not unique.')
+    print('\nsub-106 BrainVision acquisition order:')
+    for f, r in recordings:
+        print(f'  {f.name}: {r.info["meas_date"]}, '
+              f'{r.n_times / r.info["sfreq"]:.3f} s')
+    # Show exact cumulative offsets for manual selection in the normal
+    # raw-browser crop-time workflow; do not assign stim/no-stim automatically.
+    elapsed = 0.0
+    for f, r in recordings:
+        duration = r.n_times / r.info['sfreq']
+        print(f'  {f.name}: concatenated interval [{elapsed:.3f}, '
+              f'{elapsed + duration:.3f}] s')
+        elapsed += duration
+    vhdr_fnames = [str(f) for f, _ in recordings]
+    raw = mne.concatenate_raws([r for _, r in recordings])
+elif subject == '110':
     vhdr_fnames = [op.join(base_fpath, brainVision_basename + '_blocks1-2.vhdr'), 
                   op.join(base_fpath, brainVision_basename + '_blocks3-8.vhdr')]
     raw = mne.concatenate_raws([mne.io.read_raw_brainvision(f, preload=True) for f in vhdr_fnames])

@@ -520,6 +520,24 @@ def _find_brainvision_basename(
 
         return basename
 
+    # sub-106 has four separate BrainVision blocks. P01 orders them by
+    # acquisition time and concatenates them before BIDS conversion.
+    if subject == "106":
+        expected = {
+            "ao_6_lxx_nostimleft.vhdr",
+            "ao_6_lxx_nostimright.vhdr",
+            "ao_6_lxx_stim_left.vhdr",
+            "ao_6_lxx_stimright.vhdr",
+        }
+        actual = {f.name for f in vhdr_files}
+        if actual != expected:
+            raise RuntimeError(
+                f"Unexpected BrainVision files for sub-106: {sorted(actual)}; "
+                f"expected {sorted(expected)}"
+            )
+        print("sub-106: four recordings will be ordered by acquisition time in P01.")
+        return "ao_6_lxx"
+
     # ----------------------------------------------------------
     # Ordinary subjects
     # ----------------------------------------------------------
