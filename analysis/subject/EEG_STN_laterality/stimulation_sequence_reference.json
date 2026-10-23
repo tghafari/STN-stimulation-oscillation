@@ -1,0 +1,147 @@
+{
+  "_source": "Proposed chronological block sequence copied from analysis/subject/EEG_posterior_channels/preprocessing/P01_first_look_BIDS_conversion.py, whose comment says it was copied from the GitHub wiki Stimulation-table. These labels are PROPOSALS ONLY; the participant's BIDS event timing must be reviewed and explicitly confirmed in confirm_stimulation_blocks.csv before analysis.",
+  "sub-01": [
+    "off",
+    "off",
+    "stim_right",
+    "stim_left"
+  ],
+  "sub-02": [
+    "off",
+    "off",
+    "stim_left",
+    "stim_right"
+  ],
+  "sub-05": [
+    "stim_left",
+    "stim_right",
+    "off",
+    "off"
+  ],
+  "sub-101": [
+    "off",
+    "off",
+    "stim_right",
+    "stim_left"
+  ],
+  "sub-102": [
+    "off",
+    "off",
+    "stim_left",
+    "stim_right"
+  ],
+  "sub-103": [
+    "stim_right",
+    "off",
+    "off",
+    "stim_left"
+  ],
+  "sub-104": [
+    "stim_right",
+    "stim_left",
+    "off",
+    "off"
+  ],
+  "sub-105": [
+    "stim_left",
+    "stim_right",
+    "off",
+    "off"
+  ],
+  "sub-107": [
+    "off",
+    "off",
+    "stim_right",
+    "stim_left"
+  ],
+  "sub-108": [
+    "off",
+    "off",
+    "stim_left",
+    "stim_right"
+  ],
+  "sub-110": [
+    "exclude",
+    "exclude",
+    "exclude",
+    "exclude"
+  ],
+  "sub-111": [
+    "stim_left",
+    "stim_right",
+    "off",
+    "off"
+  ],
+  "sub-112": [
+    "stim_left",
+    "off",
+    "off",
+    "stim_right"
+  ],
+  "sub-113": [
+    "off",
+    "off",
+    "stim_right",
+    "stim_left"
+  ],
+  "sub-114": [
+    "off",
+    "off",
+    "stim_left",
+    "stim_right"
+  ],
+  "sub-115": [
+    "stim_right",
+    "off",
+    "off",
+    "stim_left"
+  ],
+  "sub-116": [
+    "stim_right",
+    "stim_left",
+    "off",
+    "off"
+  ],
+  "sub-117": [
+    "stim_left",
+    "stim_right",
+    "off",
+    "off"
+  ],
+  "sub-118": [
+    "stim_left",
+    "off",
+    "off",
+    "stim_right"
+  ],
+  "sub-119": [
+    "off",
+    "off",
+    "stim_right",
+    "stim_left"
+  ],
+  "sub-120": [
+    "off",
+    "off",
+    "stim_left",
+    "stim_right"
+  ],
+  "sub-121": [
+    "stim_right",
+    "off",
+    "off",
+    "stim_left"
+  ],
+  "sub-122": [
+    "stim_right",
+    "stim_left",
+    "off",
+    "off"
+  ],
+  "sub-123": [
+    "stim_left",
+    "stim_right",
+    "off",
+    "off"
+  ]
+}
