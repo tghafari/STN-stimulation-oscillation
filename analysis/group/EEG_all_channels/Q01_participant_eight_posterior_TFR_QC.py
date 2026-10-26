@@ -52,23 +52,24 @@ def common_lim(subject_rois):
  m=float(np.percentile(np.abs(np.concatenate(vals)),ROBUST));return(-m,m) if np.isfinite(m) and m>0 else(None,None)
 def plot_grid(subjects, rois, title, v):
     """
-    Plot individual participant TFRs in a grid.
+    Plot up to 8 participants per figure.
 
-    The number of columns is fixed at 4, while the number
-    of rows automatically adjusts to the number of subjects.
+    Layout:
+        - 2 columns
+        - up to 4 rows
+        - one participant per panel
 
-    Each panel represents one participant.
-    No averaging across participants is performed.
+    Each figure is saved separately so that the
+    TFRs remain readable in the PDF report.
     """
 
-    n_subjects = len(subjects)
-    n_cols = 4
-    n_rows = int(np.ceil(n_subjects / n_cols))
+    n_cols = 2
+    n_rows = int(np.ceil(len(subjects) / n_cols))
 
     fig, axes = plt.subplots(
         n_rows,
         n_cols,
-        figsize=(20, 4.5 * n_rows),
+        figsize=(12, 3.5 * n_rows),
         constrained_layout=True
     )
 
@@ -77,7 +78,7 @@ def plot_grid(subjects, rois, title, v):
 
     for i, ax in enumerate(axes):
 
-        if i >= n_subjects:
+        if i >= len(subjects):
             ax.axis('off')
             continue
 
@@ -115,7 +116,7 @@ def plot_grid(subjects, rois, title, v):
             linewidth=0.7
         )
 
-        ax.set_title(f'sub-{subject}', fontsize=11)
+        ax.set_title(f'sub-{subject}', fontsize=12)
         ax.set_xlabel('Time (s)')
         ax.set_ylabel('Frequency (Hz)')
 
@@ -127,10 +128,19 @@ def plot_grid(subjects, rois, title, v):
             label='TFR power'
         )
 
-    fig.suptitle(title, fontsize=16)
+    fig.suptitle(title, fontsize=15)
 
     return fig
 
+def split_into_pages(subjects, subjects_per_page=8):
+    """
+    Split participants into groups of 8.
+
+    Each group becomes a separate TFR figure
+    in the participant QC PDF.
+    """
+    for i in range(0, len(subjects), subjects_per_page):
+        yield subjects[i:i + subjects_per_page]
 def main():
  a=parse_args();subjects=[s.removeprefix('sub-') for s in a.subjects]
  root=resolve_project_root(a.platform,a.project_root);out=root/'derivatives'/'reports'/'QC'/'posterior_TFR_all_subjects';figs=out/'figures';figs.mkdir(parents=True,exist_ok=True);report=ParticipantPDF(str(out),'posterior_TFR_QC_'+'_'.join(subjects));eps={s:load(root,s,a) for s in subjects};av={s:available(eps[s]) for s in subjects}
@@ -153,8 +163,45 @@ def main():
    roi3[s],used3[s]=mean_roi(x,ROI3);roi8[s],used8[s]=mean_roi(x,ROI8)
   v3=common_lim(roi3);v8=common_lim(roi8)
   report.add_text('Section details',f'{title}. Two subject-grid figures follow. First: mean PO3/POz/PO4. Second: mean 8 posterior channels. {caption} No across-subject averaging. Colour limits are shared across the 16 subject panels within each ROI figure.',title)
-  report.add_figure(plot_grid(subjects,roi3,f'{title}: mean PO3 / POz / PO4 — subjects',v3),str(figs/f'{key}_all_subjects_mean3.png'),f'{title}: 3-channel posterior mean, all subjects',caption+' Each panel is one participant; no across-participant averaging.',title)
-  report.add_figure(plot_grid(subjects,roi8,f'{title}: mean 8 posterior channels — subjects',v8),str(figs/f'{key}_all_subjects_mean8.png'),f'{title}: 8-channel posterior mean, all subjects',caption+' Each panel is one participant; no across-participant averaging.',title)
+  # ================================================
+  # Save TFR figures in pages of 8 participants
+  # ================================================
+
+  for roi_name, roi_data, color_limits in [
+      ('mean3', roi3, v3),
+      ('mean8', roi8, v8),
+  ]:
+
+      for page_number, page_subjects in enumerate(
+          split_into_pages(subjects, subjects_per_page=8),
+          start=1
+      ):
+
+          fig = plot_grid(
+              page_subjects,
+              roi_data,
+              f'{title}: {roi_name} - page {page_number}',
+              color_limits
+          )
+
+          figure_fname = figs / (
+              f'{key}_all_subjects_{roi_name}_page{page_number}.png'
+          )
+
+          report.add_figure(
+              fig,
+              str(figure_fname),
+              f'{title}: {roi_name}, page {page_number}',
+              (
+                  f'Participants: {", ".join("sub-" + s for s in page_subjects)}. '
+                  f'{caption} '
+                  'Each panel represents one participant. '
+                  'No averaging across participants.'
+              ),
+              title
+          )
+
+          plt.close(fig)
   report.add_text('Channels used per participant','3-channel ROI:\n'+'\n'.join(f"sub-{s}: {', '.join(used3.get(s,[])) or 'unavailable'}" for s in subjects)+'\n\n8-channel ROI:\n'+'\n'.join(f"sub-{s}: {', '.join(used8.get(s,[])) or 'unavailable'}" for s in subjects),title)
  print(f'QC report complete: {report.pdf_fname}')
 if __name__=='__main__':main()
