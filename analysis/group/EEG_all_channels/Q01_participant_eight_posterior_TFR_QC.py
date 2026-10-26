@@ -141,6 +141,91 @@ def split_into_pages(subjects, subjects_per_page=8):
     """
     for i in range(0, len(subjects), subjects_per_page):
         yield subjects[i:i + subjects_per_page]
+
+def plot_subject_alpha(epochs_pair, channels, subject, roi_name, n_jobs):
+    """
+    Calculate and plot 10-12 Hz alpha power for one participant.
+
+    1. Read stim ON and OFF cleaned epochs.
+    2. Compute single-trial multitaper TFR.
+    3. Apply percent baseline correction per trial.
+    4. Average across 10-12 Hz and posterior channels.
+    5. Calculate mean and SEM across trials.
+    6. Plot stim ON and OFF with shaded SEM.
+    """
+
+    fig, ax = plt.subplots(figsize=(10, 5), constrained_layout=True)
+
+    for condition, color, label in [
+        ('no-stim', 'tab:blue', 'Stim OFF'),
+        ('stim', 'tab:orange', 'Stim ON'),
+    ]:
+        epochs = epochs_pair[condition].copy().pick(channels)
+
+        tfr = epochs.compute_tfr(
+            method='multitaper',
+            freqs=FREQS,
+            n_cycles=N_CYCLES,
+            time_bandwidth=TIME_BANDWIDTH,
+            use_fft=True,
+            zero_mean=True,
+            return_itc=False,
+            average=False,  # IMPORTANT: preserve individual trials
+            decim=DECIM,
+            n_jobs=n_jobs,
+        )
+
+        tfr.apply_baseline(BASELINE, mode='percent')
+
+        freq_mask = (tfr.freqs >= 10) & (tfr.freqs <= 12)
+        time_mask = (tfr.times >= -0.3) & (tfr.times <= 1.3)
+
+        # Trial x channel x frequency x time
+        # Average channels and frequencies, keeping trials.
+        alpha_trials = tfr.data[:, :, freq_mask, :].mean(axis=(1, 2))
+        alpha_trials = alpha_trials[:, time_mask]
+
+        mean = alpha_trials.mean(axis=0)
+        n_trials = len(alpha_trials)
+
+        if n_trials > 1:
+            sem = alpha_trials.std(axis=0, ddof=1) / np.sqrt(n_trials)
+        else:
+            sem = np.zeros_like(mean)
+
+        times = tfr.times[time_mask]
+
+        ax.plot(
+            times, mean,
+            color=color,
+            linewidth=2,
+            label=f'{label} (n={n_trials})'
+        )
+
+        ax.fill_between(
+            times,
+            mean - sem,
+            mean + sem,
+            color=color,
+            alpha=0.2
+        )
+
+    ax.axvline(0, color='black', linestyle='--', linewidth=1)
+    ax.axhline(0, color='gray', linestyle=':', linewidth=0.8)
+
+    ax.set_xlim(-0.3, 1.3)
+    ax.set_xlabel('Time relative to cue onset (s)')
+    ax.set_ylabel('Alpha power change from baseline (%)')
+
+    ax.set_title(
+        f'sub-{subject}: Alpha power (10-12 Hz)\n'
+        f'{roi_name} - Mean +/- SEM across trials'
+    )
+
+    ax.legend()
+    return fig
+
+
 def main():
  a=parse_args();subjects=[s.removeprefix('sub-') for s in a.subjects]
  root=resolve_project_root(a.platform,a.project_root);out=root/'derivatives'/'reports'/'QC'/'posterior_TFR_all_subjects';figs=out/'figures';figs.mkdir(parents=True,exist_ok=True);report=ParticipantPDF(str(out),'posterior_TFR_QC_'+'_'.join(subjects));eps={s:load(root,s,a) for s in subjects};av={s:available(eps[s]) for s in subjects}
@@ -203,5 +288,62 @@ def main():
 
           plt.close(fig)
   report.add_text('Channels used per participant','3-channel ROI:\n'+'\n'.join(f"sub-{s}: {', '.join(used3.get(s,[])) or 'unavailable'}" for s in subjects)+'\n\n8-channel ROI:\n'+'\n'.join(f"sub-{s}: {', '.join(used8.get(s,[])) or 'unavailable'}" for s in subjects),title)
+ # ================================================
+  # Alpha power QC: 10-12 Hz, mean +/- SEM
+  # ================================================
+
+  section = 'Alpha power QC: 10-12 Hz'
+
+  report.add_text(
+      'Alpha power QC: stimulation ON vs OFF',
+      '10-12 Hz alpha power from -0.3 to 1.3 s relative to cue onset. '
+      'Percent baseline correction (-0.3 to -0.1 s) was applied '
+      'separately to each trial and stimulation condition. '
+      'Shaded regions represent +/- SEM across trials. '
+      'No averaging across participants.',
+      section
+  )
+
+  for subject in subjects:
+
+      for roi_name, roi_channels, suffix in [
+          ('Mean of 3 posterior channels', ROI3, 'mean3'),
+          ('Mean of 8 posterior channels', ROI8, 'mean8'),
+      ]:
+
+          # Keep only channels that are good in both conditions.
+          channels = [ch for ch in roi_channels if ch in av[subject]]
+
+          if not channels:
+              report.add_text(
+                  f'sub-{subject}: {roi_name}',
+                  'No valid channels available.',
+                  section
+              )
+              continue
+
+          fig = plot_subject_alpha(
+              eps[subject],
+              channels,
+              subject,
+              roi_name,
+              a.n_jobs
+          )
+
+          figure_fname = figs / (
+              f'sub-{subject}_alpha_10-12Hz_{suffix}_mean_SEM.png'
+          )
+
+          report.add_figure(
+              fig,
+              str(figure_fname),
+              f'sub-{subject}: {roi_name}',
+              'Stim ON vs OFF, 10-12 Hz, mean +/- SEM across trials. '
+              'Baseline -0.3 to -0.1 s; '
+              f'channels: {", ".join(channels)}.',
+              section
+          )
+
+          plt.close(fig)
  print(f'QC report complete: {report.pdf_fname}')
 if __name__=='__main__':main()
