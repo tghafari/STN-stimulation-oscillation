@@ -194,12 +194,23 @@ def analyze_subject(root, sub, review_df, args):
     split_blocks = {}
     for _, row in block_rows.iterrows():
         condition = str(row["confirmed_condition"]).strip().lower()
-        start, end = float(row["onset_s"]), float(row["offset_s"])
-        if condition == "off":
-            subset = subset_epochs_for_block(off_epochs, start, end, crop_off, f"sub-{sub} OFF block")
-        else:
-            subset = subset_epochs_for_block(stim_epochs, start, end, crop_stim, f"sub-{sub} {condition} block")
-        split_blocks[condition if condition != "off" else f"off_{int(row['block_index_chronological'])}"] = subset
+        source_ep = off_epochs if condition == "off" else stim_epochs
+        source_ranges = crop_off if condition == "off" else crop_stim
+        # The eight BIDS task blocks are paired (1+2, 3+4, etc.).
+        # Select each actual task block separately, avoiding the gap between them.
+        task_ranges = [(float(row["first_task_block_onset_s"]),
+                        float(row["first_task_block_offset_s"]))]
+        second_start = str(row.get("second_task_block_onset_s", "")).strip()
+        second_end = str(row.get("second_task_block_offset_s", "")).strip()
+        if second_start and second_end:
+            task_ranges.append((float(second_start), float(second_end)))
+        pieces = [subset_epochs_for_block(source_ep, start, end, source_ranges,
+                  f"sub-{sub} {condition} task block {j+1}")
+                  for j, (start, end) in enumerate(task_ranges)]
+        subset = pieces[0] if len(pieces) == 1 else mne.concatenate_epochs(pieces,
+                                                   add_offset=True, verbose=False)
+        name = condition if condition != "off" else f"off_{int(row['block_index_chronological'])}"
+        split_blocks[name] = subset
 
     # Compute each block separately. The OFF reference is the equal-weight mean of
     # the two OFF block TFRs, independent of how many accepted trials each has.

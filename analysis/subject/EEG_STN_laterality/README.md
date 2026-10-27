@@ -11,50 +11,48 @@ For each participant, describe how left-STN and right-STN stimulation are associ
 
 The two OFF blocks are treated as a common reference and receive equal weight, regardless of accepted trial counts. Chronological effects are intentionally not modelled, as requested.
 
-## Required confirmatory step — do not skip
+## Interactive terminal confirmation and analysis
 
-Run the runner once in review-only mode:
+The BIDS files normally contain **eight task blocks**. Each consecutive pair has
+the same STN condition: task blocks (1,2), (3,4), (5,6), and (7,8)
+form four stimulation periods. The proposed order comes from the repository's
+legacy stimulation sequence mapping, not from an automatically inferred stimulation
+side. The terminal displays the proposed order, BIDS start/end times, and cue counts
+for each participant.
 
-```bash
-python run_all_participants.py --subjects 102 103 104 107 110 112 113 114 115 116 118 119 120 121 122 123 --review-only
-```
-
-It reads each participant's BIDS `events.tsv`, identifies `block_onset` / `block_end` intervals, and shows the actual onset, offset, duration, left/right cue counts, event types, and the proposed sequence from the legacy stimulation mapping. The proposed mapping is not accepted automatically.
-
-Open:
-
-`derivatives/reports/group/EEG_STN_laterality/confirm_stimulation_blocks.html`
-
-Then edit:
-
-`derivatives/reports/group/EEG_STN_laterality/confirm_stimulation_blocks.csv`
-
-For every block, enter `confirmed_condition` as exactly one of:
-
-- `off`: an OFF block
-- `stim_left`: left STN ON
-- `stim_right`: right STN ON
-- `exclude`: use this for all four rows if the entire participant is to be excluded (e.g. a non-STN stimulation case)
-
-Set `confirmed` to `yes` only after manually checking the source record and BIDS time range. Each analysed participant must have exactly four confirmed blocks: two `off`, one `stim_left`, and one `stim_right`. Participants with unknown mappings or non-four block records are not analysed until resolved.
-
-The CSV is regenerated on each runner start but existing confirmations are preserved only when subject, block index, onset and offset are identical. If those times change, reconfirm.
-
-## Run the analysis
-
-After reviewing and editing the CSV, run the same command without `--review-only`:
+Run:
 
 ```bash
-python run_all_participants.py --subjects 102 103 104 107 110 112 113 114 115 116 118 119 120 121 122 123
+python run_all_participants.py --subjects 101 102 103 104 105 106 107 108 110 111 112 113 114 115 116 118 119 120 121 122 123
 ```
 
-Mac is the default. Optional arguments: `--platform bluebear`, `--project-root /path/to/STN-in-PD`, `--session 01`, `--task SpAtt`, `--run 01`, `--n-jobs 4`.
+For each participant, answer `y` to accept the proposed order, `n` to
+correct it, `s` to skip, or `q` to stop. When correcting, type four labels,
+e.g. `o o l r` for OFF, OFF, LEFT STN ON, RIGHT STN ON. The runner validates
+that there are two OFF periods and one period per stimulation side. It saves
+the confirmation to CSV, **runs that participant immediately**, and then
+moves to the next participant. If an analysis fails, it records the error
+and continues. To confirm labels without computing TFRs, add `--review-only`.
 
-Run from this folder, or from repository root use:
+The CSV and HTML review remain available as an audit trail; you no longer need
+to edit the CSV manually. Four-condition-period mapping is required; if a
+participant has neither eight task blocks nor four condition periods in BIDS,
+the runner flags and skips them instead of guessing.
 
-```bash
-python analysis/subject/EEG_STN_laterality/run_all_participants.py --subjects 102 103 104 --review-only
-```
+**Special caution:** legacy records indicate that sub-110 may have VLM rather
+than STN stimulation. Do not accept an STN mapping for this participant
+without checking the source record.
+
+Mac is the default platform. Optional arguments: `--platform bluebear`,
+`--project-root /path/to/STN-in-PD`, `--session 01`, `--task SpAtt`,
+`--run 01`, `--n-jobs 4`.
+
+## Analysis of the paired task blocks
+
+Each pair is treated as one stimulation-condition period. Cleaned cue epochs
+are selected from both task blocks, then combined within the condition period.
+The two OFF condition periods are averaged with equal weight for the reference.
+The analysis uses the existing cleaned epochs and does not alter preprocessing.
 
 ## Outputs
 
