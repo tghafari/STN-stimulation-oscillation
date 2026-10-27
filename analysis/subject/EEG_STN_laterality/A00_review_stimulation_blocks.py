@@ -87,8 +87,10 @@ def review_rows(root, subjects, session, task, run):
             note += " Existing source code notes stimulation was on VLM, not STN; exclude from STN-specific analysis unless source records show otherwise."
         if len(proposed) != 4:
             note += " No four-block sequence proposal exists; assign conditions manually after review."
+        if len(blocks) > 4:
+            note += " Extra BIDS block markers were detected; rows beyond the four proposed blocks are labelled unknown, not assigned a stimulation side."
         for i, block in enumerate(blocks, start=1):
-            proposal = proposed[i-1] if len(proposed) == 4 else "unknown"
+            proposal = proposed[i-1] if len(proposed) == 4 and i <= 4 else "unknown"
             output.append({
                 "subject": sub, "block_index_chronological": i, **block,
                 "source_event_file": str(path),
