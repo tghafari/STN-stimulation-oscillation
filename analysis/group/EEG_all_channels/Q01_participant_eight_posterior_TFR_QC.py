@@ -1,349 +1,499 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""Single all-subject posterior TFR QC report with subject grids.
+"""Q01: Participant-level posterior TFR and alpha-power quality control.
 
-For each TFR result the report contains TWO group-display figures, but NO group
-averaging:
-  1. a grid showing the within-subject mean of PO3/POz/PO4 for each subject;
-  2. a grid showing the within-subject mean of the 8 posterior sensors
-     PO3, POz, PO4, O1, Oz, O2, PO7, PO8 for each subject.
+Steps
+-----
+1. Load each participant's final cleaned cue epochs for stim ON and OFF.
+2. Identify the posterior sensors available in both conditions.
+3. Calculate trial-averaged multitaper TFRs separately by condition.
+4. Plot stim OFF, stim ON, their raw-power difference and normalized
+   difference, for both the three- and eight-channel posterior ROIs.
+5. Split participant TFRs into readable grids (up to four rows, two columns).
+6. Compute single-trial 10-12 Hz alpha power, baseline-correct each trial,
+   and calculate the within-participant mean and SEM across trials.
+7. Display alpha time courses in matching participant grids, separately
+   for the three- and eight-channel ROIs.
+8. Add the figures and methods to the same cumulative PDF report.
 
-Each panel is one participant. 
+The script never averages across participants. The two TFR contrasts are
+computed from original, unbaselined power; descriptive stim ON/OFF TFRs
+use percent baseline (-0.3 to -0.1 seconds). Alpha curves use trial-wise
+percent baseline and show mean +/- SEM across trials.
+
+Run from the repository root:
+    python analysis/group/EEG_all_channels/Q01_participant_eight_posterior_TFR_QC.py \
+        --subjects 101 102 103 104 --platform mac
 """
+
 from __future__ import annotations
-import argparse,sys
+
+import argparse
+import sys
 from pathlib import Path
+
 import matplotlib.pyplot as plt
 import mne
 import numpy as np
-HERE=Path(__file__).resolve().parent;ANALYSIS_DIR=HERE.parents[1]
-for p in (ANALYSIS_DIR/'subject'/'EEG_all_channels',ANALYSIS_DIR/'utils'):
- if str(p) not in sys.path:sys.path.insert(0,str(p))
-from pipeline_config import CONDITIONS,resolve_project_root,stage_path
+
+HERE = Path(__file__).resolve().parent
+ANALYSIS_DIR = HERE.parents[1]
+
+for folder in (
+    ANALYSIS_DIR / "subject" / "EEG_all_channels",
+    ANALYSIS_DIR / "utils",
+):
+    if str(folder) not in sys.path:
+        sys.path.insert(0, str(folder))
+
+from pipeline_config import CONDITIONS, resolve_project_root, stage_path
 from pdf_report import ParticipantPDF
-ROI8=('PO3','POz','PO4','O1','Oz','O2','PO7','PO8');ROI3=('PO3','POz','PO4')
-BASELINE=(-.3,-.1);FREQS=np.arange(2.,32.,.5);N_CYCLES=FREQS/2.;TIME_BANDWIDTH=2.;DECIM=2;TMIN=-.5;TMAX=1.5;ROBUST=98.
+
+ROI3 = ("PO3", "POz", "PO4")
+ROI8 = ("PO3", "POz", "PO4", "O1", "Oz", "O2", "PO7", "PO8")
+BASELINE = (-0.3, -0.1)
+FREQS = np.arange(2.0, 32.0, 0.5)
+N_CYCLES = FREQS / 2.0
+TIME_BANDWIDTH = 2.0
+DECIM = 2
+TMIN, TMAX = -0.5, 1.5
+ALPHA_WINDOW = (-0.3, 1.3)
+ROBUST = 98.0
+SUBJECTS_PER_FIGURE = 8
+
+
 def parse_args():
- p=argparse.ArgumentParser(description=__doc__);p.add_argument('--subjects',nargs='+',required=True);p.add_argument('--session',default='01');p.add_argument('--task',default='SpAtt');p.add_argument('--run',default='01');p.add_argument('--platform',choices=['mac','bluebear'],default='mac');p.add_argument('--project-root',default=None);p.add_argument('--n-jobs',type=int,default=4);return p.parse_args()
-def load(root,s,a):
- out={}
- for c in CONDITIONS:
-  f=stage_path(root,s,a.session,a.task,a.run,c,'clean','epo')
-  if not f.exists():raise FileNotFoundError(f'Missing final cleaned epochs for sub-{s} {c}: {f}')
-  e=mne.read_epochs(f,preload=True);k=[x for x in ('cue_onset_right','cue_onset_left') if x in e.event_id];out[c]=e[k] if k else e
- return out
-def available(ep):
- st,no=ep['stim'],ep['no-stim'];eeg=st.copy().pick('eeg').ch_names
- return[ch for ch in ROI8 if ch in eeg and ch in no.ch_names and ch not in st.info['bads'] and ch not in no.info['bads']]
-def compute(ep,picks,jobs):return ep.copy().pick(picks).compute_tfr(method='multitaper',freqs=FREQS,n_cycles=N_CYCLES,time_bandwidth=TIME_BANDWIDTH,use_fft=True,zero_mean=True,return_itc=False,average=True,decim=DECIM,n_jobs=jobs)
-def ratio(st,no):
- x=st.copy();x.data=(st.data-no.data)/(st.data+no.data+np.finfo(float).eps);return x
-def mean_roi(x,roi):
- picks=[ch for ch in roi if ch in x.ch_names]
- if not picks:return None,[]
- y=x.copy().pick(picks);y.data=y.data.mean(0,keepdims=True);return y,picks
-def common_lim(subject_rois):
- vals=[]
- for x in subject_rois.values():
-  if x is None:continue
-  ti=(x.times>=TMIN)&(x.times<=TMAX);fi=(x.freqs>=2)&(x.freqs<=31.5);z=np.asarray(x.data)[:,fi][:,:,ti];z=z[np.isfinite(z)]
-  if z.size:vals.append(z)
- if not vals:return(None,None)
- m=float(np.percentile(np.abs(np.concatenate(vals)),ROBUST));return(-m,m) if np.isfinite(m) and m>0 else(None,None)
-def plot_grid(subjects, rois, title, v):
-    """
-    Plot up to 8 participants per figure.
+    """Read participant IDs, dataset paths, and parallelism."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--subjects", nargs="+", required=True)
+    parser.add_argument("--session", default="01")
+    parser.add_argument("--task", default="SpAtt")
+    parser.add_argument("--run", default="01")
+    parser.add_argument(
+        "--platform", choices=("mac", "bluebear"), default="mac"
+    )
+    parser.add_argument("--project-root", default=None)
+    parser.add_argument("--n-jobs", type=int, default=4)
+    return parser.parse_args()
 
-    Layout:
-        - 2 columns
-        - up to 4 rows
-        - one participant per panel
 
-    Each figure is saved separately so that the
-    TFRs remain readable in the PDF report.
-    """
+def load(root, subject, args):
+    """Load both stimulation conditions and combine cue directions."""
+    epochs = {}
+    for condition in CONDITIONS:
+        filename = stage_path(
+            root, subject, args.session, args.task, args.run,
+            condition, "clean", "epo"
+        )
+        if not filename.exists():
+            raise FileNotFoundError(
+                f"Missing final epochs for sub-{subject}, {condition}: "
+                f"{filename}"
+            )
+        ep = mne.read_epochs(filename, preload=True)
+        cues = [
+            cue for cue in ("cue_onset_right", "cue_onset_left")
+            if cue in ep.event_id
+        ]
+        epochs[condition] = ep[cues] if cues else ep
+    return epochs
 
-    n_cols = 2
-    n_rows = int(np.ceil(len(subjects) / n_cols))
 
-    fig, axes = plt.subplots(
-        n_rows,
-        n_cols,
-        figsize=(12, 3.5 * n_rows),
-        constrained_layout=True
+def available(epochs):
+    """Return posterior channels retained in BOTH conditions."""
+    stim = epochs["stim"]
+    no_stim = epochs["no-stim"]
+    eeg_channels = stim.copy().pick("eeg").ch_names
+    return [
+        ch for ch in ROI8
+        if ch in eeg_channels
+        and ch in no_stim.ch_names
+        and ch not in stim.info["bads"]
+        and ch not in no_stim.info["bads"]
+    ]
+
+
+def compute(epochs, channels, n_jobs):
+    """Compute trial-averaged multitaper power, without baseline."""
+    return epochs.copy().pick(channels).compute_tfr(
+        method="multitaper",
+        freqs=FREQS,
+        n_cycles=N_CYCLES,
+        time_bandwidth=TIME_BANDWIDTH,
+        use_fft=True,
+        zero_mean=True,
+        return_itc=False,
+        average=True,
+        decim=DECIM,
+        n_jobs=n_jobs,
     )
 
+
+def ratio(stim, no_stim):
+    """Normalized power contrast on original unbaselined power."""
+    result = stim.copy()
+    result.data = (
+        (stim.data - no_stim.data)
+        / (stim.data + no_stim.data + np.finfo(float).eps)
+    )
+    return result
+
+
+def mean_roi(tfr, roi):
+    """Average available channels within one participant."""
+    channels = [ch for ch in roi if ch in tfr.ch_names]
+    if not channels:
+        return None, []
+    result = tfr.copy().pick(channels)
+    result.data = result.data.mean(axis=0, keepdims=True)
+    return result, channels
+
+
+def common_lim(subject_rois):
+    """Robust symmetric color limits, shared across all figure pages."""
+    values = []
+    for tfr in subject_rois.values():
+        if tfr is None:
+            continue
+        times = (tfr.times >= TMIN) & (tfr.times <= TMAX)
+        freqs = (tfr.freqs >= 2) & (tfr.freqs <= 31.5)
+        data = np.asarray(tfr.data)[:, freqs][:, :, times]
+        finite = data[np.isfinite(data)]
+        if finite.size:
+            values.append(finite)
+    if not values:
+        return None, None
+    maximum = float(
+        np.percentile(np.abs(np.concatenate(values)), ROBUST)
+    )
+    if not np.isfinite(maximum) or maximum <= 0:
+        return None, None
+    return -maximum, maximum
+
+
+def split_into_pages(subjects, subjects_per_page=SUBJECTS_PER_FIGURE):
+    """Yield consecutive participant groups for readable figures."""
+    for index in range(0, len(subjects), subjects_per_page):
+        yield subjects[index:index + subjects_per_page]
+
+
+def plot_grid(subjects, rois, title, limits):
+    """Display up to eight participant TFRs in a 4-row, 2-column grid."""
+    n_rows = int(np.ceil(len(subjects) / 2))
+    fig, axes = plt.subplots(
+        n_rows, 2, figsize=(12, 3.3 * n_rows),
+        constrained_layout=True
+    )
     axes = np.atleast_1d(axes).ravel()
-    last_im = None
+    last_image = None
 
-    for i, ax in enumerate(axes):
-
-        if i >= len(subjects):
-            ax.axis('off')
+    for index, ax in enumerate(axes):
+        if index >= len(subjects):
+            ax.axis("off")
             continue
 
-        subject = subjects[i]
+        subject = subjects[index]
         tfr = rois.get(subject)
-
         if tfr is None:
-            ax.axis('off')
-            ax.set_title(f'sub-{subject}: unavailable')
+            ax.axis("off")
+            ax.set_title(f"sub-{subject}: unavailable")
             continue
 
         time_mask = (tfr.times >= TMIN) & (tfr.times <= TMAX)
         freq_mask = (tfr.freqs >= 2) & (tfr.freqs <= 31.5)
-
         data = tfr.data[0][freq_mask][:, time_mask]
-        times = tfr.times[time_mask]
-        freqs = tfr.freqs[freq_mask]
 
-        im = ax.pcolormesh(
-            times,
-            freqs,
+        last_image = ax.pcolormesh(
+            tfr.times[time_mask],
+            tfr.freqs[freq_mask],
             data,
-            shading='auto',
-            cmap='RdBu_r',
-            vmin=v[0],
-            vmax=v[1]
+            shading="auto",
+            cmap="RdBu_r",
+            vmin=limits[0],
+            vmax=limits[1],
         )
+        ax.axvline(0, color="black", linestyle="--", linewidth=0.8)
+        ax.set_title(f"sub-{subject}")
+        ax.set_xlabel("Time from cue onset (s)")
+        ax.set_ylabel("Frequency (Hz)")
 
-        last_im = im
-
-        ax.axvline(
-            0,
-            color='black',
-            linestyle='--',
-            linewidth=0.7
-        )
-
-        ax.set_title(f'sub-{subject}', fontsize=12)
-        ax.set_xlabel('Time (s)')
-        ax.set_ylabel('Frequency (Hz)')
-
-    if last_im is not None:
+    if last_image is not None:
         fig.colorbar(
-            last_im,
-            ax=list(axes),
-            shrink=0.8,
-            label='TFR power'
+            last_image, ax=list(axes), shrink=0.8, label="TFR power"
         )
-
     fig.suptitle(title, fontsize=15)
-
     return fig
 
-def split_into_pages(subjects, subjects_per_page=8):
+
+def alpha_curves(epochs_pair, channels, n_jobs):
+    """Return trial-level 10-12 Hz alpha mean and SEM per condition.
+
+    Each trial is baseline-normalized independently before averaging
+    across frequency and channels. SEM is across trials, NOT subjects.
     """
-    Split participants into groups of 8.
-
-    Each group becomes a separate TFR figure
-    in the participant QC PDF.
-    """
-    for i in range(0, len(subjects), subjects_per_page):
-        yield subjects[i:i + subjects_per_page]
-
-def plot_subject_alpha(epochs_pair, channels, subject, roi_name, n_jobs):
-    """
-    Calculate and plot 10-12 Hz alpha power for one participant.
-
-    1. Read stim ON and OFF cleaned epochs.
-    2. Compute single-trial multitaper TFR.
-    3. Apply percent baseline correction per trial.
-    4. Average across 10-12 Hz and posterior channels.
-    5. Calculate mean and SEM across trials.
-    6. Plot stim ON and OFF with shaded SEM.
-    """
-
-    fig, ax = plt.subplots(figsize=(10, 5), constrained_layout=True)
-
-    for condition, color, label in [
-        ('no-stim', 'tab:blue', 'Stim OFF'),
-        ('stim', 'tab:orange', 'Stim ON'),
-    ]:
-        epochs = epochs_pair[condition].copy().pick(channels)
-
-        tfr = epochs.compute_tfr(
-            method='multitaper',
+    curves = {}
+    for condition in ("no-stim", "stim"):
+        tfr = epochs_pair[condition].copy().pick(channels).compute_tfr(
+            method="multitaper",
             freqs=FREQS,
             n_cycles=N_CYCLES,
             time_bandwidth=TIME_BANDWIDTH,
             use_fft=True,
             zero_mean=True,
             return_itc=False,
-            average=False,  # IMPORTANT: preserve individual trials
+            average=False,
             decim=DECIM,
             n_jobs=n_jobs,
         )
-
-        tfr.apply_baseline(BASELINE, mode='percent')
-
+        tfr.apply_baseline(BASELINE, mode="percent")
         freq_mask = (tfr.freqs >= 10) & (tfr.freqs <= 12)
-        time_mask = (tfr.times >= -0.3) & (tfr.times <= 1.3)
-
-        # Trial x channel x frequency x time
-        # Average channels and frequencies, keeping trials.
-        alpha_trials = tfr.data[:, :, freq_mask, :].mean(axis=(1, 2))
-        alpha_trials = alpha_trials[:, time_mask]
-
-        mean = alpha_trials.mean(axis=0)
-        n_trials = len(alpha_trials)
-
-        if n_trials > 1:
-            sem = alpha_trials.std(axis=0, ddof=1) / np.sqrt(n_trials)
-        else:
-            sem = np.zeros_like(mean)
-
-        times = tfr.times[time_mask]
-
-        ax.plot(
-            times, mean,
-            color=color,
-            linewidth=2,
-            label=f'{label} (n={n_trials})'
+        time_mask = (
+            (tfr.times >= ALPHA_WINDOW[0])
+            & (tfr.times <= ALPHA_WINDOW[1])
         )
-
-        ax.fill_between(
-            times,
-            mean - sem,
-            mean + sem,
-            color=color,
-            alpha=0.2
+        trials = tfr.data[:, :, freq_mask, :].mean(axis=(1, 2))
+        trials = trials[:, time_mask]
+        count = len(trials)
+        mean = trials.mean(axis=0)
+        sem = (
+            trials.std(axis=0, ddof=1) / np.sqrt(count)
+            if count > 1 else np.zeros_like(mean)
         )
+        curves[condition] = (tfr.times[time_mask], mean, sem, count)
+    return curves
 
-    ax.axvline(0, color='black', linestyle='--', linewidth=1)
-    ax.axhline(0, color='gray', linestyle=':', linewidth=0.8)
 
-    ax.set_xlim(-0.3, 1.3)
-    ax.set_xlabel('Time relative to cue onset (s)')
-    ax.set_ylabel('Alpha power change from baseline (%)')
-
-    ax.set_title(
-        f'sub-{subject}: Alpha power (10-12 Hz)\n'
-        f'{roi_name} - Mean +/- SEM across trials'
+def plot_alpha_grid(subjects, curves, title):
+    """Plot alpha ON/OFF mean +/- SEM in the same 4 x 2 TFR layout."""
+    n_rows = int(np.ceil(len(subjects) / 2))
+    fig, axes = plt.subplots(
+        n_rows, 2, figsize=(12, 3.3 * n_rows),
+        constrained_layout=True
     )
+    axes = np.atleast_1d(axes).ravel()
 
-    ax.legend()
+    for index, ax in enumerate(axes):
+        if index >= len(subjects):
+            ax.axis("off")
+            continue
+        subject = subjects[index]
+        if subject not in curves:
+            ax.axis("off")
+            ax.set_title(f"sub-{subject}: unavailable")
+            continue
+
+        for condition, color, label in (
+            ("no-stim", "tab:blue", "Stim OFF"),
+            ("stim", "tab:orange", "Stim ON"),
+        ):
+            times, mean, sem, count = curves[subject][condition]
+            ax.plot(times, mean, color=color, label=f"{label} (n={count})")
+            ax.fill_between(
+                times, mean - sem, mean + sem,
+                color=color, alpha=0.2
+            )
+
+        ax.axvline(0, color="black", linestyle="--", linewidth=0.8)
+        ax.axhline(0, color="gray", linestyle=":", linewidth=0.7)
+        ax.set_xlim(*ALPHA_WINDOW)
+        ax.set_title(f"sub-{subject}")
+        ax.set_xlabel("Time from cue onset (s)")
+        ax.set_ylabel("Alpha power change (%)")
+        ax.legend(fontsize=8)
+
+    fig.suptitle(title, fontsize=15)
     return fig
 
 
 def main():
- a=parse_args();subjects=[s.removeprefix('sub-') for s in a.subjects]
- root=resolve_project_root(a.platform,a.project_root);out=root/'derivatives'/'reports'/'QC'/'posterior_TFR_all_subjects';figs=out/'figures';figs.mkdir(parents=True,exist_ok=True);report=ParticipantPDF(str(out),'posterior_TFR_QC_'+'_'.join(subjects));eps={s:load(root,s,a) for s in subjects};av={s:available(eps[s]) for s in subjects}
- report.add_text('Subjects and channel availability','Subjects: '+', '.join('sub-'+s for s in subjects)+'\n\n'+'\n'.join(f"sub-{s}: available={', '.join(av[s]) if av[s] else 'none'}; missing={', '.join(ch for ch in ROI8 if ch not in av[s]) or 'none'}" for s in subjects),'QC overview')
- report.add_text('Analysis details','One PDF contains all requested participants. No values are averaged across participants. For each TFR result there are two figures: first the within-participant mean of PO3/POz/PO4 for all participants, then the within-participant mean of PO3/POz/PO4/O1/Oz/O2/PO7/PO8 for all participants. Each panel is one participant. Missing/rejected sensors are omitted from that participant ROI and never interpolated. Multitaper TFR: 2-31.5 Hz in 0.5-Hz steps, n_cycles=f/2, time-bandwidth=2, FFT=True, zero_mean=True, ITC=False, trial-average=True, decim=2. Stim OFF/ON use percent baseline -0.3 to -0.1 s. Difference and normalized difference use original unbaselined power. Each figure uses one shared robust symmetric colour scale across subjects so participant magnitudes can be compared visually.','QC overview')
- raw={}
- for s in subjects:
-  if not av[s]:continue
-  print(f'Computing TFRs for sub-{s}');raw[s]={c:compute(eps[s][c],av[s],a.n_jobs) for c in CONDITIONS}
- sections=[('Stim OFF','no-stim'),('Stim ON','stim'),('Stim ON - Stim OFF','difference'),('(Stim ON - Stim OFF) / (Stim ON + Stim OFF)','ratio')]
- for title,key in sections:
-  roi3={};roi8={};used3={};used8={}
-  for s in subjects:
-   if s not in raw:roi3[s]=None;roi8[s]=None;continue
-   st,no=raw[s]['stim'],raw[s]['no-stim']
-   if key=='stim':x=st.copy().apply_baseline(BASELINE,mode='percent');caption='Percent power change relative to -0.3 to -0.1 s baseline.'
-   elif key=='no-stim':x=no.copy().apply_baseline(BASELINE,mode='percent');caption='Percent power change relative to -0.3 to -0.1 s baseline.'
-   elif key=='difference':x=st.copy();x.data=st.data-no.data;caption='Stim ON minus Stim OFF from original unbaselined power.'
-   else:x=ratio(st,no);caption='(Stim ON - Stim OFF)/(Stim ON + Stim OFF) from original unbaselined power.'
-   roi3[s],used3[s]=mean_roi(x,ROI3);roi8[s],used8[s]=mean_roi(x,ROI8)
-  v3=common_lim(roi3);v8=common_lim(roi8)
-  report.add_text('Section details',f'{title}. Two subject-grid figures follow. First: mean PO3/POz/PO4. Second: mean 8 posterior channels. {caption} No across-subject averaging. Colour limits are shared across the 16 subject panels within each ROI figure.',title)
-  # ================================================
-  # Save TFR figures in pages of 8 participants
-  # ================================================
+    """Create one cumulative PDF with paginated TFR and alpha QC."""
+    args = parse_args()
+    subjects = [s.removeprefix("sub-") for s in args.subjects]
+    root = resolve_project_root(args.platform, args.project_root)
+    output_dir = (
+        root / "derivatives" / "reports" / "QC"
+        / "posterior_TFR_all_subjects"
+    )
+    figures_dir = output_dir / "figures"
+    figures_dir.mkdir(parents=True, exist_ok=True)
+    report = ParticipantPDF(
+        str(output_dir),
+        "posterior_TFR_QC_" + "_".join(subjects),
+    )
 
-  for roi_name, roi_data, color_limits in [
-      ('mean3', roi3, v3),
-      ('mean8', roi8, v8),
-  ]:
+    epochs = {s: load(root, s, args) for s in subjects}
+    good = {s: available(epochs[s]) for s in subjects}
 
-      for page_number, page_subjects in enumerate(
-          split_into_pages(subjects, subjects_per_page=8),
-          start=1
-      ):
+    availability = "\n".join(
+        f"sub-{s}: available={', '.join(good[s]) or 'none'}; "
+        f"missing={', '.join(ch for ch in ROI8 if ch not in good[s]) or 'none'}"
+        for s in subjects
+    )
+    report.add_text(
+        "Subjects and channel availability",
+        "Subjects: " + ", ".join(f"sub-{s}" for s in subjects)
+        + "\n\n" + availability,
+        "QC overview",
+    )
+    report.add_text(
+        "Analysis details",
+        "Each panel represents one participant; no group averaging. "
+        "TFRs: multitaper 2-31.5 Hz, 0.5-Hz steps, n_cycles=f/2, "
+        "time-bandwidth=2, decim=2. Stim ON/OFF descriptive power "
+        "uses percent baseline -0.3 to -0.1 s; difference and "
+        "normalized difference use unbaselined power. "
+        "Figures are paginated into grids of at most 4 rows x 2 columns. "
+        "Alpha curves: 10-12 Hz, -0.3 to 1.3 s, condition-wise "
+        "trial-level percent baseline, mean +/- SEM across trials.",
+        "QC overview",
+    )
 
-          fig = plot_grid(
-              page_subjects,
-              roi_data,
-              f'{title}: {roi_name} - page {page_number}',
-              color_limits
-          )
+    raw_tfrs = {}
+    for subject in subjects:
+        if not good[subject]:
+            continue
+        print(f"Computing TFRs for sub-{subject}")
+        raw_tfrs[subject] = {
+            condition: compute(
+                epochs[subject][condition], good[subject], args.n_jobs
+            )
+            for condition in CONDITIONS
+        }
 
-          figure_fname = figs / (
-              f'{key}_all_subjects_{roi_name}_page{page_number}.png'
-          )
+    sections = (
+        ("Stim OFF", "no-stim"),
+        ("Stim ON", "stim"),
+        ("Stim ON - Stim OFF", "difference"),
+        (
+            "(Stim ON - Stim OFF) / (Stim ON + Stim OFF)",
+            "ratio",
+        ),
+    )
 
-          report.add_figure(
-              fig,
-              str(figure_fname),
-              f'{title}: {roi_name}, page {page_number}',
-              (
-                  f'Participants: {", ".join("sub-" + s for s in page_subjects)}. '
-                  f'{caption} '
-                  'Each panel represents one participant. '
-                  'No averaging across participants.'
-              ),
-              title
-          )
+    for title, key in sections:
+        roi_results = {"mean3": {}, "mean8": {}}
+        used = {"mean3": {}, "mean8": {}}
 
-          plt.close(fig)
-  report.add_text('Channels used per participant','3-channel ROI:\n'+'\n'.join(f"sub-{s}: {', '.join(used3.get(s,[])) or 'unavailable'}" for s in subjects)+'\n\n8-channel ROI:\n'+'\n'.join(f"sub-{s}: {', '.join(used8.get(s,[])) or 'unavailable'}" for s in subjects),title)
- # ================================================
-  # Alpha power QC: 10-12 Hz, mean +/- SEM
-  # ================================================
+        for subject in subjects:
+            if subject not in raw_tfrs:
+                for roi_name in roi_results:
+                    roi_results[roi_name][subject] = None
+                continue
 
-  section = 'Alpha power QC: 10-12 Hz'
+            stim = raw_tfrs[subject]["stim"]
+            no_stim = raw_tfrs[subject]["no-stim"]
 
-  report.add_text(
-      'Alpha power QC: stimulation ON vs OFF',
-      '10-12 Hz alpha power from -0.3 to 1.3 s relative to cue onset. '
-      'Percent baseline correction (-0.3 to -0.1 s) was applied '
-      'separately to each trial and stimulation condition. '
-      'Shaded regions represent +/- SEM across trials. '
-      'No averaging across participants.',
-      section
-  )
+            if key in ("stim", "no-stim"):
+                tfr = raw_tfrs[subject][key].copy()
+                tfr.apply_baseline(BASELINE, mode="percent")
+                caption = "Condition-wise percent baseline -0.3 to -0.1 s."
+            elif key == "difference":
+                tfr = stim.copy()
+                tfr.data = stim.data - no_stim.data
+                caption = "Difference from unbaselined power."
+            else:
+                tfr = ratio(stim, no_stim)
+                caption = "Normalized difference from unbaselined power."
 
-  for subject in subjects:
+            for roi_name, channels in (("mean3", ROI3), ("mean8", ROI8)):
+                result, picked = mean_roi(tfr, channels)
+                roi_results[roi_name][subject] = result
+                used[roi_name][subject] = picked
 
-      for roi_name, roi_channels, suffix in [
-          ('Mean of 3 posterior channels', ROI3, 'mean3'),
-          ('Mean of 8 posterior channels', ROI8, 'mean8'),
-      ]:
+        report.add_text(
+            "Section details",
+            f"{title}. {caption} Each panel is one participant. "
+            "Colour limits are shared across every figure in this section.",
+            title,
+        )
 
-          # Keep only channels that are good in both conditions.
-          channels = [ch for ch in roi_channels if ch in av[subject]]
+        for roi_name in ("mean3", "mean8"):
+            limits = common_lim(roi_results[roi_name])
+            for figure_number, page_subjects in enumerate(
+                split_into_pages(subjects), start=1
+            ):
+                figure = plot_grid(
+                    page_subjects,
+                    roi_results[roi_name],
+                    f"{title}: {roi_name}",
+                    limits,
+                )
+                filename = (
+                    figures_dir
+                    / f"{key}_all_subjects_{roi_name}_{figure_number}.png"
+                )
+                report.add_figure(
+                    figure,
+                    str(filename),
+                    f"{title}: {roi_name}",
+                    "Participants: "
+                    + ", ".join(f"sub-{s}" for s in page_subjects)
+                    + ". " + caption,
+                    title,
+                )
+                plt.close(figure)
 
-          if not channels:
-              report.add_text(
-                  f'sub-{subject}: {roi_name}',
-                  'No valid channels available.',
-                  section
-              )
-              continue
+        channel_details = []
+        for roi_name in ("mean3", "mean8"):
+            channel_details.append(f"{roi_name} ROI:")
+            for subject in subjects:
+                names = used[roi_name].get(subject, [])
+                channel_details.append(
+                    f"sub-{subject}: {', '.join(names) or 'unavailable'}"
+                )
+        report.add_text(
+            "Channels used per participant",
+            "\n".join(channel_details),
+            title,
+        )
 
-          fig = plot_subject_alpha(
-              eps[subject],
-              channels,
-              subject,
-              roi_name,
-              a.n_jobs
-          )
+    alpha_section = "Alpha power QC: 10-12 Hz"
+    report.add_text(
+        "Alpha power QC: stimulation ON vs OFF",
+        "Single-trial 10-12 Hz power, -0.3 to 1.3 s relative to cue. "
+        "Percent baseline -0.3 to -0.1 s applied independently to "
+        "each trial in each condition. Mean +/- SEM across trials "
+        "within each participant, not across participants.",
+        alpha_section,
+    )
 
-          figure_fname = figs / (
-              f'sub-{subject}_alpha_10-12Hz_{suffix}_mean_SEM.png'
-          )
+    for roi_name, channels in (("mean3", ROI3), ("mean8", ROI8)):
+        alpha_results = {}
+        for subject in subjects:
+            picks = [ch for ch in channels if ch in good[subject]]
+            if not picks:
+                continue
+            print(f"Alpha QC sub-{subject}: {roi_name}")
+            alpha_results[subject] = alpha_curves(
+                epochs[subject], picks, args.n_jobs
+            )
 
-          report.add_figure(
-              fig,
-              str(figure_fname),
-              f'sub-{subject}: {roi_name}',
-              'Stim ON vs OFF, 10-12 Hz, mean +/- SEM across trials. '
-              'Baseline -0.3 to -0.1 s; '
-              f'channels: {", ".join(channels)}.',
-              section
-          )
+        for figure_number, page_subjects in enumerate(
+            split_into_pages(subjects), start=1
+        ):
+            figure = plot_alpha_grid(
+                page_subjects,
+                alpha_results,
+                f"Alpha power (10-12 Hz): {roi_name}, mean +/- SEM",
+            )
+            filename = (
+                figures_dir
+                / f"alpha_10-12Hz_{roi_name}_{figure_number}.png"
+            )
+            report.add_figure(
+                figure,
+                str(filename),
+                f"Alpha power 10-12 Hz: {roi_name}",
+                "Stim ON versus OFF; trial-level percent baseline "
+                "-0.3 to -0.1 s; shaded +/- SEM across trials. "
+                "Participants: "
+                + ", ".join(f"sub-{s}" for s in page_subjects),
+                alpha_section,
+            )
+            plt.close(figure)
 
-          plt.close(fig)
- print(f'QC report complete: {report.pdf_fname}')
-if __name__=='__main__':main()
+    print(f"QC report complete: {report.pdf_fname}")
+
+
+if __name__ == "__main__":
+    main()
