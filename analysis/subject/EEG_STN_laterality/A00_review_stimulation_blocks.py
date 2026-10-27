@@ -77,31 +77,59 @@ def review_rows(root, subjects, session, task, run):
         events = pd.read_csv(path, sep="\t", na_values=["n/a", ""])
         blocks = get_blocks(events)
         proposed = reference.get(f"sub-{sub}", [])
-        if len(blocks) != 4:
-            note = (f"Found {len(blocks)} paired block intervals, expected 4. Do not guess; "
-                    "resolve BIDS events or block boundaries.")
+        # Each pair of consecutive task blocks has the same STN condition.
+        # Eight task blocks therefore form four stimulation-condition periods.
+        if len(blocks) == 8:
+            grouped = []
+            for j in range(0, 8, 2):
+                first, second = blocks[j], blocks[j+1]
+                grouped.append({
+                    "onset_s": first["onset_s"],
+                    "offset_s": second["offset_s"],
+                    "duration_s": first["duration_s"] + second["duration_s"],
+                    "cue_left_n": first["cue_left_n"] + second["cue_left_n"],
+                    "cue_right_n": first["cue_right_n"] + second["cue_right_n"],
+                    "n_events": first["n_events"] + second["n_events"],
+                    "event_types": "Two consecutive task blocks (see BIDS events.tsv)",
+                    "source_task_blocks": f"{j+1},{j+2}",
+                    "first_task_block_onset_s": first["onset_s"],
+                    "first_task_block_offset_s": first["offset_s"],
+                    "second_task_block_onset_s": second["onset_s"],
+                    "second_task_block_offset_s": second["offset_s"],
+                })
+            note = ("Eight BIDS task blocks grouped as (1,2), (3,4), (5,6), (7,8). "
+                    "The two task blocks in each pair must have the same STN condition.")
+        elif len(blocks) == 4:
+            grouped = [{**block, "source_task_blocks": str(i),
+                        "first_task_block_onset_s": block["onset_s"],
+                        "first_task_block_offset_s": block["offset_s"],
+                        "second_task_block_onset_s": "",
+                        "second_task_block_offset_s": ""}
+                       for i, block in enumerate(blocks, 1)]
+            note = "Four BIDS block intervals detected; one interval per condition period."
         else:
-            note = ("Proposed chronology comes from the legacy stimulation sequence reference. "
-                    "Manually verify against the BIDS times and source record.")
+            grouped = []
+            note = (f"Found {len(blocks)} BIDS block intervals; expected 8 task blocks "
+                    "or 4 condition periods. This participant requires manual BIDS review.")
         if sub == "110":
-            note += " Existing source code notes stimulation was on VLM, not STN; exclude from STN-specific analysis unless source records show otherwise."
+            note += " WARNING: legacy records indicate VLM rather than STN stimulation; exclude unless independently verified."
         if len(proposed) != 4:
-            note += " No four-block sequence proposal exists; assign conditions manually after review."
-        if len(blocks) > 4:
-            note += " Extra BIDS block markers were detected; rows beyond the four proposed blocks are labelled unknown, not assigned a stimulation side."
-        for i, block in enumerate(blocks, start=1):
-            proposal = proposed[i-1] if len(proposed) == 4 and i <= 4 else "unknown"
+            note += " No complete proposed sequence available; enter the order manually."
+        for i, block in enumerate(grouped, start=1):
             output.append({
                 "subject": sub, "block_index_chronological": i, **block,
                 "source_event_file": str(path),
-                "wiki_proposed_condition": proposal,
+                "wiki_proposed_condition": proposed[i-1] if len(proposed) == 4 else "unknown",
                 "confirmed_condition": "", "confirmed": "no", "review_note": note,
             })
-        if not blocks:
+        if not grouped:
             output.append({
                 "subject": sub, "block_index_chronological": 0,
                 "onset_s": "", "offset_s": "", "duration_s": "",
-                "cue_left_n": "", "cue_right_n": "", "n_events": "", "event_types": "",
+                "cue_left_n": "", "cue_right_n": "", "n_events": "",
+                "event_types": "", "source_task_blocks": "",
+                "first_task_block_onset_s": "", "first_task_block_offset_s": "",
+                "second_task_block_onset_s": "", "second_task_block_offset_s": "",
                 "source_event_file": str(path), "wiki_proposed_condition": "unknown",
                 "confirmed_condition": "", "confirmed": "no", "review_note": note,
             })
@@ -135,7 +163,7 @@ def preserve_confirmations(rows, csv_path):
 
 def write_html(rows, html_path, csv_path):
     cols = ["subject", "block_index_chronological", "onset_s", "offset_s",
-            "duration_s", "cue_left_n", "cue_right_n", "n_events", "event_types",
+            "duration_s", "source_task_blocks", "cue_left_n", "cue_right_n", "n_events", "event_types",
             "wiki_proposed_condition", "confirmed_condition", "confirmed", "review_note"]
     html_rows = []
     for row in rows:
