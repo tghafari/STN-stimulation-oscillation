@@ -170,7 +170,7 @@ def add_text_page(pdf, title, lines):
     pdf.savefig(fig); plt.close(fig)
 
 
-def individual_alpha_peak(off_power, good, times):
+def individual_alpha_peak(off_power, good, times, half_width_hz=1.0):
     """Choose one participant-level peak from OFF-only posterior power, 7-14 Hz.
 
     Uses the existing unbaselined TFR, averaged over available posterior channels
@@ -183,7 +183,9 @@ def individual_alpha_peak(off_power, good, times):
     spectrum = np.mean([off_power[ch][:, interval].mean(axis=1) for ch in good], axis=0)
     idx = np.flatnonzero(search)[int(np.argmax(spectrum[search]))]
     peak = float(FREQS[idx])
-    band = (FREQS >= peak - 1.0 - 1e-9) & (FREQS <= peak + 1.0 + 1e-9)
+    if not np.isfinite(half_width_hz) or half_width_hz <= 0:
+        raise ValueError('alpha peak half-width must be a positive finite number of Hz')
+    band = (FREQS >= peak - half_width_hz - 1e-9) & (FREQS <= peak + half_width_hz + 1e-9)
     return peak, band, spectrum
 
 
@@ -194,7 +196,7 @@ def alpha_timecourse(power, channels, band):
     return np.mean([power[ch][band].mean(axis=0) for ch in available], axis=0), available
 
 
-def plot_peak_alpha_timeseries(times, off, left, right, peak, band, good):
+def plot_peak_alpha_timeseries(times, off, left, right, peak, band, good, half_width_hz):
     """Four panels: stimulation side x ipsi/contra, ON vs matched OFF ROI."""
     fig, axes = plt.subplots(2, 2, figsize=(13, 8), sharex=True)
     rows = [("Left STN ON", left, LEFT_POST, RIGHT_POST),
@@ -212,7 +214,7 @@ def plot_peak_alpha_timeseries(times, off, left, right, peak, band, good):
             ax.set_ylabel("Mean unbaselined alpha power")
             ax.set_xlabel("Time from cue (s)")
             ax.legend(fontsize=8)
-    fig.suptitle(f"Participant-specific alpha peak {peak:.1f} Hz (peak ±1 Hz): STN ON vs OFF")
+    fig.suptitle(f"Participant-specific alpha peak {peak:.1f} Hz (peak ±{half_width_hz:g} Hz): STN ON vs OFF")
     fig.tight_layout(rect=[0, 0, 1, .94])
     return fig
 
@@ -328,7 +330,7 @@ def analyze_subject(root, sub, review_df, args):
                                "alpha_hz": f"{ALPHA[0]}-{ALPHA[1]}",
                                "time_s": f"{ALPHA_TIME[0]}-{ALPHA_TIME[1]}",
                                "mean_unbaselined_linear_power": value})
-    peak, peak_band, peak_spectrum = individual_alpha_peak(off_ref, good, times)
+    peak, peak_band, peak_spectrum = individual_alpha_peak(off_ref, good, times, args.alpha_peak_half_width)
     peak_channels = {
         "left_stim_ipsilateral": [ch for ch in LEFT_POST if ch in good],
         "left_stim_contralateral": [ch for ch in RIGHT_POST if ch in good],
@@ -365,8 +367,8 @@ def analyze_subject(root, sub, review_df, args):
         "Sensor contrasts: difference = unbaselined P_ON - P_OFF; ratio = (P_ON-P_OFF)/(P_ON+P_OFF), calculated separately per sensor before ROI averaging.",
         "Left posterior ROI = PO3, PO7, O1; right posterior ROI = PO4, PO8, O2. Left-STN ipsilateral=left posterior, right-STN ipsilateral=right posterior. Contralateral ROIs reverse.",
         "Descriptive standalone condition TFR plots use percent baseline (-0.3,-0.1 s). Difference and ratio maps and all alpha time courses use original unbaselined linear power.",
-        "Individual alpha peak is selected ONLY from the equally weighted OFF reference, averaging available lateral posterior channels and 0.3-0.8 s after cue, within 7-14 Hz. The peak ±1 Hz band is then applied unchanged to both STN ON conditions and OFF.",
-        f"Peak frequency = {peak:.2f} Hz; selected frequency bins = {', '.join(f'{x:.1f}' for x in FREQS[peak_band])} Hz.",
+        "Individual alpha peak is selected ONLY from the equally weighted OFF reference, averaging available lateral posterior channels and 0.3-0.8 s after cue, within 7-14 Hz. The peak ±{args.alpha_peak_half_width:g} Hz band is then applied unchanged to both STN ON conditions and OFF.",
+        f"Peak frequency = {peak:.2f} Hz; half-width = {args.alpha_peak_half_width:g} Hz; selected frequency bins = {', '.join(f'{x:.1f}' for x in FREQS[peak_band])} Hz.",
         "Fixed-band alpha QC summary remains 8-12 Hz, 0.3-0.8 s. Individual peak-based time courses are additional descriptive plots.",
         "No participant-level cluster permutation significance is claimed: only one ON period exists for each STN side, and stimulation is confounded with period identity.",
     ]
@@ -375,7 +377,7 @@ def analyze_subject(root, sub, review_df, args):
         "Cue-locked EEG epochs were obtained from the final manually quality-controlled preprocessing outputs. Trials from left- and right-attention cues were pooled. Eight task blocks were grouped into four consecutive stimulation periods, with two blocks per period. The stimulation sequence was verified manually for each participant and comprised left-STN stimulation, right-STN stimulation, and two stimulation-OFF periods.",
         "Time-frequency power was estimated using multitaper decomposition (2-31.5 Hz in 0.5-Hz increments; number of cycles equal to frequency/2; time-bandwidth product 2; decimation factor 2). Trial-averaged power was computed for each period and electrode. The two OFF period power maps were combined with equal weighting to provide a common reference.",
         "Posterior channels were grouped into left (PO3, PO7, O1) and right (PO4, PO8, O2) regions. Ipsilateral and contralateral regions were defined relative to the stimulated STN. For each channel, stimulation-associated absolute and normalized power differences were calculated using unbaselined linear power; channel-level differences were subsequently averaged within each region.",
-        "Individual alpha peak frequency was identified as the maximal OFF-reference posterior power between 7 and 14 Hz, averaged across available posterior electrodes and the 0.3-0.8-s post-cue interval. Mean power across peak ±1 Hz was then plotted over time for each ipsilateral and contralateral region under stimulation ON and OFF. Fixed-band 8-12-Hz power in the 0.3-0.8-s interval was also summarized.",
+        "Individual alpha peak frequency was identified as the maximal OFF-reference posterior power between 7 and 14 Hz, averaged across available posterior electrodes and the 0.3-0.8-s post-cue interval. Mean power across peak ±{args.alpha_peak_half_width:g} Hz was then plotted over time for each ipsilateral and contralateral region under stimulation ON and OFF. Fixed-band 8-12-Hz power in the 0.3-0.8-s interval was also summarized.",
         "Baseline-normalized percent-change maps were used only for descriptive plots of individual stimulation conditions; neither the difference/ratio maps nor alpha power time courses were baseline corrected. Because stimulation side was manipulated in one period per side, analyses were descriptive and no participant-level permutation significance was inferred.",
         f"PARTICIPANT-SPECIFIC: sub-{sub}; alpha peak {peak:.1f} Hz; retained epochs OFF={off_count}, left-STN ON={len(split_blocks['stim_left'])}, right-STN ON={len(split_blocks['stim_right'])}.",
     ]
@@ -412,7 +414,7 @@ def analyze_subject(root, sub, review_df, args):
         add_text_page(pdf, "Analysis details", methods)
         add_text_page(pdf, "Methods — manuscript-ready", manuscript)
         peak_fig = plot_peak_alpha_timeseries(times, off_ref, left_power, right_power,
-                                               peak, peak_band, good)
+                                               peak, peak_band, good, args.alpha_peak_half_width)
         pdf.savefig(peak_fig); plt.close(peak_fig)
         # Condition-wise descriptive views with percent baseline; contrasts stay raw.
         for title, channels_data in [
@@ -454,7 +456,8 @@ def analyze_subject(root, sub, review_df, args):
     metadata = {
         "subject": sub,
         "individual_alpha_peak_hz": peak,
-        "individual_alpha_peak_band_hz": [peak - 1.0, peak + 1.0],
+        "individual_alpha_peak_band_hz": [peak - args.alpha_peak_half_width, peak + args.alpha_peak_half_width],
+        "individual_alpha_peak_half_width_hz": args.alpha_peak_half_width,
         "individual_alpha_frequency_bins_hz": FREQS[peak_band].tolist(),
         "roi_channels_used": peak_channels,
         "bids_events_and_cleaned_epochs_by_period": block_counts,
@@ -487,8 +490,12 @@ def main():
     p.add_argument("--platform", choices=["mac", "bluebear"], default="mac")
     p.add_argument("--project-root", default=None)
     p.add_argument("--n-jobs", type=int, default=4)
+    p.add_argument("--alpha-peak-half-width", type=float, default=1.0,
+                   help="Hz on either side of participant alpha peak (default: 1.0).")
     p.add_argument("--confirmation-csv", required=True)
     a = p.parse_args()
+    if not np.isfinite(a.alpha_peak_half_width) or a.alpha_peak_half_width <= 0:
+        p.error("--alpha-peak-half-width must be positive and finite")
     root = resolve_project_root(a.platform, a.project_root)
     review_df = pd.read_csv(a.confirmation_csv, dtype=str).fillna("")
     analyze_subject(root, a.subject.removeprefix("sub-"), review_df, a)

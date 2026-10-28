@@ -7,6 +7,7 @@ and analysed immediately before moving on to the next participant.
 """
 from __future__ import annotations
 import argparse
+import math
 import sys
 from pathlib import Path
 import pandas as pd
@@ -93,9 +94,13 @@ def main():
     p.add_argument("--platform", choices=["mac", "bluebear"], default="mac")
     p.add_argument("--project-root", default=None)
     p.add_argument("--n-jobs", type=int, default=4)
+    p.add_argument("--alpha-peak-half-width", type=float, default=1.0,
+                   help="Hz on either side of each participant alpha peak (default 1.0).")
     p.add_argument("--review-only", action="store_true",
                    help="Interactive confirmation only, no TFR calculations.")
     args = p.parse_args()
+    if not math.isfinite(args.alpha_peak_half_width) or args.alpha_peak_half_width <= 0:
+        p.error("--alpha-peak-half-width must be positive and finite")
     subjects = [str(s).removeprefix("sub-") for s in args.subjects]
     root = resolve_project_root(args.platform, args.project_root)
     out = root / "derivatives" / "reports" / "group" / "EEG_STN_laterality"
