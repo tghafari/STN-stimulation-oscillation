@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
-# -*- coding: utf-8 -*-
 """A02_three_channel_TFR.py: processing and analysis overview
 
-Read cleaned cue epochs; combine left/right attention; multitaper TFR 2-30 Hz in 1-Hz steps, n_cycles=f/2; compare stimulation conditions in PO3/PO4/POz; save TFR and participant report. Condition display baseline -0.3..-0.1 s.
+Read cleaned cue epochs, combine left/right attention, and compute
+multitaper TFRs (2-30 Hz, 1-Hz steps, cycles = frequency / 2).
+Show condition power with percent baseline (-0.3, -0.1 s); compute
+stim-minus-no-stim difference and normalized ratio from raw power.
+Report absolute alpha power checks (8-12 Hz, 0.3-0.8 s).
 
 Workflow order: run this posterior-channel pipeline FIRST for each subject;
 then run EEG_all_channels/run_subject_pipeline.py on its raw BIDS output.
@@ -15,12 +18,15 @@ import os
 import os.path as op
 import sys
 
-import numpy as np
 import matplotlib.pyplot as plt
 import mne
+import numpy as np
 from mne_bids import BIDSPath
 
-GITHUB_ROOT = r'/Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/BEAR_outage/GitHub/STN-stimulation-oscillation'
+GITHUB_ROOT = (
+    r'/Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/'
+    r'BEAR_outage/GitHub/STN-stimulation-oscillation'
+)
 UTILS_DIR = os.path.join(GITHUB_ROOT, 'analysis', 'utils')
 
 if GITHUB_ROOT not in sys.path:
@@ -35,7 +41,10 @@ session = '01'
 task = 'SpAtt'
 run = '01'
 eeg_suffix = 'eeg'
-project_root = '/Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/BEAR_outage/STN-in-PD'  # local folder
+project_root = (
+    '/Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/'
+    'BEAR_outage/STN-in-PD'
+)
 bids_root = op.join(project_root, 'data', 'BIDS')
 posterior_file = op.join(
     bids_root,
@@ -54,8 +63,15 @@ else:
 
 baseline = (-0.3, -0.1)
 
-bids_path = BIDSPath(subject=subject, session=session, task=task, run=run,
-                     root=bids_root, datatype='eeg', suffix=eeg_suffix)
+bids_path = BIDSPath(
+    subject=subject,
+    session=session,
+    task=task,
+    run=run,
+    root=bids_root,
+    datatype='eeg',
+    suffix=eeg_suffix,
+)
 deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)
 fig_folder = op.join(project_root, 'derivatives', 'figures', f'sub-{subject}')
 report_folder = op.join(project_root, 'derivatives', 'reports', f'sub-{subject}')
@@ -76,7 +92,11 @@ for label in ['no-stim', 'stim']:
     if missing:
         raise RuntimeError(f'Missing posterior channels: {missing}')
 
-    epochs = epochs[['cue_onset_right', 'cue_onset_left']].copy().pick(posterior_channels)
+    epochs = (
+        epochs[['cue_onset_right', 'cue_onset_left']]
+        .copy()
+        .pick(posterior_channels)
+    )
 
     # Combined attention-right and attention-left trials, as requested.
     tfr_raw = epochs.compute_tfr(
@@ -102,8 +122,16 @@ for label in ['no-stim', 'stim']:
 
     fig, axes = plt.subplots(1, 3, figsize=(15, 4), constrained_layout=True)
     for ax, ch in zip(axes, posterior_channels):
-        tfr_plot.plot(picks=ch, tmin=-0.3, tmax=1.4, baseline=None,
-                      mode=None, axes=ax, show=False, colorbar=True)
+        tfr_plot.plot(
+            picks=ch,
+            tmin=-0.3,
+            tmax=1.4,
+            baseline=None,
+            mode=None,
+            axes=ax,
+            show=False,
+            colorbar=True,
+        )
         ax.set_title(f'{label}: {ch}')
 
     report.add_figure(
@@ -119,7 +147,10 @@ difference = tfrs_raw['stim'].copy()
 difference.data = tfrs_raw['stim'].data - tfrs_raw['no-stim'].data
 
 # Validate absolute power and signed contrasts in the alpha analysis window.
-np.testing.assert_allclose(difference.data, tfrs_raw['stim'].data - tfrs_raw['no-stim'].data)
+np.testing.assert_allclose(
+    difference.data,
+    tfrs_raw['stim'].data - tfrs_raw['no-stim'].data,
+)
 alpha_f = (difference.freqs >= 8) & (difference.freqs <= 12)
 alpha_t = (difference.times >= 0.3) & (difference.times <= 0.8)
 power_checks = {}
@@ -127,21 +158,45 @@ for ch in posterior_channels:
     idx = difference.ch_names.index(ch)
     st = float(tfrs_raw['stim'].data[idx][np.ix_(alpha_f, alpha_t)].mean())
     no = float(tfrs_raw['no-stim'].data[idx][np.ix_(alpha_f, alpha_t)].mean())
-    power_checks[ch] = {'stim': st, 'no_stim': no, 'stim_minus_no_stim': st - no}
-    print(f'{ch} | 8-12 Hz, 0.3-0.8 s | stim={st:.6e}, no-stim={no:.6e}, difference={st-no:.6e}')
-report.add_text('Absolute TFR power checks (8-12 Hz, 0.3-0.8 s)',
-                '\\n'.join(f'{ch}: stim={v["stim"]:.6e}, no-stim={v["no_stim"]:.6e}, stim-no-stim={v["stim_minus_no_stim"]:.6e}' for ch, v in power_checks.items()),
-                'Time-frequency analysis')
+    power_checks[ch] = {
+        'stim': st,
+        'no_stim': no,
+        'stim_minus_no_stim': st - no,
+    }
+    print(
+        f'{ch} | 8-12 Hz, 0.3-0.8 s | '
+        f'stim={st:.6e}, no-stim={no:.6e}, difference={st-no:.6e}'
+    )
+report.add_text(
+    'Absolute TFR power checks (8-12 Hz, 0.3-0.8 s)',
+    '\\n'.join(
+        f'{ch}: stim={values["stim"]:.6e}, '
+        f'no-stim={values["no_stim"]:.6e}, '
+        f'stim-no-stim={values["stim_minus_no_stim"]:.6e}'
+        for ch, values in power_checks.items()
+    ),
+    'Time-frequency analysis',
+)
 
 def symmetric_limits(tfr):
+    """Return zero-centred colour limits for a signed TFR."""
     vmax = float(np.nanmax(np.abs(tfr.data)))
     return (-vmax, vmax) if np.isfinite(vmax) and vmax > 0 else (-1., 1.)
 
 fig_diff, axes = plt.subplots(1, 3, figsize=(15, 4), constrained_layout=True)
 for ax, ch in zip(axes, posterior_channels):
-    difference.plot(picks=ch, tmin=-0.3, tmax=1.4, baseline=None,
-                    mode=None, axes=ax, show=False, colorbar=True,
-                    cmap='RdBu_r', vlim=symmetric_limits(difference))
+    difference.plot(
+        picks=ch,
+        tmin=-0.3,
+        tmax=1.4,
+        baseline=None,
+        mode=None,
+        axes=ax,
+        show=False,
+        colorbar=True,
+        cmap='RdBu_r',
+        vlim=symmetric_limits(difference),
+    )
     ax.set_title(f'Stim - no-stim: {ch}')
 
 report.add_figure(
@@ -161,9 +216,18 @@ np.testing.assert_allclose(ratio.data, difference.data / (denom + eps))
 
 fig_ratio, axes = plt.subplots(1, 3, figsize=(15, 4), constrained_layout=True)
 for ax, ch in zip(axes, posterior_channels):
-    ratio.plot(picks=ch, tmin=-0.3, tmax=1.4, baseline=None,
-               mode=None, axes=ax, show=False, colorbar=True,
-               cmap='RdBu_r', vlim=symmetric_limits(ratio))
+    ratio.plot(
+        picks=ch,
+        tmin=-0.3,
+        tmax=1.4,
+        baseline=None,
+        mode=None,
+        axes=ax,
+        show=False,
+        colorbar=True,
+        cmap='RdBu_r',
+        vlim=symmetric_limits(ratio),
+    )
     ax.set_title(f'Ratio: {ch}')
 
 report.add_figure(
@@ -174,7 +238,8 @@ report.add_figure(
     'Time-frequency analysis'
 )
 
-subject_notes = input(                                                  # to add any notes to the PDF report for this subject, e.g. about data quality, artifacts, etc.
+# Add optional notes about artifacts and data quality to the participant PDF.
+subject_notes = input(
     f"\nFinal notes for sub-{subject} (press Enter to skip): "
 ).strip()
 
