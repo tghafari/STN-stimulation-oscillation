@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Participant-specific STN laterality TFR analysis, using confirmed block labels."""
 from __future__ import annotations
-import argparse, json, sys
+import argparse, json, sys, textwrap
 from pathlib import Path
 
 import numpy as np
@@ -151,17 +151,71 @@ def make_tfr_grid(tfrs, times, title, scale, unit):
     return fig
 
 def add_text_page(pdf, title, lines):
+    """Add readable, wrapped text pages to the participant PDF."""
     fig = plt.figure(figsize=(11.7, 8.3))
-    fig.text(0.06, 0.94, title, fontsize=16, weight="bold", va="top")
-    y = 0.88
+    fig.text(.06, .94, title, fontsize=16, weight="bold", va="top")
+    y = .88
     for line in lines:
-        fig.text(0.06, y, str(line), fontsize=9.5, va="top", wrap=True)
-        y -= 0.045
-        if y < 0.08:
-            pdf.savefig(fig); plt.close(fig)
-            fig = plt.figure(figsize=(11.7, 8.3))
-            y = 0.92
+        for wrapped in textwrap.wrap(str(line), width=115, break_long_words=False,
+                                     break_on_hyphens=False) or [""]:
+            if y < .075:
+                pdf.savefig(fig); plt.close(fig)
+                fig = plt.figure(figsize=(11.7, 8.3))
+                fig.text(.06, .95, title + " (continued)", fontsize=14,
+                         weight="bold", va="top")
+                y = .88
+            fig.text(.06, y, wrapped, fontsize=9.5, va="top")
+            y -= .029
+        y -= .022
     pdf.savefig(fig); plt.close(fig)
+
+
+def individual_alpha_peak(off_power, good, times):
+    """Choose one participant-level peak from OFF-only posterior power, 7-14 Hz.
+
+    Uses the existing unbaselined TFR, averaged over available posterior channels
+    and the prespecified 0.3-0.8 s window. Selection is independent of ON effects.
+    """
+    search = (FREQS >= 7.0) & (FREQS <= 14.0)
+    interval = (times >= ALPHA_TIME[0]) & (times <= ALPHA_TIME[1])
+    if not search.any() or not interval.any():
+        raise ValueError("Peak-search frequency/time window is unavailable.")
+    spectrum = np.mean([off_power[ch][:, interval].mean(axis=1) for ch in good], axis=0)
+    idx = np.flatnonzero(search)[int(np.argmax(spectrum[search]))]
+    peak = float(FREQS[idx])
+    band = (FREQS >= peak - 1.0 - 1e-9) & (FREQS <= peak + 1.0 + 1e-9)
+    return peak, band, spectrum
+
+
+def alpha_timecourse(power, channels, band):
+    available = [ch for ch in channels if ch in power]
+    if not available:
+        raise ValueError("No available EEG channels in requested ROI.")
+    return np.mean([power[ch][band].mean(axis=0) for ch in available], axis=0), available
+
+
+def plot_peak_alpha_timeseries(times, off, left, right, peak, band, good):
+    """Four panels: stimulation side x ipsi/contra, ON vs matched OFF ROI."""
+    fig, axes = plt.subplots(2, 2, figsize=(13, 8), sharex=True)
+    rows = [("Left STN ON", left, LEFT_POST, RIGHT_POST),
+            ("Right STN ON", right, RIGHT_POST, LEFT_POST)]
+    for i, (name, on, ipsi, contra) in enumerate(rows):
+        for j, (relation, roi) in enumerate((("Ipsilateral", ipsi), ("Contralateral", contra))):
+            ax = axes[i, j]
+            on_series, used = alpha_timecourse(on, roi, band)
+            off_series, _ = alpha_timecourse(off, roi, band)
+            ax.plot(times, off_series, label="STN OFF", lw=1.8)
+            ax.plot(times, on_series, label=name, lw=1.8)
+            ax.axvline(0, color="k", ls="--", lw=.7)
+            ax.set_xlim(-.5, 1.5)
+            ax.set_title(f"{name} | {relation}: {', '.join(used)}", fontsize=10)
+            ax.set_ylabel("Mean unbaselined alpha power")
+            ax.set_xlabel("Time from cue (s)")
+            ax.legend(fontsize=8)
+    fig.suptitle(f"Participant-specific alpha peak {peak:.1f} Hz (peak ±1 Hz): STN ON vs OFF")
+    fig.tight_layout(rect=[0, 0, 1, .94])
+    return fig
+
 
 def analyze_subject(root, sub, review_df, args):
     crop_file = SUBJECT_DIR / "stimulation_cropped_time.json"
@@ -274,6 +328,57 @@ def analyze_subject(root, sub, review_df, args):
                                "alpha_hz": f"{ALPHA[0]}-{ALPHA[1]}",
                                "time_s": f"{ALPHA_TIME[0]}-{ALPHA_TIME[1]}",
                                "mean_unbaselined_linear_power": value})
+    peak, peak_band, peak_spectrum = individual_alpha_peak(off_ref, good, times)
+    peak_channels = {
+        "left_stim_ipsilateral": [ch for ch in LEFT_POST if ch in good],
+        "left_stim_contralateral": [ch for ch in RIGHT_POST if ch in good],
+        "right_stim_ipsilateral": [ch for ch in RIGHT_POST if ch in good],
+        "right_stim_contralateral": [ch for ch in LEFT_POST if ch in good],
+    }
+    # BIDS cue counts are original event counts; cleaned epoch counts are post-QC.
+    # The two should not be confused, and a cleaned epoch need not survive QC.
+    block_counts = []
+    for _, row in block_rows.iterrows():
+        condition = str(row["confirmed_condition"]).strip().lower()
+        key_name = condition if condition != "off" else f"off_{int(row['block_index_chronological'])}"
+        block_counts.append({
+            "condition": key_name,
+            "task_blocks": str(row.get("source_task_blocks", "")),
+            "bids_cue_left_events": int(row["cue_left_n"]),
+            "bids_cue_right_events": int(row["cue_right_n"]),
+            "bids_total_cue_events": int(row["cue_left_n"]) + int(row["cue_right_n"]),
+            "cleaned_epochs": len(split_blocks[key_name]),
+        })
+    off_count = sum(x["cleaned_epochs"] for x in block_counts if x["condition"].startswith("off_"))
+    counts_summary = {
+        "STN OFF (both periods)": off_count,
+        "Left STN ON": len(split_blocks["stim_left"]),
+        "Right STN ON": len(split_blocks["stim_right"]),
+    }
+    methods = [
+        "ANALYSIS DETAILS (participant-specific, cue-locked EEG)",
+        "Input: final cleaned cue-onset epochs generated by the all-channel preprocessing pipeline. Both left and right attention cues were pooled within each stimulation period.",
+        "The eight task blocks are grouped into four pairs (1+2, 3+4, 5+6, 7+8), each pair sharing the same stimulation condition. STN laterality is manually confirmed in the terminal.",
+        "Event counts are cue_onset_left plus cue_onset_right events in the original BIDS events.tsv, grouped within the paired task blocks. Cleaned epoch counts are retained epochs after preprocessing and QC.",
+        "Multitaper TFR: frequencies 2-31.5 Hz, 0.5-Hz steps, cycles=f/2, time-bandwidth=2, FFT=True, zero_mean=True, decimation=2. TFR is averaged over retained trials within each stimulation period.",
+        "The two STN OFF period TFRs are averaged equally, independent of their trial counts. No chronological drift adjustment is performed.",
+        "Sensor contrasts: difference = unbaselined P_ON - P_OFF; ratio = (P_ON-P_OFF)/(P_ON+P_OFF), calculated separately per sensor before ROI averaging.",
+        "Left posterior ROI = PO3, PO7, O1; right posterior ROI = PO4, PO8, O2. Left-STN ipsilateral=left posterior, right-STN ipsilateral=right posterior. Contralateral ROIs reverse.",
+        "Descriptive standalone condition TFR plots use percent baseline (-0.3,-0.1 s). Difference and ratio maps and all alpha time courses use original unbaselined linear power.",
+        "Individual alpha peak is selected ONLY from the equally weighted OFF reference, averaging available lateral posterior channels and 0.3-0.8 s after cue, within 7-14 Hz. The peak ±1 Hz band is then applied unchanged to both STN ON conditions and OFF.",
+        f"Peak frequency = {peak:.2f} Hz; selected frequency bins = {', '.join(f'{x:.1f}' for x in FREQS[peak_band])} Hz.",
+        "Fixed-band alpha QC summary remains 8-12 Hz, 0.3-0.8 s. Individual peak-based time courses are additional descriptive plots.",
+        "No participant-level cluster permutation significance is claimed: only one ON period exists for each STN side, and stimulation is confounded with period identity.",
+    ]
+    manuscript = [
+        "METHODS — MANUSCRIPT-READY (adapt subject-specific quantities before publication)",
+        "Cue-locked EEG epochs were obtained from the final manually quality-controlled preprocessing outputs. Trials from left- and right-attention cues were pooled. Eight task blocks were grouped into four consecutive stimulation periods, with two blocks per period. The stimulation sequence was verified manually for each participant and comprised left-STN stimulation, right-STN stimulation, and two stimulation-OFF periods.",
+        "Time-frequency power was estimated using multitaper decomposition (2-31.5 Hz in 0.5-Hz increments; number of cycles equal to frequency/2; time-bandwidth product 2; decimation factor 2). Trial-averaged power was computed for each period and electrode. The two OFF period power maps were combined with equal weighting to provide a common reference.",
+        "Posterior channels were grouped into left (PO3, PO7, O1) and right (PO4, PO8, O2) regions. Ipsilateral and contralateral regions were defined relative to the stimulated STN. For each channel, stimulation-associated absolute and normalized power differences were calculated using unbaselined linear power; channel-level differences were subsequently averaged within each region.",
+        "Individual alpha peak frequency was identified as the maximal OFF-reference posterior power between 7 and 14 Hz, averaged across available posterior electrodes and the 0.3-0.8-s post-cue interval. Mean power across peak ±1 Hz was then plotted over time for each ipsilateral and contralateral region under stimulation ON and OFF. Fixed-band 8-12-Hz power in the 0.3-0.8-s interval was also summarized.",
+        "Baseline-normalized percent-change maps were used only for descriptive plots of individual stimulation conditions; neither the difference/ratio maps nor alpha power time courses were baseline corrected. Because stimulation side was manipulated in one period per side, analyses were descriptive and no participant-level permutation significance was inferred.",
+        f"PARTICIPANT-SPECIFIC: sub-{sub}; alpha peak {peak:.1f} Hz; retained epochs OFF={off_count}, left-STN ON={len(split_blocks['stim_left'])}, right-STN ON={len(split_blocks['stim_right'])}.",
+    ]
     out = root / "derivatives" / "reports" / "group" / "EEG_STN_laterality"
     out.mkdir(parents=True, exist_ok=True)
     report_path = out / f"sub-{sub}_STN_laterality_report.pdf"
@@ -294,6 +399,21 @@ def analyze_subject(root, sub, review_df, args):
             f"Channels available and used: {', '.join(good)}",
             f"Block trials: " + "; ".join(f"{k}={len(v)}" for k,v in split_blocks.items()),
         ])
+        add_text_page(pdf, "Channels in each ipsilateral / contralateral average", [
+            f"{name}: {', '.join(channels) if channels else 'NONE'} (n={len(channels)})"
+            for name, channels in peak_channels.items()
+        ])
+        add_text_page(pdf, "BIDS cue events and retained epochs per condition", [
+            f"{x['condition']} (task blocks {x['task_blocks']}): "
+            f"BIDS cues left={x['bids_cue_left_events']}, right={x['bids_cue_right_events']}, "
+            f"total={x['bids_total_cue_events']}; retained cleaned epochs={x['cleaned_epochs']}"
+            for x in block_counts
+        ] + [f"Combined OFF retained epochs = {off_count} (two periods, equally weighted for TFR)."])
+        add_text_page(pdf, "Analysis details", methods)
+        add_text_page(pdf, "Methods — manuscript-ready", manuscript)
+        peak_fig = plot_peak_alpha_timeseries(times, off_ref, left_power, right_power,
+                                               peak, peak_band, good)
+        pdf.savefig(peak_fig); plt.close(peak_fig)
         # Condition-wise descriptive views with percent baseline; contrasts stay raw.
         for title, channels_data in [
             ("Condition power: OFF reference (left/right posterior)", {"Left posterior": off_left, "Right posterior": off_right}),
@@ -333,6 +453,15 @@ def analyze_subject(root, sub, review_df, args):
 
     metadata = {
         "subject": sub,
+        "individual_alpha_peak_hz": peak,
+        "individual_alpha_peak_band_hz": [peak - 1.0, peak + 1.0],
+        "individual_alpha_frequency_bins_hz": FREQS[peak_band].tolist(),
+        "roi_channels_used": peak_channels,
+        "bids_events_and_cleaned_epochs_by_period": block_counts,
+        "cleaned_epochs_by_condition": counts_summary,
+        "analysis_details": methods,
+        "manuscript_methods": manuscript,
+
         "confirmed_blocks": block_rows.to_dict(orient="records"),
         "clean_epoch_files": {"stim": str(stim_path), "no_stim": str(off_path)},
         "block_epoch_counts": {k: len(v) for k,v in split_blocks.items()},
