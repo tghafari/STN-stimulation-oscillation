@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# -*- coding: utf-8 -*-
 """A01_ERP.py: processing and analysis overview
 
 Read cleaned epochs, combine left/right attention, average stim/no-stim trials, low-pass evokeds at 30 Hz, generate cue- and grating-aligned ERP views with configured crop/baseline, save evoked FIF and participant report figures.
@@ -14,11 +13,15 @@ import json
 import os
 import os.path as op
 import sys
+
 import matplotlib.pyplot as plt
 import mne
 from mne_bids import BIDSPath
 
-GITHUB_ROOT = r'/Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/BEAR_outage/GitHub/STN-stimulation-oscillation'
+GITHUB_ROOT = (
+    r'/Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/'
+    r'BEAR_outage/GitHub/STN-stimulation-oscillation'
+)
 UTILS_DIR = os.path.join(GITHUB_ROOT, 'analysis', 'utils')
 
 if GITHUB_ROOT not in sys.path:
@@ -33,7 +36,10 @@ session = '01'
 task = 'SpAtt'
 run = '01'
 eeg_suffix = 'eeg'
-project_root = '/Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/BEAR_outage/STN-in-PD'  # local folder
+project_root = (
+    '/Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/'
+    'BEAR_outage/STN-in-PD'
+)
 bids_root = op.join(project_root, 'data', 'BIDS')
 posterior_file = op.join(
     bids_root,
@@ -49,8 +55,15 @@ if op.exists(posterior_file):
 else:
     posterior_channels = ['PO3', 'PO4', 'POz']
 
-bids_path = BIDSPath(subject=subject, session=session, task=task, run=run,
-                     root=bids_root, datatype='eeg', suffix=eeg_suffix)
+bids_path = BIDSPath(
+    subject=subject,
+    session=session,
+    task=task,
+    run=run,
+    root=bids_root,
+    datatype='eeg',
+    suffix=eeg_suffix,
+)
 deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)
 fig_folder = op.join(project_root, 'derivatives', 'figures', f'sub-{subject}')
 report_folder = op.join(project_root, 'derivatives', 'reports', f'sub-{subject}')
@@ -60,6 +73,7 @@ report = ParticipantPDF(report_folder, subject)
 evokeds = {'cue': {}, 'grating': {}}
 
 def make_evoked(epochs, tmin, tmax, baseline, shift=None):
+    """Average, filter, crop, baseline-correct and optionally shift epochs."""
     evoked = epochs.average(method='mean').filter(l_freq=None, h_freq=30)
     evoked = evoked.copy().crop(tmin=tmin, tmax=tmax)
     evoked.apply_baseline(baseline)
@@ -69,6 +83,7 @@ def make_evoked(epochs, tmin, tmax, baseline, shift=None):
 
 
 def add_compare_fig(evoked_dict, fname, title, caption, picks, xlim):
+    """Add a posterior-channel evoked comparison figure to the report."""
     fig = mne.viz.plot_compare_evokeds(
         evoked_dict,
         picks=picks,
