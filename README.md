@@ -38,3 +38,7 @@ The posterior group folder also provides `G01_concatenated_epochs_report.py` (tr
 - Stimulation timing table: `analysis/subject/stimulation_cropped_time.json`
 
 See the README in each subject/group analysis folder for commands, processing details and outputs. The workflows require interactive review; do not treat them as unattended batch jobs.
+
+## Developer guide and PEP 8
+
+See [code style, formatting, documentation and validation](docs/DEVELOPMENT.md). Run `python -m black --check analysis` and `python -m ruff check analysis` to audit the current code before reformatting. The legacy scripts are **not yet guaranteed PEP 8-compliant**; formatting and scientific validation must be reviewed together.
