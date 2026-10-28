@@ -16,6 +16,9 @@ Steps
    for the three- and eight-channel ROIs.
 8. Add the figures and methods to the same cumulative PDF report.
 
+Prerequisites: complete the posterior pipeline and the all-channel
+subject pipeline for every participant. Use final cleaned cue epochs.
+
 The script never averages across participants. The two TFR contrasts are
 computed from original, unbaselined power; descriptive stim ON/OFF TFRs
 use percent baseline (-0.3 to -0.1 seconds). Alpha curves use trial-wise

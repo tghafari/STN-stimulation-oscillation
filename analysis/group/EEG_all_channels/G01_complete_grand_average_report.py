@@ -1,18 +1,29 @@
 #!/usr/bin/env python
 """G01_complete_grand_average_report.py: group analysis overview
 
-Requires final clean all-channel epochs from each subject after the posterior-first, all-channel-second sequence. Computes per-subject/per-good-sensor ERP (30-Hz low-pass, baseline -0.1..0 s) and multitaper TFR (2-31.5 Hz, 0.5-Hz steps, cycles=f/2, bandwidth=2, decim=2). Stim/no-stim plots use percent baseline -0.3..-0.1 s; both stim-no-stim difference and normalized ratio use unbaselined participant power. Group averaging is separately weighted per sensor, excluding bad/missing channels; saves PDF and JSON.
+Read final cleaned all-channel cue epochs for every selected subject.
+
+For each good EEG sensor, compute a subject-level ERP (30-Hz low-pass,
+baseline -0.1 to 0 s) and multitaper TFR (2-31.5 Hz, 0.5-Hz steps,
+n_cycles=f/2, time-bandwidth=2, decim=2). Display stim/no-stim TFR
+with percent baseline (-0.3 to -0.1 s). Calculate stimulation minus
+no-stimulation difference and normalized ratio from unbaselined power.
+Grand-average subjects independently per sensor, excluding missing/bad
+channels, and save PDF figures, channel counts and analysis JSON.
 
 Prepare subject inputs by running the posterior-channel subject pipeline first,
 then the all-channel pipeline when analysing the full montage.
 See this group's README for commands and output locations.
 """
 
-import argparse,json,sys
+import argparse
+import json
+import sys
 from pathlib import Path
+
 import matplotlib.pyplot as plt
-import numpy as np
 import mne
+import numpy as np
 HERE=Path(__file__).resolve().parent;ANALYSIS_DIR=HERE.parents[1]
 for p in (ANALYSIS_DIR/'subject'/'EEG_all_channels',ANALYSIS_DIR/'utils'):
     if str(p) not in sys.path:sys.path.insert(0,str(p))

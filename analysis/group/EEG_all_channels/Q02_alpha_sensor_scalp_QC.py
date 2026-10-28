@@ -10,7 +10,8 @@ For each included participant/condition:
 - attention-left/right trials are combined;
 - multitaper TFR: 2-30 Hz, 1-Hz steps, n_cycles=f/2, time-bandwidth=2,
   FFT=True, ITC=False, trial-average=True, decim=2;
-- percent baseline correction (-0.3 to -0.1 s) is applied separately to each condition;
+- percent baseline correction (-0.3 to -0.1 s) is applied separately
+  to each condition;
 - user-selected alpha frequencies are averaged;
 - stimulation and no-stimulation alpha time courses are retained.
 
@@ -18,8 +19,12 @@ Each scalp panel shows the across-participant mean +/- SEM for that sensor and
 prints its sensor-specific N. This script is descriptive QC only: no statistics.
 """
 from __future__ import annotations
-import argparse,csv,sys
+
+import argparse
+import csv
+import sys
 from pathlib import Path
+
 import matplotlib.pyplot as plt
 import mne
 import numpy as np

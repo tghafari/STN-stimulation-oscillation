@@ -1,15 +1,19 @@
 #!/usr/bin/env python
 """run_grand_average.py: group analysis overview
 
-Imports G01_complete_grand_average_report.py and adds compact scalp and posterior sensor plots without changing group contrast formulas. Accepts --subjects and --platform via the imported main. Run after every selected subject has completed both subject pipelines.
+Import the G01 grand-average pipeline and add compact scalp-layout
+and posterior-channel plots without changing numerical contrasts.
+Use --subjects and --platform. Each participant must have completed
+posterior-channel and all-channel preprocessing.
 
 Prepare subject inputs by running the posterior-channel subject pipeline first,
 then the all-channel pipeline when analysing the full montage.
 See this group's README for commands and output locations.
 """
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
+
 import G01_complete_grand_average_report as pipeline
 
 def baseline_percent_safe(x):

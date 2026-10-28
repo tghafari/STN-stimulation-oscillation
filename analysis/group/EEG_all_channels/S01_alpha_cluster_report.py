@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 """Alpha cluster-permutation analysis with a self-contained PDF report.
 
-Tests stimulation minus no-stimulation alpha power (8-12 Hz) from 0.2-1.2 s.
+Tests stimulation minus no-stimulation alpha power (8-12 Hz)
+from 0.2 to 1.2 s.
 Default power is condition-wise percent baseline (-0.3 to -0.1 s), matching the
 subject-level descriptive TFR analysis.
 
