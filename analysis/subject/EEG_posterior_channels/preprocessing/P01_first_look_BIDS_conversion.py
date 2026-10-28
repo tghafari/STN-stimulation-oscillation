@@ -1,6 +1,17 @@
 """P01_first_look_BIDS_conversion.py: processing and analysis overview
 
-Read organised BrainVision files; inspect EEG and triggers; correct/standardise annotations and event IDs; write raw EEG to BIDS with MNE-BIDS; add recording/event/impedance QC to participant report. Input: data/data-organised. Output: data/BIDS and participant report. Verify participant-specific BrainVision filenames.
+Read organised BrainVision files and convert them to BIDS.
+
+Steps
+-----
+1. Resolve participant-specific recording files, including multi-file cases.
+2. Read/concatenate BrainVision EEG and inspect trigger annotations.
+3. Rename EOG channels and identify mastoid channels.
+4. Map trigger codes to named events and save event/EEG derivatives.
+5. Write raw EEG to BIDS and append impedance/recording QC to the PDF.
+
+Inputs: data/data-organised. Outputs: data/BIDS and participant report.
+Verify recording order and trigger alignment before interpreting results.
 
 Workflow order: run this posterior-channel pipeline FIRST for each subject;
 then run EEG_all_channels/run_subject_pipeline.py on its raw BIDS output.
@@ -8,16 +19,16 @@ See the posterior README for commands and required input files.
 """
 
 
-import os.path as op
 import os
+import os.path as op
 import sys
-import pandas as pd
-
-import mne
-from mne_bids import (BIDSPath, write_raw_bids, read_raw_bids)
-import matplotlib.pyplot as plt
 from copy import deepcopy
 from pathlib import Path
+
+import matplotlib.pyplot as plt
+import mne
+import pandas as pd
+from mne_bids import BIDSPath, read_raw_bids, write_raw_bids
 
 # Automatically locate the repository and shared utilities.
 GITHUB_ROOT = Path(__file__).resolve().parents[4]

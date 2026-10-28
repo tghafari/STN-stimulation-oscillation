@@ -1,8 +1,18 @@
 # -*- coding: utf-8 -*-
-# -*- coding: utf-8 -*-
 """P03_epoching_SpAtt.py: processing and analysis overview
 
-Read condition raw FIF, filter 0.1-100 Hz, create cue epochs -0.5..1.6 s, inspect PSD/PyPREP suggestions and manually reject trials while displaying PO3/PO4/POz. Rejected epochs are removed across all channels. Save cleaned epochs and QC.
+Load condition-specific raw EEG and prepare posterior-channel cue epochs.
+
+Steps
+-----
+1. Read stimulation/no-stimulation FIF recordings.
+2. Inspect PyPREP bad-channel suggestions and PSDs in both conditions.
+3. Apply a common bad-channel set; create cue epochs (-0.5 to 1.6 s).
+4. Review PO3/PO4/POz and reject bad trials interactively.
+5. Save subject epochs, optional group-interpolated copies and QC reports.
+
+Epoch settings: baseline=None, detrend=1, reject=None.
+Manual epoch rejection removes trials across all recorded channels.
 
 Workflow order: run this posterior-channel pipeline FIRST for each subject;
 then run EEG_all_channels/run_subject_pipeline.py on its raw BIDS output.
@@ -11,17 +21,21 @@ See the posterior README for commands and required input files.
 
 
 import json
-import warnings
 import os
 import os.path as op
 import sys
+import warnings
 from copy import deepcopy
+
 import matplotlib.pyplot as plt
 import mne
 import numpy as np
 from mne_bids import BIDSPath
 
-GITHUB_ROOT = r'/Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/BEAR_outage/GitHub/STN-stimulation-oscillation'
+GITHUB_ROOT = (
+    r'/Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/'
+    r'BEAR_outage/GitHub/STN-stimulation-oscillation'
+)
 UTILS_DIR = os.path.join(GITHUB_ROOT, 'analysis', 'utils')
 
 if GITHUB_ROOT not in sys.path:
@@ -40,7 +54,10 @@ task = 'SpAtt'
 run = '01'
 eeg_suffix = 'eeg'
 extension = '.fif'
-project_root = '/Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/BEAR_outage/STN-in-PD'  # local folder
+project_root = (
+    '/Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/'
+    'BEAR_outage/STN-in-PD'
+)
 bids_root = op.join(project_root, 'data', 'BIDS')
 posterior_channels = ['PO3', 'PO4', 'POz']  # These are the ones we agreed with Ole
 GROUP_POSTERIOR_CHANNELS = ['PO3', 'PO4', 'POz']
@@ -74,9 +91,8 @@ def get_bad_channel_reasons(raw):
         ('deviation', noisy.find_bad_by_deviation),
         ('high-frequency noise', noisy.find_bad_by_hfnoise),
         ('correlation', noisy.find_bad_by_correlation),
-        ('RANSAC', noisy.find_bad_by_ransac),  # Random sample consensus, or RANSAC works by identifying the outliers 
-                                               # in a data set and estimating the desired model using data that does not 
-                                               # contain outliers
+        # RANSAC identifies outlying channels from spatial predictions.
+        ('RANSAC', noisy.find_bad_by_ransac),
     ]
     reasons = {}
     for reason, detector in detectors:

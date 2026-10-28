@@ -1,7 +1,19 @@
 # -*- coding: utf-8 -*-
 """run_subject_pipeline.py: processing and analysis overview
 
-Runs P01 BrainVision-to-BIDS, P02 stimulation segmentation, P03 cue epochs/manual QC, A01 ERP, A02 posterior TFR for --subjects or --range. Prompts for Mac/BlueBEAR; uses saved stimulation_cropped_time.json when available. Finish this runner before starting the all-channel subject runner.
+Run the posterior-channel subject pipeline for selected participants.
+
+Stages
+------
+1. P01: identify BrainVision recordings, read/concatenate, convert to BIDS.
+2. P02: collect or reuse stim/no-stim crop times and save segmented EEG.
+3. P03: inspect bad channels, epoch cues, manually reject bad trials.
+4. A01: calculate cue/grating ERP and save evoked/report figures.
+5. A02: calculate posterior multitaper TFR and signed contrasts.
+
+Use --subjects or --range. The runner prompts for Mac/BlueBEAR.
+Crop times are stored in stimulation_cropped_time.json.
+Finish this workflow before running the all-channel pipeline.
 
 Workflow order: run this posterior-channel pipeline FIRST for each subject;
 then run EEG_all_channels/run_subject_pipeline.py on its raw BIDS output.
