@@ -72,9 +72,7 @@ def parse_args():
     parser.add_argument("--session", default="01")
     parser.add_argument("--task", default="SpAtt")
     parser.add_argument("--run", default="01")
-    parser.add_argument(
-        "--platform", choices=("mac", "bluebear"), default="mac"
-    )
+    parser.add_argument("--platform", choices=("mac", "bluebear"), default="mac")
     parser.add_argument("--project-root", default=None)
     parser.add_argument("--n-jobs", type=int, default=4)
     return parser.parse_args()
@@ -85,18 +83,15 @@ def load(root, subject, args):
     epochs = {}
     for condition in CONDITIONS:
         filename = stage_path(
-            root, subject, args.session, args.task, args.run,
-            condition, "clean", "epo"
+            root, subject, args.session, args.task, args.run, condition, "clean", "epo"
         )
         if not filename.exists():
             raise FileNotFoundError(
-                f"Missing final epochs for sub-{subject}, {condition}: "
-                f"{filename}"
+                f"Missing final epochs for sub-{subject}, {condition}: " f"{filename}"
             )
         ep = mne.read_epochs(filename, preload=True)
         cues = [
-            cue for cue in ("cue_onset_right", "cue_onset_left")
-            if cue in ep.event_id
+            cue for cue in ("cue_onset_right", "cue_onset_left") if cue in ep.event_id
         ]
         epochs[condition] = ep[cues] if cues else ep
     return epochs
@@ -108,7 +103,8 @@ def available(epochs):
     no_stim = epochs["no-stim"]
     eeg_channels = stim.copy().pick("eeg").ch_names
     return [
-        ch for ch in ROI8
+        ch
+        for ch in ROI8
         if ch in eeg_channels
         and ch in no_stim.ch_names
         and ch not in stim.info["bads"]
@@ -118,26 +114,29 @@ def available(epochs):
 
 def compute(epochs, channels, n_jobs):
     """Compute trial-averaged multitaper power, without baseline."""
-    return epochs.copy().pick(channels).compute_tfr(
-        method="multitaper",
-        freqs=FREQS,
-        n_cycles=N_CYCLES,
-        time_bandwidth=TIME_BANDWIDTH,
-        use_fft=True,
-        zero_mean=True,
-        return_itc=False,
-        average=True,
-        decim=DECIM,
-        n_jobs=n_jobs,
+    return (
+        epochs.copy()
+        .pick(channels)
+        .compute_tfr(
+            method="multitaper",
+            freqs=FREQS,
+            n_cycles=N_CYCLES,
+            time_bandwidth=TIME_BANDWIDTH,
+            use_fft=True,
+            zero_mean=True,
+            return_itc=False,
+            average=True,
+            decim=DECIM,
+            n_jobs=n_jobs,
+        )
     )
 
 
 def ratio(stim, no_stim):
     """Normalized power contrast on original unbaselined power."""
     result = stim.copy()
-    result.data = (
-        (stim.data - no_stim.data)
-        / (stim.data + no_stim.data + np.finfo(float).eps)
+    result.data = (stim.data - no_stim.data) / (
+        stim.data + no_stim.data + np.finfo(float).eps
     )
     return result
 
@@ -166,9 +165,7 @@ def common_lim(subject_rois):
             values.append(finite)
     if not values:
         return None, None
-    maximum = float(
-        np.percentile(np.abs(np.concatenate(values)), ROBUST)
-    )
+    maximum = float(np.percentile(np.abs(np.concatenate(values)), ROBUST))
     if not np.isfinite(maximum) or maximum <= 0:
         return None, None
     return -maximum, maximum
@@ -177,15 +174,14 @@ def common_lim(subject_rois):
 def split_into_pages(subjects, subjects_per_page=SUBJECTS_PER_FIGURE):
     """Yield consecutive participant groups for readable figures."""
     for index in range(0, len(subjects), subjects_per_page):
-        yield subjects[index:index + subjects_per_page]
+        yield subjects[index : index + subjects_per_page]
 
 
 def plot_grid(subjects, rois, title, limits):
     """Display up to eight participant TFRs in a 4-row, 2-column grid."""
     n_rows = int(np.ceil(len(subjects) / 2))
     fig, axes = plt.subplots(
-        n_rows, 2, figsize=(12, 3.3 * n_rows),
-        constrained_layout=True
+        n_rows, 2, figsize=(12, 3.3 * n_rows), constrained_layout=True
     )
     axes = np.atleast_1d(axes).ravel()
     last_image = None
@@ -221,9 +217,7 @@ def plot_grid(subjects, rois, title, limits):
         ax.set_ylabel("Frequency (Hz)")
 
     if last_image is not None:
-        fig.colorbar(
-            last_image, ax=list(axes), shrink=0.8, label="TFR power"
-        )
+        fig.colorbar(last_image, ax=list(axes), shrink=0.8, label="TFR power")
     fig.suptitle(title, fontsize=15)
     return fig
 
@@ -236,31 +230,34 @@ def alpha_curves(epochs_pair, channels, n_jobs):
     """
     curves = {}
     for condition in ("no-stim", "stim"):
-        tfr = epochs_pair[condition].copy().pick(channels).compute_tfr(
-            method="multitaper",
-            freqs=FREQS,
-            n_cycles=N_CYCLES,
-            time_bandwidth=TIME_BANDWIDTH,
-            use_fft=True,
-            zero_mean=True,
-            return_itc=False,
-            average=False,
-            decim=DECIM,
-            n_jobs=n_jobs,
+        tfr = (
+            epochs_pair[condition]
+            .copy()
+            .pick(channels)
+            .compute_tfr(
+                method="multitaper",
+                freqs=FREQS,
+                n_cycles=N_CYCLES,
+                time_bandwidth=TIME_BANDWIDTH,
+                use_fft=True,
+                zero_mean=True,
+                return_itc=False,
+                average=False,
+                decim=DECIM,
+                n_jobs=n_jobs,
+            )
         )
         tfr.apply_baseline(BASELINE, mode="percent")
         freq_mask = (tfr.freqs >= 10) & (tfr.freqs <= 12)
-        time_mask = (
-            (tfr.times >= ALPHA_WINDOW[0])
-            & (tfr.times <= ALPHA_WINDOW[1])
-        )
+        time_mask = (tfr.times >= ALPHA_WINDOW[0]) & (tfr.times <= ALPHA_WINDOW[1])
         trials = tfr.data[:, :, freq_mask, :].mean(axis=(1, 2))
         trials = trials[:, time_mask]
         count = len(trials)
         mean = trials.mean(axis=0)
         sem = (
             trials.std(axis=0, ddof=1) / np.sqrt(count)
-            if count > 1 else np.zeros_like(mean)
+            if count > 1
+            else np.zeros_like(mean)
         )
         curves[condition] = (tfr.times[time_mask], mean, sem, count)
     return curves
@@ -270,8 +267,7 @@ def plot_alpha_grid(subjects, curves, title):
     """Plot alpha ON/OFF mean +/- SEM in the same 4 x 2 TFR layout."""
     n_rows = int(np.ceil(len(subjects) / 2))
     fig, axes = plt.subplots(
-        n_rows, 2, figsize=(12, 3.3 * n_rows),
-        constrained_layout=True
+        n_rows, 2, figsize=(12, 3.3 * n_rows), constrained_layout=True
     )
     axes = np.atleast_1d(axes).ravel()
 
@@ -291,10 +287,7 @@ def plot_alpha_grid(subjects, curves, title):
         ):
             times, mean, sem, count = curves[subject][condition]
             ax.plot(times, mean, color=color, label=f"{label} (n={count})")
-            ax.fill_between(
-                times, mean - sem, mean + sem,
-                color=color, alpha=0.2
-            )
+            ax.fill_between(times, mean - sem, mean + sem, color=color, alpha=0.2)
 
         ax.axvline(0, color="black", linestyle="--", linewidth=0.8)
         ax.axhline(0, color="gray", linestyle=":", linewidth=0.7)
@@ -313,10 +306,7 @@ def main():
     args = parse_args()
     subjects = [s.removeprefix("sub-") for s in args.subjects]
     root = resolve_project_root(args.platform, args.project_root)
-    output_dir = (
-        root / "derivatives" / "reports" / "QC"
-        / "posterior_TFR_all_subjects"
-    )
+    output_dir = root / "derivatives" / "reports" / "QC" / "posterior_TFR_all_subjects"
     figures_dir = output_dir / "figures"
     figures_dir.mkdir(parents=True, exist_ok=True)
     report = ParticipantPDF(
@@ -334,8 +324,7 @@ def main():
     )
     report.add_text(
         "Subjects and channel availability",
-        "Subjects: " + ", ".join(f"sub-{s}" for s in subjects)
-        + "\n\n" + availability,
+        "Subjects: " + ", ".join(f"sub-{s}" for s in subjects) + "\n\n" + availability,
         "QC overview",
     )
     report.add_text(
@@ -357,9 +346,7 @@ def main():
             continue
         print(f"Computing TFRs for sub-{subject}")
         raw_tfrs[subject] = {
-            condition: compute(
-                epochs[subject][condition], good[subject], args.n_jobs
-            )
+            condition: compute(epochs[subject][condition], good[subject], args.n_jobs)
             for condition in CONDITIONS
         }
 
@@ -422,8 +409,7 @@ def main():
                     limits,
                 )
                 filename = (
-                    figures_dir
-                    / f"{key}_all_subjects_{roi_name}_{figure_number}.png"
+                    figures_dir / f"{key}_all_subjects_{roi_name}_{figure_number}.png"
                 )
                 report.add_figure(
                     figure,
@@ -431,7 +417,8 @@ def main():
                     f"{title}: {roi_name}",
                     "Participants: "
                     + ", ".join(f"sub-{s}" for s in page_subjects)
-                    + ". " + caption,
+                    + ". "
+                    + caption,
                     title,
                 )
                 plt.close(figure)
@@ -467,9 +454,7 @@ def main():
             if not picks:
                 continue
             print(f"Alpha QC sub-{subject}: {roi_name}")
-            alpha_results[subject] = alpha_curves(
-                epochs[subject], picks, args.n_jobs
-            )
+            alpha_results[subject] = alpha_curves(epochs[subject], picks, args.n_jobs)
 
         for figure_number, page_subjects in enumerate(
             split_into_pages(subjects), start=1
@@ -479,18 +464,14 @@ def main():
                 alpha_results,
                 f"Alpha power (10-12 Hz): {roi_name}, mean +/- SEM",
             )
-            filename = (
-                figures_dir
-                / f"alpha_10-12Hz_{roi_name}_{figure_number}.png"
-            )
+            filename = figures_dir / f"alpha_10-12Hz_{roi_name}_{figure_number}.png"
             report.add_figure(
                 figure,
                 str(filename),
                 f"Alpha power 10-12 Hz: {roi_name}",
                 "Stim ON versus OFF; trial-level percent baseline "
                 "-0.3 to -0.1 s; shaded +/- SEM across trials. "
-                "Participants: "
-                + ", ".join(f"sub-{s}" for s in page_subjects),
+                "Participants: " + ", ".join(f"sub-{s}" for s in page_subjects),
                 alpha_section,
             )
             plt.close(figure)
