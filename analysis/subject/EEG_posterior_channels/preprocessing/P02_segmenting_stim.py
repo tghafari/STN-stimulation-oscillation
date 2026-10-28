@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
-# -*- coding: utf-8 -*-
 """P02_segmenting_stim.py: processing and analysis overview
 
-Read raw BIDS EEG, crop stimulation/no-stimulation intervals (one or two kept pieces), concatenate retained pieces, inspect condition PSDs and save condition-specific raw FIF and participant report figures. The runner stores timing decisions in analysis/subject/stimulation_cropped_time.json.
+Read raw BIDS EEG and select stimulation/no-stimulation intervals.
+Concatenate the retained pieces, inspect their PSDs before low-pass
+filtering, filter 0.1-100 Hz, and save condition-specific raw FIF files.
+The subject runner supplies crop times from stimulation_cropped_time.json.
 
 Workflow order: run this posterior-channel pipeline FIRST for each subject;
 then run EEG_all_channels/run_subject_pipeline.py on its raw BIDS output.
@@ -13,10 +15,14 @@ See the posterior README for commands and required input files.
 import os
 import os.path as op
 import sys
+
 import mne
 from mne_bids import BIDSPath, read_raw_bids
 
-GITHUB_ROOT = r'/Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/BEAR_outage/GitHub/STN-stimulation-oscillation'
+GITHUB_ROOT = (
+    r'/Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/'
+    r'BEAR_outage/GitHub/STN-stimulation-oscillation'
+)
 UTILS_DIR = os.path.join(GITHUB_ROOT, 'analysis', 'utils')
 
 if GITHUB_ROOT not in sys.path:
@@ -32,10 +38,20 @@ task = 'SpAtt'
 run = '01'
 eeg_suffix = 'eeg'
 extension = '.fif'
-project_root = '/Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/BEAR_outage/STN-in-PD'  # local folder
+project_root = (
+    '/Users/taraghafari/Desktop/Desktop - Tara’s MacBook Pro/'
+    'BEAR_outage/STN-in-PD'
+)
 bids_root = op.join(project_root, 'data', 'BIDS')
-bids_path = BIDSPath(subject=subject, session=session, task=task, run=run,
-                     root=bids_root, datatype='eeg', suffix=eeg_suffix)
+bids_path = BIDSPath(
+    subject=subject,
+    session=session,
+    task=task,
+    run=run,
+    root=bids_root,
+    datatype='eeg',
+    suffix=eeg_suffix,
+)
 deriv_folder = op.join(bids_root, 'derivatives', 'sub-' + subject)
 fig_folder = op.join(project_root, 'derivatives', 'figures', f'sub-{subject}')
 report_folder = op.join(project_root, 'derivatives', 'reports', f'sub-{subject}')
@@ -43,13 +59,19 @@ os.makedirs(deriv_folder, exist_ok=True)
 os.makedirs(fig_folder, exist_ok=True)
 report = ParticipantPDF(report_folder, subject)
 
-raw = read_raw_bids(bids_path=bids_path, verbose=True, extra_params={'preload': True})
+raw = read_raw_bids(
+    bids_path=bids_path,
+    verbose=True,
+    extra_params={'preload': True},
+)
 raw.plot()  # visual confirmation of your saved crop times
 
 # Keep and extend your existing crop dictionary. Four numbers mean two kept pieces;
 # the interval between the pieces is not included in the concatenated output.
 stimulation_cropped_time = {
-    'sub-107_no-stim': [15, 974], 'sub-107_stim': [1000, 1845],}
+    'sub-107_no-stim': [15, 974],
+    'sub-107_stim': [1000, 1845],
+}
 #     'sub-108_no-stim': [8, 890], 'sub-108_stim': [930, 1882],
 #     'sub-110_no-stim': [905, 1711], 'sub-110_stim': [0, 840],
 #     'sub-102_no-stim': [0, 965], 'sub-102_stim': [1490, 2230],
@@ -66,6 +88,7 @@ stimulation_cropped_time = {
 # from the time series that first half is stim on second half is stim off.
 
 def make_segment(label):
+    """Return the condition-specific raw segment and its crop times."""
     times = stimulation_cropped_time[f'sub-{subject}_{label}']
     if len(times) not in (2, 4):
         raise ValueError(f'{label} must contain 2 or 4 crop times, got {times}')
@@ -73,26 +96,35 @@ def make_segment(label):
     if len(times) == 4:
         pieces.append(raw.copy().crop(tmin=times[2], tmax=times[3]))
     # Concatenation excludes the section between the retained pieces.
-    segment = pieces[0] if len(pieces) == 1 else mne.concatenate_raws(pieces)
+    segment = (
+        pieces[0]
+        if len(pieces) == 1
+        else mne.concatenate_raws(pieces)
+    )
     return segment, times
 
 for label in ['no-stim', 'stim']:
     suffix = label
     segment, times = make_segment(label)
-    # PSD before the 100-Hz low-pass, so the 130-Hz stimulation peak remains visible.
+    # PSD before the 100-Hz low-pass preserves the 130-Hz stimulation peak.
     fmax = min(200, segment.info['sfreq'] / 2 - 0.1)
     fig_psd = segment.compute_psd(fmin=0.1, fmax=fmax).plot(show=False)
-    report.add_figure(fig_psd, op.join(fig_folder, f'P04_{label}_PSD_before_filter.png'),
-                      f'{label} PSD before filtering or any other processing.',
-                      f'Used to check whether a peak near 130 Hz is present. Kept ranges: {times}',
-                      'Stimulation segmentation')
+    report.add_figure(
+        fig_psd,
+        op.join(fig_folder, f'P04_{label}_PSD_before_filter.png'),
+        f'{label} PSD before filtering or any other processing.',
+        f'Check for a peak near 130 Hz. Kept ranges: {times}',
+        'Stimulation segmentation',
+    )
 
     # Apply the requested analysis filter only after the 130-Hz QC PSD.
     segment.filter(l_freq=0.1, h_freq=100.0)
     output = op.join(deriv_folder, bids_path.basename + f'_{suffix}_raw.fif')
     segment.save(output, overwrite=True)
-    report.add_text(f'{label} segment saved',
-                    f'Kept ranges: {times}\nFiltered 0.1-100 Hz\nOutput: {output}',
-                    'Stimulation segmentation')
+    report.add_text(
+        f'{label} segment saved',
+        f'Kept ranges: {times}\nFiltered 0.1-100 Hz\nOutput: {output}',
+        'Stimulation segmentation',
+    )
 
 print(f'Updated PDF: {report.pdf_fname}')
