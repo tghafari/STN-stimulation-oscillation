@@ -81,3 +81,13 @@ Percent baseline correction (`-0.3 to -0.1 s`) is used only for descriptive cond
 ## Statistical limitation
 
 This report estimates and visualizes participant-specific effects. It does not claim conventional per-participant cluster-permutation significance: each participant has only one ON block per STN side and two OFF blocks, and stimulation side is fixed by block. Treating trials as freely permutable independent units would risk pseudoreplication. Block sequence is shown for confirmation but chronological effects are not modelled by design.
+
+## Configurable individual alpha peak width
+
+The default alpha band for the participant-specific time-course plots is the OFF-defined alpha peak ±1 Hz. To use a different half-width, run:
+
+```bash
+python run_all_participants.py --subjects 101 102 103 --alpha-peak-half-width 2.0
+```
+
+This selects peak ±2 Hz (total 4 Hz). For peak ±0.5 Hz, use `--alpha-peak-half-width 0.5`. The OFF-defined peak search (7–14 Hz), the fixed-band alpha summary, and all TFR contrasts remain unchanged. The chosen half-width and frequency bins are recorded in each participant report and JSON audit.
