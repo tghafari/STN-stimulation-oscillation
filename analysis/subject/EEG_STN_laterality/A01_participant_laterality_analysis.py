@@ -413,9 +413,11 @@ def analyze_subject(root, sub, review_df, args):
         "Baseline-normalized percent-change maps were used only for descriptive plots of individual stimulation conditions; neither the difference/ratio maps nor alpha power time courses were baseline corrected. Because stimulation side was manipulated in one period per side, analyses were descriptive and no participant-level permutation significance was inferred.",
         f"PARTICIPANT-SPECIFIC: sub-{sub}; alpha peak {peak:.1f} Hz; retained epochs OFF={off_count}, left-STN ON={len(split_blocks['stim_left'])}, right-STN ON={len(split_blocks['stim_right'])}.",
     ]
-    out = root / "derivatives" / "reports" / "group" / "EEG_STN_laterality"
+    # Participant-specific outputs belong with the other subject reports.
+    # Shared block-confirmation files and runner summary remain in the group folder.
+    out = root / "derivatives" / "reports" / f"sub-{sub}"
     out.mkdir(parents=True, exist_ok=True)
-    report_path = out / f"sub-{sub}_STN_laterality_report.pdf"
+    report_path = out / f"sub-{sub}_STN_laterality_analysis.pdf"
     summary_path = out / f"sub-{sub}_STN_laterality_alpha.csv"
     meta_path = out / f"sub-{sub}_STN_laterality_analysis.json"
     pd.DataFrame(alpha_rows).to_csv(summary_path, index=False)

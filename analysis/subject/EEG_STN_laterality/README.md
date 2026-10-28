@@ -97,3 +97,17 @@ This selects peak ±2 Hz (total 4 Hz). For peak ±0.5 Hz, use `--alpha-peak-half
 Before computing any participant TFR, `A02_validate_bids_epoch_mapping.py` projects the original BIDS cue-onset events through the manually saved `analysis/subject/stimulation_cropped_time.json` intervals. It then checks cue direction, unique event correspondence, chronological order, and sample timing against the final cleaned cue epochs. It determines the event sample offset from verified matches rather than assuming a fixed first-sample origin. Every retained cleaned epoch must map exactly once to one of the eight task blocks, with the correct stimulation condition. Per-condition mapping counts and offsets are written to the participant JSON audit.
 
 If a participant fails validation, **do not use old participant PDFs**. The shared crop JSON may have changed after the epochs were created; re-run the all-channel preprocessing stages for that participant to regenerate the final cleaned epochs using the new crop definitions, including manual QC. This validation does not modify EEG data or silently discard missing task blocks. No epoch concatenation is needed for combining task blocks in the same stimulation period.
+
+## Participant-specific output location
+
+Each completed participant's report and numerical audit files are saved under
+`<PROJECT_ROOT>/derivatives/reports/sub-XXX/`:
+
+- `sub-XXX_STN_laterality_analysis.pdf`
+- `sub-XXX_STN_laterality_alpha.csv`
+- `sub-XXX_STN_laterality_analysis.json`
+
+Shared confirmation files (`confirm_stimulation_blocks.csv` and `.html`) and
+`runner_summary.csv` remain under
+`<PROJECT_ROOT>/derivatives/reports/group/EEG_STN_laterality/`.
+This change does not move or delete previously generated reports; rerun a participant to create the PDF at the new location.
