@@ -91,3 +91,9 @@ python run_all_participants.py --subjects 101 102 103 --alpha-peak-half-width 2.
 ```
 
 This selects peak ±2 Hz (total 4 Hz). For peak ±0.5 Hz, use `--alpha-peak-half-width 0.5`. The OFF-defined peak search (7–14 Hz), the fixed-band alpha summary, and all TFR contrasts remain unchanged. The chosen half-width and frequency bins are recorded in each participant report and JSON audit.
+
+## Verified BIDS-to-clean-epoch mapping
+
+Before computing any participant TFR, `A02_validate_bids_epoch_mapping.py` projects the original BIDS cue-onset events through the manually saved `analysis/subject/stimulation_cropped_time.json` intervals. It then checks cue direction, unique event correspondence, chronological order, and sample timing against the final cleaned cue epochs. It determines the event sample offset from verified matches rather than assuming a fixed first-sample origin. Every retained cleaned epoch must map exactly once to one of the eight task blocks, with the correct stimulation condition. Per-condition mapping counts and offsets are written to the participant JSON audit.
+
+If a participant fails validation, **do not use old participant PDFs**. The shared crop JSON may have changed after the epochs were created; re-run the all-channel preprocessing stages for that participant to regenerate the final cleaned epochs using the new crop definitions, including manual QC. This validation does not modify EEG data or silently discard missing task blocks. No epoch concatenation is needed for combining task blocks in the same stimulation period.

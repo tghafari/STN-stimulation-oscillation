@@ -16,6 +16,8 @@ PIPELINE_DIR = SUBJECT_DIR / "EEG_all_channels"
 if str(PIPELINE_DIR) not in sys.path:
     sys.path.insert(0, str(PIPELINE_DIR))
 from pipeline_config import CONDITIONS, resolve_project_root, stage_path
+from A00_review_stimulation_blocks import events_path
+from A02_validate_bids_epoch_mapping import map_condition_epochs
 
 LEFT_POST = ("PO3", "PO7", "O1")
 RIGHT_POST = ("PO4", "PO8", "O2")
@@ -247,27 +249,57 @@ def analyze_subject(root, sub, review_df, args):
         raise RuntimeError(f"sub-{sub}: need at least one available good sensor in each posterior hemisphere; found {good}.")
     crop_stim = intervals(crop_table[key]["stim"])
     crop_off = intervals(crop_table[key]["no-stim"])
-    split_blocks = {}
+    # Reconstruct each task block directly from original BIDS cue events.
+    # This mapping validates event identity and exact sample timing, rather
+    # than assuming an Epochs.events time origin after crop/concatenation.
+    bids_file = events_path(root, sub, args.session, args.task, args.run)
+    if not bids_file.exists():
+        raise FileNotFoundError(f"Missing original BIDS events file: {bids_file}")
+    bids_events = pd.read_csv(bids_file, sep="\t")
+    task_blocks = []
     for _, row in block_rows.iterrows():
-        condition = str(row["confirmed_condition"]).strip().lower()
-        source_ep = off_epochs if condition == "off" else stim_epochs
-        source_ranges = crop_off if condition == "off" else crop_stim
-        # The eight BIDS task blocks are paired (1+2, 3+4, etc.).
-        # Select each actual task block separately, avoiding the gap between them.
-        task_ranges = [(float(row["first_task_block_onset_s"]),
-                        float(row["first_task_block_offset_s"]))]
+        task_blocks.append((
+            float(row["first_task_block_onset_s"]),
+            float(row["first_task_block_offset_s"]),
+        ))
         second_start = str(row.get("second_task_block_onset_s", "")).strip()
         second_end = str(row.get("second_task_block_offset_s", "")).strip()
         if second_start and second_end:
-            task_ranges.append((float(second_start), float(second_end)))
-        pieces = [subset_epochs_for_block(source_ep, start, end, source_ranges,
-                  f"sub-{sub} {condition} task block {j+1}")
-                  for j, (start, end) in enumerate(task_ranges)]
-        subset = pieces[0] if len(pieces) == 1 else mne.concatenate_epochs(pieces,
-                                                   add_offset=True, verbose=False)
-        name = condition if condition != "off" else f"off_{int(row['block_index_chronological'])}"
-        split_blocks[name] = subset
-
+            task_blocks.append((float(second_start), float(second_end)))
+    if len(task_blocks) != 8:
+        raise ValueError(f"sub-{sub}: expected 8 verified BIDS task blocks, got {len(task_blocks)}.")
+    mappings = {
+        "stim": map_condition_epochs(stim_epochs, bids_events, crop_stim,
+                                     task_blocks, "stim"),
+        "no-stim": map_condition_epochs(off_epochs, bids_events, crop_off,
+                                        task_blocks, "no-stim"),
+    }
+    print(f"sub-{sub}: validated BIDS/clean-epoch mapping: " +
+          "; ".join(f"{condition} {details['n_clean_epochs']}/"
+                    f"{details['n_bids_cues_in_crops']} matched, "
+                    f"sample offset={details['sample_offset']}"
+                    for condition, details in mappings.items()))
+    split_blocks = {}
+    for _, row in block_rows.iterrows():
+        condition = str(row["confirmed_condition"]).strip().lower()
+        source_key = "no-stim" if condition == "off" else "stim"
+        source_ep = off_epochs if condition == "off" else stim_epochs
+        pair = int(row["block_index_chronological"]) - 1
+        expected_task_indices = {pair * 2, pair * 2 + 1}
+        assignment = mappings[source_key]["matched_task_block_indices"]
+        mask = np.asarray([i in expected_task_indices for i in assignment], dtype=bool)
+        if not mask.any():
+            raise ValueError(f"sub-{sub}: no verified cleaned epochs in condition period {pair+1}.")
+        name = condition if condition != "off" else f"off_{pair+1}"
+        split_blocks[name] = source_ep[mask]
+    # Every retained epoch must belong to exactly one confirmed period with
+    # the correct stimulation state. No overlaps, no silent missing assignments.
+    for source_key, epochs in (("stim", stim_epochs), ("no-stim", off_epochs)):
+        selected = sum(len(ep) for label, ep in split_blocks.items()
+                       if (source_key == "stim") == (not label.startswith("off_")))
+        if selected != len(epochs):
+            raise ValueError(f"sub-{sub}: {source_key} has {len(epochs)} clean epochs "
+                             f"but only {selected} were assigned to verified blocks.")
     # Compute each block separately. The OFF reference is the equal-weight mean of
     # the two OFF block TFRs, independent of how many accepted trials each has.
     block_power, times = {}, None
@@ -400,6 +432,7 @@ def analyze_subject(root, sub, review_df, args):
             "Design limitation: one block per stimulated STN side and two OFF blocks. No conventional per-participant cluster-permutation significance test is claimed; the results are effect estimates/descriptive contrasts.",
             f"Channels available and used: {', '.join(good)}",
             f"Block trials: " + "; ".join(f"{k}={len(v)}" for k,v in split_blocks.items()),
+            "BIDS cue-to-clean-epoch timing verified by exact event sample matching before TFR estimation.",
         ])
         add_text_page(pdf, "Channels in each ipsilateral / contralateral average", [
             f"{name}: {', '.join(channels) if channels else 'NONE'} (n={len(channels)})"
@@ -468,6 +501,7 @@ def analyze_subject(root, sub, review_df, args):
         "confirmed_blocks": block_rows.to_dict(orient="records"),
         "clean_epoch_files": {"stim": str(stim_path), "no_stim": str(off_path)},
         "block_epoch_counts": {k: len(v) for k,v in split_blocks.items()},
+        "validated_bids_epoch_mapping": mappings,
         "channels_used": good,
         "off_reference": "equal-weight mean of two OFF block-level raw TFRs",
         "difference": "per sensor: raw P_stim - raw P_off; then mean sensors",
