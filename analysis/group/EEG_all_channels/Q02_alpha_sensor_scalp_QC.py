@@ -1,5 +1,7 @@
 #!/usr/bin/env python
-"""QC: scalp-layout alpha-power time courses for stimulation vs no stimulation.
+"""
+================================================================================
+QC: scalp-layout alpha-power time courses for stimulation vs no stimulation.
 
 For EACH EEG sensor independently, include every participant for whom that sensor
 is present and marked good in BOTH stimulation conditions. Therefore N may differ
@@ -17,6 +19,7 @@ For each included participant/condition:
 
 Each scalp panel shows the across-participant mean +/- SEM for that sensor and
 prints its sensor-specific N. This script is descriptive QC only: no statistics.
+================================================================================
 """
 from __future__ import annotations
 
@@ -43,7 +46,6 @@ DECIM = 2
 PLOT_WINDOW = (-0.3, 1.4)
 BASELINE = (-0.3, -0.1)
 DEFAULT_ALPHA = (8.0, 12.0)
-
 
 def args():
     p = argparse.ArgumentParser(description=__doc__)
