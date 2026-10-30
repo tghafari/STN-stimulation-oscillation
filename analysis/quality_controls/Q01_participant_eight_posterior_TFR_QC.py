@@ -150,6 +150,40 @@ def mean_roi(tfr, roi):
     result.data = result.data.mean(axis=0, keepdims=True)
     return result, channels
 
+def alpha_from_tfr(tfr):
+    """Extract 10-12 Hz alpha from a baseline-corrected ROI TFR."""
+
+    freq_mask = (
+        (tfr.freqs >= 10)
+        & (tfr.freqs <= 12)
+    )
+
+    time_mask = (
+        (tfr.times >= ALPHA_WINDOW[0])
+        & (tfr.times <= ALPHA_WINDOW[1])
+    )
+
+    # Average across channels and alpha frequencies
+    alpha = tfr.data[:, freq_mask, :].mean(axis=(0, 1))
+
+    return tfr.times[time_mask], alpha[time_mask] * 100
+
+def check_alpha_consistency(tfr, alpha_times, alpha_values):
+    """Compare alpha extracted from TFR with the QC alpha curve."""
+
+    tfr_times, tfr_alpha = alpha_from_tfr(tfr)
+
+    if not np.allclose(tfr_times, alpha_times):
+        raise ValueError("Time points do not match.")
+
+    difference = tfr_alpha - alpha_values
+
+    return {
+        "max_absolute_difference": np.max(np.abs(difference)),
+        "mean_absolute_difference": np.mean(np.abs(difference)),
+        "tfr_alpha_mean": np.mean(tfr_alpha),
+        "qc_alpha_mean": np.mean(alpha_values),
+    }
 
 def common_lim(subject_rois):
     """Robust symmetric color limits, shared across all figure pages."""
@@ -361,6 +395,68 @@ def main():
             condition: compute(epochs[subject][condition], good[subject], args.n_jobs)
             for condition in CONDITIONS
         }
+
+    consistency_results = []
+
+    for subject in subjects:
+        if subject not in raw_tfrs:
+            continue
+
+        for roi_name, roi_channels in (
+            ("mean3", ROI3),
+            ("mean8", ROI8),
+        ):
+            picks = [
+                ch for ch in roi_channels
+                if ch in good[subject]
+            ]
+
+            if not picks:
+                continue
+
+            # Calculate the existing trial-wise alpha curves
+            qc_curves = alpha_curves(
+                epochs[subject],
+                picks,
+                args.n_jobs,
+            )
+
+            for condition in ("no-stim", "stim"):
+
+                # Use the same TFR as the descriptive TFR figures
+                tfr = raw_tfrs[subject][condition].copy()
+
+                # Baseline after trial averaging
+                tfr.apply_baseline(BASELINE, mode="percent")
+
+                # Average the same posterior channels
+                roi_tfr, _ = mean_roi(tfr, picks)
+
+                # Existing QC alpha curve
+                times, alpha = qc_curves[condition]
+
+                result = check_alpha_consistency(
+                    roi_tfr,
+                    times,
+                    alpha,
+                )
+
+                consistency_results.append(
+                    f"sub-{subject}, {roi_name}, {condition}: "
+                    f"max difference = "
+                    f"{result['max_absolute_difference']:.6f}, "
+                    f"mean difference = "
+                    f"{result['mean_absolute_difference']:.6f}, "
+                    f"TFR mean = "
+                    f"{result['tfr_alpha_mean']:.6f}, "
+                    f"QC mean = "
+                    f"{result['qc_alpha_mean']:.6f}"
+                )
+    report.add_text(
+    "Alpha consistency check",
+    "\n".join(consistency_results),
+    "Alpha QC",
+    )
 
     sections = (
         ("Stim OFF", "no-stim"),

@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 import pandas as pd
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parents[1]
 SUBJECT_DIR = HERE.parent
 PIPELINE_DIR = SUBJECT_DIR / "EEG_all_channels"
 if str(PIPELINE_DIR) not in sys.path:
