@@ -221,12 +221,12 @@ def plot_participant(subject, raw, channels, counts, half_width):
     return fig, peak
 
 
-def methods_page(half_width):
+def methods_page(half_width, page_number):
     """Document all calculations in the exported PDF report."""
     fig, ax = plt.subplots(figsize=(11.7, 8.3))
     ax.axis("off")
     fig.suptitle(
-        "Methods | posterior TFRs and individual alpha curves",
+        f"Methods ({page_number}/2) | posterior TFRs and individual alpha curves",
         x=0.07, ha="left", y=0.96, fontsize=18, fontweight="bold",
     )
     paragraphs = [
@@ -282,7 +282,8 @@ def methods_page(half_width):
             "inferential statistics are performed.",
         ),
     ]
-    y = 0.88
+    paragraphs = paragraphs[:3] if page_number == 1 else paragraphs[3:]
+    y = 0.83
     import textwrap
     for heading, paragraph in paragraphs:
         ax.text(0.07, y, heading, transform=ax.transAxes, va="top",
@@ -310,9 +311,10 @@ def main():
     summary = ["subject,peak_hz,channels,n_off,n_on,status"]
 
     with PdfPages(report_path) as pdf:
-        method_fig = methods_page(args.alpha_peak_half_width)
-        pdf.savefig(method_fig)
-        plt.close(method_fig)
+        for page_number in (1, 2):
+            method_fig = methods_page(args.alpha_peak_half_width, page_number)
+            pdf.savefig(method_fig)
+            plt.close(method_fig)
         for subject in subjects:
             try:
                 epochs = load_epochs(root, subject, args)
