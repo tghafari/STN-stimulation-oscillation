@@ -12,14 +12,12 @@ OFF power (7-14 Hz; 0.3-0.8 s), and plot peak +/- 1 Hz for both conditions.
 Each participant gets one PDF page: two TFRs and one alpha time course.
 No inferential statistics or across-participant averaging are performed.
 
-run in Bash by:
-
-python analysis/group/EEG_posterior_channels/G03_individual_alpha_report.py \
-    --subjects 101 102 103 104 105 106 107 108 110 111 112 113 114 115 116 118 119 120 121 122 123
-
 The PDF and a CSV containing individual alpha peak frequencies will be saved under:
     derivatives/reports/group/EEG_posterior_channels_alpha_changes_stimOn_stimOff
 
+run in Bash by:
+    python analysis/group/EEG_posterior_channels/G03_individual_alpha_report.py \
+    --subjects 101 102 103 104 105 106 107 108 110 111 112 113 114 115 116 118 119 120 121 122 123
 """
 
 import argparse
@@ -43,7 +41,7 @@ from pipeline_config import resolve_project_root, stage_path
 ROI8 = ("PO3", "POz", "PO4", "O1", "Oz", "O2", "PO7", "PO8")
 FREQS = np.arange(2.0, 32.0, 0.5)
 BASELINE = (-0.3, -0.1)
-PEAK_SEARCH = (7.0, 14.0)
+PEAK_SEARCH = (8.0, 12.0)
 PEAK_TIME = (0.3, 0.8)
 PLOT_WINDOW = (-0.5, 1.5)
 
