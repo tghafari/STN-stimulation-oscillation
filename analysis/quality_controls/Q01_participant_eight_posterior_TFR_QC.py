@@ -25,7 +25,7 @@ use percent baseline (-0.3 to -0.1 seconds). Alpha curves use trial-wise
 percent baseline and show mean +/- SEM across trials.
 
 Run from the repository root:
-    python analysis/group/EEG_all_channels/Q01_participant_eight_posterior_TFR_QC.py \
+    python analysis/quality_controls/EEG_all_channels/Q01_participant_eight_posterior_TFR_QC.py \
         --subjects 101 102 103 104 --platform mac
 """
 
