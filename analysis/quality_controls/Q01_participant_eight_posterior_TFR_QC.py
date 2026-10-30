@@ -447,7 +447,7 @@ def main():
                 roi_tfr, _ = mean_roi(tfr, picks)
 
                 # Existing QC alpha curve
-                times, alpha = qc_curves[condition]
+                times, alpha, sem, count = qc_curves[condition]
 
                 result = check_alpha_consistency(
                     roi_tfr,
