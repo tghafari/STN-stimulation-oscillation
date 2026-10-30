@@ -274,13 +274,13 @@ def alpha_curves(epochs_pair, channels, n_jobs):
                 use_fft=True,
                 zero_mean=True,
                 return_itc=False,
-                average=True,
+                average=False,
                 decim=DECIM,
                 n_jobs=n_jobs,
             )
         )
 
-        # Baseline correction of trial-averaged power
+        # Baseline-correct each trial independently
         tfr.apply_baseline(BASELINE, mode="percent")
 
         # Select alpha frequencies
@@ -295,15 +295,29 @@ def alpha_curves(epochs_pair, channels, n_jobs):
             & (tfr.times <= ALPHA_WINDOW[1])
         )
 
-        # Average across channels and frequencies
-        alpha = tfr.data[:, freq_mask, :].mean(axis=(0, 1))
+        # Average across channels and alpha frequencies
+        # Shape: (n_trials, n_times)
+        trials = tfr.data[:, :, freq_mask, :].mean(axis=(1, 2))
+        trials = trials[:, time_mask]
 
         # Convert fractional change to percentage
-        alpha = alpha[time_mask] * 100
+        trials = trials * 100
+
+        # Calculate mean and SEM across trials
+        count = len(trials)
+        mean = trials.mean(axis=0)
+
+        sem = (
+            trials.std(axis=0, ddof=1) / np.sqrt(count)
+            if count > 1
+            else np.zeros_like(mean)
+        )
 
         curves[condition] = (
             tfr.times[time_mask],
-            alpha,
+            mean,
+            sem,
+            count,
         )
 
     return curves
@@ -331,9 +345,9 @@ def plot_alpha_grid(subjects, curves, title):
             ("no-stim", "tab:blue", "Stim OFF"),
             ("stim", "tab:orange", "Stim ON"),
         ):
-            times, mean = curves[subject][condition]
-            ax.plot(times, mean, color=color, label=f"{label}")
-            # ax.fill_between(times, mean - sem, mean + sem, color=color, alpha=0.2)
+            times, mean, sem, count = curves[subject][condition]
+            ax.plot(times, mean, color=color, label=f"{label} (n={count})")
+            ax.fill_between(times, mean - sem, mean + sem, color=color, alpha=0.2)
 
         ax.axvline(0, color="black", linestyle="--", linewidth=0.8)
         ax.axhline(0, color="gray", linestyle=":", linewidth=0.7)
