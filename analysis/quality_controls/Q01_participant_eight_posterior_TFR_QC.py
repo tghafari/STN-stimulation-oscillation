@@ -25,7 +25,7 @@ use percent baseline (-0.3 to -0.1 seconds). Alpha curves use trial-wise
 percent baseline and show mean +/- SEM across trials.
 
 Run from the repository root:
-    python analysis/quality_controls/EEG_all_channels/Q01_participant_eight_posterior_TFR_QC.py \
+    python analysis/quality_controls/Q01_participant_eight_posterior_TFR_QC.py \
         --subjects 101 102 103 104 --platform mac
 """
 
@@ -40,7 +40,7 @@ import mne
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-ANALYSIS_DIR = HERE.parents[1]
+ANALYSIS_DIR = HERE.parent
 
 for folder in (
     ANALYSIS_DIR / "subject" / "EEG_all_channels",
@@ -223,12 +223,10 @@ def plot_grid(subjects, rois, title, limits):
 
 
 def alpha_curves(epochs_pair, channels, n_jobs):
-    """Return trial-level 10-12 Hz alpha mean and SEM per condition.
+    """Compute baseline-corrected alpha after averaging trials."""
 
-    Each trial is baseline-normalized independently before averaging
-    across frequency and channels. SEM is across trials, NOT subjects.
-    """
     curves = {}
+
     for condition in ("no-stim", "stim"):
         tfr = (
             epochs_pair[condition]
@@ -242,24 +240,38 @@ def alpha_curves(epochs_pair, channels, n_jobs):
                 use_fft=True,
                 zero_mean=True,
                 return_itc=False,
-                average=False,
+                average=True,
                 decim=DECIM,
                 n_jobs=n_jobs,
             )
         )
+
+        # Baseline correction of trial-averaged power
         tfr.apply_baseline(BASELINE, mode="percent")
-        freq_mask = (tfr.freqs >= 10) & (tfr.freqs <= 12)
-        time_mask = (tfr.times >= ALPHA_WINDOW[0]) & (tfr.times <= ALPHA_WINDOW[1])
-        trials = tfr.data[:, :, freq_mask, :].mean(axis=(1, 2))
-        trials = trials[:, time_mask]
-        count = len(trials)
-        mean = trials.mean(axis=0)
-        sem = (
-            trials.std(axis=0, ddof=1) / np.sqrt(count)
-            if count > 1
-            else np.zeros_like(mean)
+
+        # Select alpha frequencies
+        freq_mask = (
+            (tfr.freqs >= 10)
+            & (tfr.freqs <= 12)
         )
-        curves[condition] = (tfr.times[time_mask], mean, sem, count)
+
+        # Select time window
+        time_mask = (
+            (tfr.times >= ALPHA_WINDOW[0])
+            & (tfr.times <= ALPHA_WINDOW[1])
+        )
+
+        # Average across channels and frequencies
+        alpha = tfr.data[:, freq_mask, :].mean(axis=(0, 1))
+
+        # Convert fractional change to percentage
+        alpha = alpha[time_mask] * 100
+
+        curves[condition] = (
+            tfr.times[time_mask],
+            alpha,
+        )
+
     return curves
 
 
@@ -285,9 +297,9 @@ def plot_alpha_grid(subjects, curves, title):
             ("no-stim", "tab:blue", "Stim OFF"),
             ("stim", "tab:orange", "Stim ON"),
         ):
-            times, mean, sem, count = curves[subject][condition]
-            ax.plot(times, mean, color=color, label=f"{label} (n={count})")
-            ax.fill_between(times, mean - sem, mean + sem, color=color, alpha=0.2)
+            times, mean = curves[subject][condition]
+            ax.plot(times, mean, color=color, label=f"{label}")
+            # ax.fill_between(times, mean - sem, mean + sem, color=color, alpha=0.2)
 
         ax.axvline(0, color="black", linestyle="--", linewidth=0.8)
         ax.axhline(0, color="gray", linestyle=":", linewidth=0.7)
