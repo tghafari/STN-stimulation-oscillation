@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Optional sensitivity tests for S02's validated G04 alpha data.
 
-Percentage effect: 100 * (mean ON - mean OFF) / mean OFF.
-The OFF denominator is recalculated for EVERY permutation. Whole
+Symmetric normalised effect: (mean ON - mean OFF) / (mean ON + mean OFF).
+Both ON and OFF means in the denominator are recalculated for EVERY permutation. Whole
 stimulation-period labels are shuffled within each participant, keeping
 two ON and two OFF periods. Participants contribute equally.
 
@@ -66,16 +66,16 @@ def read_data(path, subjects):
 
 
 def participant_effect(periods, labels, percentage=False):
-    """Compute trial-weighted ON minus OFF, optionally as % of OFF."""
+    """Compute trial-weighted ON-OFF, optionally divided by ON+OFF."""
     on = np.concatenate([x for x, flag in zip(periods, labels) if flag])
     off = np.concatenate([x for x, flag in zip(periods, labels) if not flag])
     difference = float(on.mean() - off.mean())
     if not percentage:
         return difference
-    denominator = float(off.mean())
-    if denominator <= 0:
-        raise ValueError("OFF mean is zero or negative")
-    return 100.0 * difference / denominator
+    denominator = float(on.mean() + off.mean())
+    if denominator <= 0 or not np.isfinite(denominator):
+        raise ValueError("ON + OFF mean must be finite and positive")
+    return difference / denominator
 
 
 def run_test(data, iterations, seed, percentage=False):
@@ -125,11 +125,11 @@ def main():
         data, args.n_permutations, args.seed, percentage=True
     )
     pd.DataFrame({
-        "subject": subjects, "on_minus_off_percent": percentages
-    }).to_csv(out / "participant_percentage_effects.csv", index=False)
+        "subject": subjects, "normalised_on_minus_off": percentages
+    }).to_csv(out / "participant_normalised_effects.csv", index=False)
     pd.DataFrame({
-        "permuted_group_percent": null
-    }).to_csv(out / "permutation_null_percentage.csv", index=False)
+        "permuted_group_normalised": null
+    }).to_csv(out / "permutation_null_normalised.csv", index=False)
     rows = []
     for index, subject in enumerate(subjects):
         remaining = [d for j, d in enumerate(data) if j != index]
@@ -145,7 +145,7 @@ def main():
     pd.DataFrame(rows).to_csv(
         out / "leave_one_out_absolute.csv", index=False
     )
-    print(f"Percentage ON-OFF = {observed:.5g}%, p = {p_value:.5g}")
+    print(f"Normalised (ON-OFF)/(ON+OFF) = {observed:.5g}, p = {p_value:.5g}")
     print(f"Sensitivity outputs: {out}")
 
 

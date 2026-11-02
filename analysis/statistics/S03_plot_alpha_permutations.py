@@ -57,21 +57,21 @@ def main():
         "Mean DBS ON - OFF (microvolt squared)",
         folder / "absolute_alpha_permutation_figure",
     )
-    percentage_file = folder / "permutation_null_percentage.csv"
-    effects_file = folder / "participant_percentage_effects.csv"
+    percentage_file = folder / "permutation_null_normalised.csv"
+    effects_file = folder / "participant_normalised_effects.csv"
     if percentage_file.exists() and effects_file.exists():
         effects = pd.read_csv(effects_file)
         percent_null = pd.read_csv(percentage_file)
-        observed_percent = float(effects["on_minus_off_percent"].mean())
-        values = percent_null["permuted_group_percent"].to_numpy()
+        observed_percent = float(effects["normalised_on_minus_off"].mean())
+        values = percent_null["permuted_group_normalised"].to_numpy()
         percent_p = (1 + np.count_nonzero(
             np.abs(values) >= abs(observed_percent)
         )) / (len(values) + 1)
         plot_distribution(
             values, observed_percent, percent_p,
-            "STN stimulation: participant-normalised alpha change",
-            "Mean DBS ON - OFF (% of OFF)",
-            folder / "percentage_alpha_permutation_figure",
+            "STN stimulation: symmetric normalised alpha change",
+            "Mean (DBS ON - OFF) / (DBS ON + OFF)",
+            folder / "normalised_alpha_permutation_figure",
         )
     print(f"Figures saved to {folder}")
 
