@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Block-label permutation test of absolute posterior alpha power.
+"""
+==================================================================
+Block-label permutation test of absolute posterior alpha power.
 
 Each participant contributes one ON-minus-OFF difference, calculated from
 trial-level absolute multitaper power in ATTENTION_WINDOW. Stimulation labels
@@ -14,10 +16,11 @@ the existing validated BIDS-to-cleaned-epochs mapping is used.
 
 Run from repository root:
 python analysis/statistics/S02_absolute_alpha_block_permutation.py \\
-    --subjects 101 102 103 --accept-proposed-labels
+    --subjects 101 102 103 --confirmation-csv /path/to/confirmed_blocks.csv
 
 The output includes a PDF with methods, observed statistic, null histogram,
 participant effects, and a CSV with per-participant results.
+==================================================================
 """
 from __future__ import annotations
 
@@ -57,14 +60,14 @@ def arguments():
     """Parse paths, participant identifiers and reproducibility settings."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--subjects", nargs="+", required=True)
-    parser.add_argument("--accept-proposed-labels", action="store_true")
-
+    parser.add_argument("--confirmation-csv", required=True, type=Path)
+    parser.add_argument("--peaks-csv", type=Path, default=None)
     parser.add_argument("--platform", choices=("mac", "bluebear"), default="mac")
     parser.add_argument("--project-root", default=None)
     parser.add_argument("--session", default="01")
     parser.add_argument("--task", default="SpAtt")
     parser.add_argument("--run", default="01")
-
+    parser.add_argument("--n-jobs", type=int, default=4)
     parser.add_argument("--n-permutations", type=int, default=N_PERMUTATIONS)
     parser.add_argument("--seed", type=int, default=RANDOM_SEED)
     args = parser.parse_args()
@@ -237,7 +240,7 @@ def methods_page(n_subjects, n_perm):
         ("Data and alpha extraction",
          f"{n_subjects} participants. Absolute multitaper power is computed "
          "for every cleaned cue trial using the retained common posterior "
-         "channels. The individual alpha peak was read by G04 from the prior G03 "
+         "channels. The individual alpha peak is read from the prior G03 "
          "CSV (selected from original DBS OFF), and peak +/- "
          f"{ALPHA_PEAK_RANGE:g} Hz is used for both conditions. "
          f"Attention interval: {ATTENTION_WINDOW[0]:g}-"
@@ -249,8 +252,8 @@ def methods_page(n_subjects, n_perm):
          "The group statistic T_observed is the mean of participant D_i, "
          "so each participant contributes equally."),
         ("5. Block-label permutations",
-         "Use four BIDS-mapped stimulation periods from G04, based on block "
-         "events and wiki-proposed labels. Each period "
+         "Reconstruct four verified stimulation periods from BIDS block "
+         "events and the confirmed stimulation-block CSV. Each period "
          "contains two consecutive task blocks. At each permutation, "
          "shuffle the four period labels within each participant, "
          "preserving two ON and two OFF periods. All trials stay with "
@@ -263,7 +266,7 @@ def methods_page(n_subjects, n_perm):
          "alpha power during stimulation. The null histogram and "
          "observed statistic are plotted on the following page."),
         ("Interpretation and limitations",
-         "Labels are proposed from the wiki and require explicit acceptance. Inference is conditional on the OFF-defined alpha peaks, "
+         "Inference is conditional on the OFF-defined alpha peaks, "
          "which are held fixed across permutations. Validity of "
          "block-label randomization requires exchangeability under "
          "the actual experimental randomization; carryover or "
@@ -308,76 +311,39 @@ def results_page(observed, null, pvalue, subjects, differences):
 
 
 def main():
-    """Run block-label permutations on the reusable G04 trial table.
-
-    G04 must be run first. Every trial retains its original period and
-    stimulation laterality. Only the four whole-period ON/OFF labels
-    are permuted within participants; individual trials never move.
-    """
+    """Validate inputs, compute effects, permute labels and export report."""
     args = arguments()
     root = resolve_project_root(args.platform, args.project_root)
-    mapping_dir = (
+    peaks_path = args.peaks_csv or (
         root / "derivatives" / "reports" / "group"
-        / "EEG_posterior_channels_block_mapping"
+        / "individual_alpha_peaks.csv"
     )
-    path = mapping_dir / "trial_alpha.csv"
-    if not path.exists():
-        raise FileNotFoundError(
-            f"Run G04_prepare_block_alpha.py first: {path}"
+    peaks = read_peaks(peaks_path)
+    review = pd.read_csv(args.confirmation_csv, dtype=str).fillna("")
+    crops = json.loads(
+        (SUBJECT_DIR / "stimulation_cropped_time.json").read_text(
+            encoding="utf-8"
         )
-    frame = pd.read_csv(path, dtype={"subject": str})
-    required = {
-        "subject", "stimulation_period", "stimulation_side",
-        "dbs_on", "alpha_power", "label_verified",
-    }
-    if not required.issubset(frame.columns):
-        raise ValueError(f"Missing G04 columns: {required - set(frame)}")
-    if frame["label_verified"].astype(str).str.lower().eq("true").all():
-        label_note = "Block labels marked verified in G04."
-    else:
-        label_note = (
-            "Stimulation labels are wiki-derived proposals, NOT "
-            "independently verified."
-        )
-        if not args.accept_proposed_labels:
-            raise ValueError(
-                label_note + " Review block_summary.csv and rerun with "
-                "--accept-proposed-labels to acknowledge this limitation."
-            )
+    )
     subjects = [value.removeprefix("sub-") for value in args.subjects]
-    if len(set(subjects)) != len(subjects):
-        raise ValueError("Duplicate subject requested")
     data = []
     rows = []
     for subject in subjects:
-        selected = frame.loc[frame["subject"] == subject].copy()
-        if selected.empty:
-            raise ValueError(f"sub-{subject}: absent from G04 trial table")
-        periods = []
-        labels = []
-        for period in range(1, 5):
-            block = selected.loc[selected["stimulation_period"] == period]
-            if block.empty:
-                raise ValueError(f"sub-{subject}: empty period {period}")
-            if block["dbs_on"].nunique() != 1:
-                raise ValueError(f"sub-{subject}: mixed labels in period")
-            values = block["alpha_power"].to_numpy(dtype=float)
-            if not np.isfinite(values).all():
-                raise ValueError(f"sub-{subject}: non-finite alpha power")
-            periods.append(values)
-            labels.append(bool(block["dbs_on"].iloc[0]))
-        labels = np.asarray(labels, dtype=bool)
-        if labels.sum() != 2:
-            raise ValueError(f"sub-{subject}: expected two ON periods")
+        peak = peaks.get(subject)
+        if peak is None or not np.isfinite(peak):
+            raise ValueError(f"Missing/invalid peak for sub-{subject}")
+        periods, labels, n_channels = participant_data(
+            root, subject, float(peak), review, crops, args
+        )
         observed = effect(periods, labels)
         rows.append({
-            "subject": subject,
-            "n_on": sum(len(x) for x, on in zip(periods, labels) if on),
-            "n_off": sum(len(x) for x, on in zip(periods, labels) if not on),
+            "subject": subject, "peak_hz": peak, "n_channels": n_channels,
+            "n_on": sum(len(x) for x, flag in zip(periods, labels) if flag),
+            "n_off": sum(len(x) for x, flag in zip(periods, labels) if not flag),
             "on_minus_off": observed,
         })
         data.append((periods, labels))
-        print(f"sub-{subject}: ON-OFF={observed:.6g}")
+        print(f"sub-{subject}: peak={peak:g} Hz; ON-OFF={observed:.6g}")
     differences = np.asarray([row["on_minus_off"] for row in rows])
     statistic = float(differences.mean())
     null = permutation_distribution(data, args.n_permutations, args.seed)
@@ -400,7 +366,6 @@ def main():
         ):
             pdf.savefig(figure)
             plt.close(figure)
-    print(label_note)
     print(f"Observed group effect: {statistic:.6g}; two-sided p={pvalue:.6g}")
     print(f"Report: {output}")
 
