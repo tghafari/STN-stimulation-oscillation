@@ -273,16 +273,23 @@ def prepare_subject(root, subject, peak, sequence, crops, args):
     trial_rows = []
     audits = []
     for condition, ep in epochs.items():
+        diagnostic_root = (
+            args.output_dir
+            if args.output_dir is not None
+            else root / "derivatives" / "reports" / "group"
+            / "EEG_posterior_channels_block_mapping"
+        )
+        diagnostic_path = (
+            diagnostic_root / "diagnostics"
+            / f"sub-{subject}_{condition}_timing.csv"
+        )
         mapping = map_condition_epochs(
-            ep, bids, crop_ranges(crops[key][condition]),
-            intervals, condition,
-            diagnostic_csv=(
-                args.output_dir
-                if args.output_dir is not None else
-                root / "derivatives" / "reports" / "group"
-                / "EEG_posterior_channels_block_mapping"
-            ) / "diagnostics" / f"sub-{subject}_{condition}_timing.csv"
-            ),
+            ep,
+            bids,
+            crop_ranges(crops[key][condition]),
+            intervals,
+            condition,
+            diagnostic_csv=diagnostic_path,
         )
         values = absolute_alpha(ep, channels, peak, args.n_jobs)
         indices = mapping["matched_task_block_indices"]
