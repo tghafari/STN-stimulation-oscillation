@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""Reconstruct and audit posterior EEG trial-to-stimulation-block assignments.
+"""Prepare reusable posterior alpha power and verified block assignments.
 
-This is a reusable NON-STATISTICAL preparation step. It preserves the
-chronological task block, four stimulation periods, stimulation laterality,
-cue direction, absolute posterior alpha power and the source of the labels.
+IMPORTANT: Run ALL intended participants together in ONE G04 invocation.
+The output CSV files (trial_alpha.csv, block_summary.csv and mapping_audit.csv)
+are replaced on every run. Running only one participant will overwrite
+the previous multi-participant outputs; G04 does not append across runs.
 
-The sequence reference provides proposed labels. Confirmed orders are saved\nto stimulation_sequence_confirmed.json after each confirmation. The user must confirm or
-correct each participant sequence interactively BEFORE EEG processing. Original BIDS block-onset/end events determine the
-actual boundaries. The validated BIDS-to-cleaned-Epochs mapping must match every retained\ncue epoch uniquely. On error, the user may skip the participant or stop;\nerrors are recorded and successful participant results are retained.
+Confirm each stimulation sequence before processing. Confirmed sequences
+are saved immediately in analysis/subject/stimulation_sequence_confirmed.json.
+Errors can be logged and participants skipped without excluding them from
+later statistical analysis. Absolute trial-level alpha is not baselined.
 
-Output: trial_alpha.csv, block_summary.csv and mapping_audit.csv.
-These outputs can be reused for ON/OFF, left/right and cue-side analyses.
-
-Run from repository root:
+Run from the repository root with all intended subjects:
 python analysis/group/EEG_posterior_channels/G04_prepare_block_alpha.py \\
-    --subjects 101 102 103
+    --subjects 101 102 103 104 105 106 107 108 110 111 112 113 \\
+    114 115 116 118 119 120 121 122 123
 """
 from __future__ import annotations
 
@@ -101,7 +101,7 @@ def confirm_sequences(root, subjects, args, failures):
     remains eligible for future runs and is never excluded automatically.
     """
     confirmed = (
-        json.loads(CONFIRMED_FILE.read_text(encoding="utf-8"))
+        json.loads(\n            CONFIRMED_FILE.read_text(encoding="utf-8")\n            .removesuffix(r"\\n").strip()\n        )
         if CONFIRMED_FILE.exists() else {}
     )
     for subject in subjects:
@@ -137,7 +137,7 @@ def confirm_sequences(root, subjects, args, failures):
             # Persist immediately, even if later participants fail.
             temporary = CONFIRMED_FILE.with_suffix(".json.tmp")
             temporary.write_text(
-                json.dumps(confirmed, indent=2) + "\\n",
+                json.dumps(confirmed, indent=2) + "\n",
                 encoding="utf-8",
             )
             temporary.replace(CONFIRMED_FILE)
