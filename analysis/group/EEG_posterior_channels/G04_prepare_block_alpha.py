@@ -5,8 +5,8 @@ This is a reusable NON-STATISTICAL preparation step. It preserves the
 chronological task block, four stimulation periods, stimulation laterality,
 cue direction, absolute posterior alpha power and the source of the labels.
 
-Stimulation labels come from the wiki-derived JSON and are PROPOSED, not
-independently confirmed. Original BIDS block-onset/end events determine the
+The wiki-derived JSON provides proposed labels. The user must confirm or
+correct each participant sequence interactively BEFORE EEG processing. Original BIDS block-onset/end events determine the
 actual boundaries. The validated BIDS-to-cleaned-Epochs mapping must match
 every retained cue epoch uniquely or processing stops.
 
@@ -63,6 +63,67 @@ def parse_args():
     parser.add_argument("--n-jobs", type=int, default=4)
     parser.add_argument("--peaks-csv", type=Path)
     return parser.parse_args()
+
+
+def confirm_sequences(subjects, reference):
+    """Interactively confirm all four stimulation periods before processing.
+
+    Proposed labels originate from the wiki and must be checked against
+    the actual stimulation log. 'exclude' is a placeholder, NOT an
+    exclusion instruction: enter the four real labels for such subjects.
+
+    No EEG files, alpha peaks, or BIDS events are processed until every
+    requested participant has an explicitly confirmed valid sequence.
+    """
+    confirmed = {}
+    allowed = {"off", "stim_left", "stim_right"}
+    expected = ["off", "off", "stim_left", "stim_right"]
+
+    print("\\nConfirm chronological stimulation sequences for ALL subjects.")
+    print("Each entry represents two consecutive task blocks.")
+    print("Allowed labels: off, stim_left, stim_right.")
+    print("Check the stimulation log; the JSON is only a proposal.")
+    print("Type 'yes' to confirm, 'edit' to replace, or 'quit' to abort.")
+
+    for subject in subjects:
+        proposed = reference.get(f"sub-{subject}", [])
+        labels = list(proposed)
+        while True:
+            print(f"\\nsub-{subject}: {', '.join(labels) if labels else 'unknown'}")
+            if sorted(labels) != sorted(expected):
+                print("A valid sequence is required; no subject is excluded.")
+                action = "edit"
+            else:
+                action = input("Confirm sequence? [yes/edit/quit]: ").strip().lower()
+
+            if action in ("quit", "q"):
+                raise SystemExit("Cancelled before any EEG processing.")
+            if action in ("edit", "e"):
+                response = input(
+                    "Enter four labels in chronological order, comma-separated: "
+                ).strip().lower()
+                candidate = [
+                    item.strip().replace("-", "_")
+                    for item in response.split(",")
+                ]
+                if len(candidate) != 4 or not all(
+                    item in allowed for item in candidate
+                ) or sorted(candidate) != sorted(expected):
+                    print(
+                        "Invalid sequence. Expected two off, one stim_left "
+                        "and one stim_right. Try again."
+                    )
+                    continue
+                labels = candidate
+                continue
+            if action in ("yes", "y"):
+                confirmed[f"sub-{subject}"] = labels.copy()
+                print(f"Confirmed sub-{subject}.")
+                break
+            print("Please enter yes, edit, or quit.")
+
+    print("\\nAll requested sequences confirmed. Starting processing.")
+    return confirmed
 
 
 def crop_ranges(values):
@@ -127,8 +188,6 @@ def prepare_subject(root, subject, peak, sequence, crops, args):
     labels = sequence.get(f"sub-{subject}")
     if not labels or len(labels) != 4:
         raise ValueError(f"sub-{subject}: no four-period sequence in JSON")
-    if labels == ["exclude"] * 4 or "exclude" in labels:
-        raise ValueError(f"sub-{subject}: excluded in stimulation sequence")
     if sorted(labels) != sorted(("off", "off", "stim_left", "stim_right")):
         raise ValueError(f"sub-{subject}: invalid proposed labels {labels}")
 
@@ -178,7 +237,7 @@ def prepare_subject(root, subject, peak, sequence, crops, args):
             stimulation = labels[period]
             if (stimulation != "off") != on_label:
                 raise ValueError(
-                    f"sub-{subject}: wiki condition disagrees with "
+                    f"sub-{subject}: confirmed condition disagrees with "
                     f"cleaned epochs in period {period + 1}"
                 )
             event_code = int(ep.events[index, 2])
@@ -202,8 +261,8 @@ def prepare_subject(root, subject, peak, sequence, crops, args):
                 "alpha_power": float(power),
                 "n_posterior_channels": len(channels),
                 "channels": ";".join(channels),
-                "label_source": "wiki_proposed_json",
-                "label_verified": False,
+                "label_source": "interactive_user_confirmation",
+                "label_verified": True,
             })
         audits.append({
             "subject": subject,
@@ -212,8 +271,8 @@ def prepare_subject(root, subject, peak, sequence, crops, args):
             "mapped_epochs": len(indices),
             "sample_offset": mapping["sample_offset"],
             "unretained_bids_cues": mapping["n_unretained_bids_cues"],
-            "label_source": "wiki_proposed_json",
-            "label_verified": False,
+            "label_source": "interactive_user_confirmation",
+            "label_verified": True,
         })
     if len(trial_rows) != sum(map(len, epochs.values())):
         raise ValueError(f"sub-{subject}: incomplete trial mapping")
@@ -223,6 +282,11 @@ def prepare_subject(root, subject, peak, sequence, crops, args):
 def main():
     """Prepare reusable tables; fail rather than silently mislabel trials."""
     args = parse_args()
+    subjects = [value.removeprefix("sub-") for value in args.subjects]
+    if len(subjects) != len(set(subjects)):
+        raise ValueError("Duplicate subject identifiers supplied")
+    reference = json.loads(SEQUENCE_FILE.read_text(encoding="utf-8"))
+    sequence = confirm_sequences(subjects, reference)
     root = resolve_project_root(args.platform, args.project_root)
     peaks_path = args.peaks_csv or (
         root / "derivatives" / "reports" / "group"
@@ -234,13 +298,11 @@ def main():
     if peaks["subject"].duplicated().any():
         raise ValueError("Duplicate subject in alpha-peak CSV")
     peaks = peaks.set_index("subject")
-    sequence = json.loads(SEQUENCE_FILE.read_text(encoding="utf-8"))
     crops = json.loads(CROP_FILE.read_text(encoding="utf-8"))
 
     trials = []
     audits = []
-    for value in args.subjects:
-        subject = value.removeprefix("sub-")
+    for subject in subjects:
         if subject not in peaks.index:
             raise ValueError(f"sub-{subject}: missing individual alpha peak")
         peak = float(peaks.loc[subject, "peak_hz"])
@@ -273,7 +335,7 @@ def main():
     summary.to_csv(out / "block_summary.csv", index=False)
     pd.DataFrame(audits).to_csv(out / "mapping_audit.csv", index=False)
     print(f"Saved reusable mapping and power tables: {out}")
-    print("WARNING: stimulation laterality comes from PROPOSED wiki labels.")
+    print("Stimulation sequences were explicitly confirmed in this run.")
 
 
 if __name__ == "__main__":
