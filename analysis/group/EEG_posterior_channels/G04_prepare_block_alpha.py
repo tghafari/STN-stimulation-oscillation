@@ -64,6 +64,10 @@ def parse_args():
     parser.add_argument("--run", default="01")
     parser.add_argument("--n-jobs", type=int, default=4)
     parser.add_argument("--peaks-csv", type=Path)
+    parser.add_argument(
+        "--reconfirm", action="store_true",
+        help="Ask again for previously confirmed stimulation sequences.",
+    )
     return parser.parse_args()
 
 
@@ -97,7 +101,7 @@ def ask_on_error(subject, stage, exc, failures):
 def confirm_sequences(root, subjects, args, failures):
     """Confirm block orders using the existing l/r/o interface.
 
-    Any failure prompts the user to skip or quit. A skipped participant
+    Saved valid orders are reused without prompting unless --reconfirm is set.\n    Any failure prompts the user to skip or quit. A skipped participant
     remains eligible for future runs and is never excluded automatically.
     """
     if CONFIRMED_FILE.exists():
@@ -110,6 +114,16 @@ def confirm_sequences(root, subjects, args, failures):
     else:
         confirmed = {}
     for subject in subjects:
+        saved = confirmed.get(f"sub-{subject}")
+        if (
+            not args.reconfirm
+            and isinstance(saved, list)
+            and sorted(saved) == sorted(
+                ("off", "off", "stim_left", "stim_right")
+            )
+        ):
+            print(f"sub-{subject}: using saved confirmed stimulation order.")
+            continue
         try:
             rows = pd.DataFrame(
                 review_rows(root, [subject], args.session, args.task, args.run)

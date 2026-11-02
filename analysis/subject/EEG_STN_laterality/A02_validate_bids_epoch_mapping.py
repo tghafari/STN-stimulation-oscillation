@@ -106,7 +106,7 @@ def validate_mapping(
     epochs, expected, condition, tolerance_samples=2,
     diagnostic_csv=None,
 ):
-    """Validate a unique global offset; save detailed diagnostics on failure.
+    """Validate a unique BIDS cue assignment; save diagnostics on failure.
 
     Search all possible same-direction event pairs, not just the first
     20 cleaned and 50 BIDS events. A valid offset must match EVERY
@@ -132,13 +132,13 @@ def validate_mapping(
         for sample, side in zip(observed, sides)
         for item in expected if item[1] == side
     }
-    solutions = []
+    solutions = {}
     for shift in sorted(candidates):
         matches = _match_shift(
             observed, sides, expected, shift, tolerance_samples
         )
         if matches is not None:
-            solutions.append((shift, matches))
+            solutions.setdefault(tuple(matches), []).append(shift)
             if len(solutions) > 1:
                 break
 
@@ -172,9 +172,25 @@ def validate_mapping(
             "Do not assign blocks until timing is uniquely verified."
         )
 
-    shift, matches = solutions[0]
+    matches_key, shifts = next(iter(solutions.items()))
+    matches = list(matches_key)
+    shift = min(
+        shifts,
+        key=lambda value: (
+            max(
+                abs(int(sample) - int(expected[index][0]) - value)
+                for sample, index in zip(observed, matches)
+            ),
+            sum(
+                abs(int(sample) - int(expected[index][0]) - value)
+                for sample, index in zip(observed, matches)
+            ),
+            abs(value),
+        ),
+    )
     return {
         "sample_offset": int(shift),
+        "equivalent_sample_offsets": sorted(shifts),
         "matched_expected_indices": matches,
         "matched_bids_onsets_s": [float(expected[i][3]) for i in matches],
         "matched_task_block_indices": [int(expected[i][2]) for i in matches],
