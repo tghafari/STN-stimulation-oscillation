@@ -5,7 +5,7 @@ This is a reusable NON-STATISTICAL preparation step. It preserves the
 chronological task block, four stimulation periods, stimulation laterality,
 cue direction, absolute posterior alpha power and the source of the labels.
 
-The wiki-derived JSON provides proposed labels. The user must confirm or
+The sequence reference provides proposed labels. Confirmed orders are saved\nto stimulation_sequence_confirmed.json after each confirmation. The user must confirm or
 correct each participant sequence interactively BEFORE EEG processing. Original BIDS block-onset/end events determine the
 actual boundaries. The validated BIDS-to-cleaned-Epochs mapping must match every retained\ncue epoch uniquely. On error, the user may skip the participant or stop;\nerrors are recorded and successful participant results are retained.
 
@@ -50,6 +50,7 @@ ALPHA_PEAK_RANGE = 1.0
 FREQS = np.arange(2.0, 32.0, 0.5)
 ROI8 = ("PO3", "POz", "PO4", "O1", "Oz", "O2", "PO7", "PO8")
 CROP_FILE = SUBJECT_DIR / "stimulation_cropped_time.json"
+CONFIRMED_FILE = SUBJECT_DIR / "stimulation_sequence_confirmed.json"
 
 
 def parse_args():
@@ -99,7 +100,10 @@ def confirm_sequences(root, subjects, args, failures):
     Any failure prompts the user to skip or quit. A skipped participant
     remains eligible for future runs and is never excluded automatically.
     """
-    confirmed = {}
+    confirmed = (
+        json.loads(CONFIRMED_FILE.read_text(encoding="utf-8"))
+        if CONFIRMED_FILE.exists() else {}
+    )
     for subject in subjects:
         try:
             rows = pd.DataFrame(
@@ -113,6 +117,8 @@ def confirm_sequences(root, subjects, args, failures):
             rows = rows.sort_values(
                 "block_index_chronological"
             ).reset_index(drop=True)
+            if f"sub-{subject}" in confirmed:
+                rows["wiki_proposed_condition"] = confirmed[f"sub-{subject}"]
             action, labels = choose_order(subject, rows)
             if action == "q":
                 raise KeyboardInterrupt("User quit during confirmation")
@@ -128,6 +134,14 @@ def confirm_sequences(root, subjects, args, failures):
             if action != "confirmed":
                 raise ValueError("Stimulation sequence was not confirmed")
             confirmed[f"sub-{subject}"] = labels
+            # Persist immediately, even if later participants fail.
+            temporary = CONFIRMED_FILE.with_suffix(".json.tmp")
+            temporary.write_text(
+                json.dumps(confirmed, indent=2) + "\\n",
+                encoding="utf-8",
+            )
+            temporary.replace(CONFIRMED_FILE)
+            print(f"Saved confirmed order: {CONFIRMED_FILE}")
         except KeyboardInterrupt:
             raise
         except Exception as exc:
