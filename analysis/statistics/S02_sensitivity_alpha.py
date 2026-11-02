@@ -19,6 +19,9 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+import textwrap
+from matplotlib.backends.backend_pdf import PdfPages
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "subject" / "EEG_all_channels"))
@@ -97,6 +100,179 @@ def run_test(data, iterations, seed, percentage=False):
     return observed_by_subject, observed, null, p_value
 
 
+def report_text_page(title, sections):
+    """Create a readable methods page with no clipped paragraphs."""
+    fig, ax = plt.subplots(figsize=(11.7, 8.3))
+    ax.axis("off")
+    ax.text(0.055, 0.95, title, fontsize=17, weight="bold",
+            transform=ax.transAxes, va="top")
+    y = 0.87
+    for heading, paragraph in sections:
+        ax.text(0.055, y, heading, fontsize=12, weight="bold",
+                transform=ax.transAxes, va="top")
+        y -= 0.045
+        lines = textwrap.fill(paragraph, width=94)
+        ax.text(0.055, y, lines, fontsize=10, linespacing=1.45,
+                transform=ax.transAxes, va="top")
+        y -= 0.025 * (lines.count("\n") + 1) + 0.06
+    return fig
+
+
+def create_report(out, subjects, absolute, normalised, loo, seed):
+    """Write a combined primary and sensitivity PDF from actual results."""
+    absolute_effects = pd.read_csv(out / "participant_effects.csv")
+    primary_null = pd.read_csv(out / "permutation_null.csv")[
+        "permuted_group_effect"
+    ].to_numpy(dtype=float)
+    if set(absolute_effects["subject"].astype(str)) != set(subjects):
+        raise ValueError(
+            "Primary S02 participant list differs from sensitivity run. "
+            "Rerun primary S02 with exactly the same participants."
+        )
+    absolute_observed = float(absolute_effects["on_minus_off"].mean())
+    primary_p = (
+        1 + np.count_nonzero(
+            np.abs(primary_null) >= abs(absolute_observed)
+        )
+    ) / (len(primary_null) + 1)
+    values, norm_observed, norm_null, norm_p = normalised
+    report_path = out / "absolute_alpha_block_permutation.pdf"
+    with PdfPages(report_path) as pdf:
+        pages = [
+            report_text_page("Absolute alpha: data and observed effect", [
+                ("Input and alpha extraction",
+                 "G04 trial_alpha.csv contains validated cue-to-block mapping, "
+                 "confirmed stimulation labels and absolute multitaper alpha "
+                 "power for each retained trial. G04 averages over available "
+                 "posterior EEG channels, the individual OFF-derived alpha "
+                 "peak +/- 1 Hz, and 0.3-0.8 seconds after cue onset. "
+                 "No baseline correction is performed."),
+                ("Stimulation structure",
+                 "Eight task blocks are grouped into four stimulation periods "
+                 "per participant: two OFF, one left ON, and one right ON. "
+                 "Each stimulation period contains two consecutive task blocks."),
+                ("Observed statistic",
+                 "Pool trials within the two ON periods and within the two "
+                 "OFF periods separately for each participant. Calculate "
+                 "participant mean ON minus mean OFF. The observed group "
+                 "statistic is the average of these participant differences, "
+                 "giving every participant equal weight."),
+            ]),
+            report_text_page("Absolute alpha: permutation procedure", [
+                ("One label permutation",
+                 "For every participant independently, randomly reassign "
+                 "the four whole stimulation-period labels while preserving "
+                 "two ON and two OFF periods. All trial measurements remain "
+                 "attached to their original period. Neither trials nor "
+                 "participants are shuffled."),
+                ("Recompute the group statistic",
+                 "After relabelling, pool ON and OFF trials within each "
+                 "participant and recalculate the difference. Average the "
+                 "participant differences to obtain one permuted group value. "
+                 f"Repeat {len(primary_null):,} times with the recorded seed "
+                 f"({seed}) for the sensitivity analysis."),
+                ("Two-sided permutation p-value",
+                 "Count null values with absolute magnitude at least as "
+                 "large as the absolute observed statistic. Calculate "
+                 "p = (count + 1) / (number of permutations + 1)."),
+                ("Assumptions",
+                 "This procedure assumes stimulation-period labels are "
+                 "exchangeable under the null according to the experimental "
+                 "randomisation. It does not model order or carryover. "
+                 "The individual OFF-selected alpha peaks remain fixed."),
+            ]),
+        ]
+        for page in pages:
+            pdf.savefig(page)
+            plt.close(page)
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.hist(primary_null * 1e12, bins=50, color="lightsteelblue")
+        ax.axvline(absolute_observed * 1e12, color="darkred", lw=2)
+        ax.set(
+            title=f"Absolute alpha: n={len(subjects)}, two-sided p={primary_p:.4g}",
+            xlabel="Group ON - OFF (microvolt squared)",
+            ylabel="Permutations",
+        )
+        fig.tight_layout()
+        pdf.savefig(fig)
+        plt.close(fig)
+        page = report_text_page("Sensitivity analysis: methods", [
+            ("Symmetric normalised difference",
+             "For each participant, calculate (mean ON - mean OFF) / "
+             "(mean ON + mean OFF), with means pooled across retained "
+             "trials in their two respective stimulation periods. "
+             "This relative measure is dimensionless and ranges from "
+             "-1 to +1 for nonnegative power."),
+            ("Normalised permutation test",
+             "Repeat the same whole-period ON/OFF label shuffling. "
+             "For every permutation, recalculate both the numerator "
+             "and the ON+OFF denominator from the newly assigned "
+             "conditions. Average participant normalised differences "
+             "and compare the observed magnitude against the null "
+             "distribution using the two-sided Monte Carlo formula."),
+            ("Leave-one-participant-out",
+             "Remove one participant, repeat the original absolute "
+             "group test with all remaining participants and 10,000 "
+             "whole-period label permutations, then restore that "
+             "participant and omit the next. Report the new group "
+             "effect and two-sided p-value for each omission. "
+             "This is an influence diagnostic, not an exclusion rule."),
+            ("Why both checks?",
+             "Normalisation reduces sensitivity to between-participant "
+             "differences in overall power, although tiny denominators "
+             "can be unstable. Leave-one-out checks whether a single "
+             "participant strongly influences the absolute result. "
+             "Neither replaces the primary analysis."),
+        ])
+        pdf.savefig(page)
+        plt.close(page)
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.hist(norm_null, bins=50, color="lightsteelblue")
+        ax.axvline(norm_observed, color="darkred", lw=2)
+        ax.set(
+            title=f"Normalised alpha: two-sided p={norm_p:.4g}",
+            xlabel="Group mean (ON - OFF) / (ON + OFF)",
+            ylabel="Permutations",
+        )
+        fig.tight_layout()
+        pdf.savefig(fig)
+        plt.close(fig)
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(11.7, 8.3))
+        ax1.scatter(loo["omitted_subject"], loo["observed_on_minus_off_v2"] * 1e12)
+        ax1.axhline(0, color="gray", lw=1)
+        ax1.set(ylabel="ON - OFF (microvolt squared)",
+                title="Leave-one-out: absolute group effect")
+        ax2.scatter(loo["omitted_subject"], loo["two_sided_p"])
+        ax2.axhline(0.05, color="gray", linestyle="--")
+        ax2.set(xlabel="Omitted participant", ylabel="Two-sided p",
+                title="Leave-one-out: permutation p-values")
+        for axis in (ax1, ax2):
+            axis.tick_params(axis="x", rotation=50)
+        fig.tight_layout()
+        pdf.savefig(fig)
+        plt.close(fig)
+        fig, ax = plt.subplots(figsize=(11.7, 8.3))
+        ax.axis("off")
+        ax.set_title("Leave-one-out: full numerical results", fontsize=15)
+        cells = [[
+            str(row.omitted_subject),
+            f"{row.observed_on_minus_off_v2 * 1e12:.4g}",
+            f"{row.two_sided_p:.4g}",
+        ] for row in loo.itertuples()]
+        table = ax.table(
+            cellText=cells,
+            colLabels=["Omitted", "ON - OFF (microvolt squared)", "Two-sided p"],
+            loc="center", cellLoc="center",
+        )
+        table.auto_set_font_size(False)
+        table.set_fontsize(9)
+        table.scale(1, 1.3)
+        fig.tight_layout()
+        pdf.savefig(fig)
+        plt.close(fig)
+    print(f"Updated combined report: {report_path}")
+
+
 def main():
     """Export optional percentage and leave-one-out sensitivity results."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -142,8 +318,11 @@ def main():
             "observed_on_minus_off_v2": statistic,
             "two_sided_p": p,
         })
-    pd.DataFrame(rows).to_csv(
-        out / "leave_one_out_absolute.csv", index=False
+    loo = pd.DataFrame(rows)
+    loo.to_csv(out / "leave_one_out_absolute.csv", index=False)
+    create_report(
+        out, subjects, None, (percentages, observed, null, p_value),
+        loo, args.seed
     )
     print(f"Normalised (ON-OFF)/(ON+OFF) = {observed:.5g}, p = {p_value:.5g}")
     print(f"Sensitivity outputs: {out}")
