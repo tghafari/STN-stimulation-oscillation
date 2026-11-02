@@ -100,10 +100,15 @@ def confirm_sequences(root, subjects, args, failures):
     Any failure prompts the user to skip or quit. A skipped participant
     remains eligible for future runs and is never excluded automatically.
     """
-    confirmed = (
-        json.loads(\n            CONFIRMED_FILE.read_text(encoding="utf-8")\n            .removesuffix(r"\\n").strip()\n        )
-        if CONFIRMED_FILE.exists() else {}
-    )
+    if CONFIRMED_FILE.exists():
+        raw_text = CONFIRMED_FILE.read_text(encoding="utf-8")
+        # Earlier versions wrote a literal backslash-n after the JSON.
+        raw_text = raw_text.strip()
+        if raw_text.endswith(chr(92) + "n"):
+            raw_text = raw_text[:-2].rstrip()
+        confirmed = json.loads(raw_text)
+    else:
+        confirmed = {}
     for subject in subjects:
         try:
             rows = pd.DataFrame(
