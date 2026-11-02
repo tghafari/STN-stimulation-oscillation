@@ -20,7 +20,7 @@ def _cue_code(label):
     return None
 
 
-def build_expected(events, crop_ranges, task_blocks, sfreq):
+def build_expected(events, crop_ranges, task_blocks, sfreq, coordinate_system="concatenated"):
     """Map BIDS cue events into concatenated-condition sample coordinates."""
     if "trial_type" not in events or "onset" not in events:
         raise ValueError("BIDS events.tsv lacks trial_type or onset.")
