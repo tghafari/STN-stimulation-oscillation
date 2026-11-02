@@ -29,39 +29,88 @@ def norm_label(value):
     return str(value).strip().lower().replace(" ", "_").replace("-", "_")
 
 def get_blocks(events):
+    """Find eight BIDS task blocks, safely recovering missing start markers.
+
+    The chronological block_end events anchor block identity. If a block has
+    no block_onset, its provisional start is the first trial_onset after the
+    preceding block_end (or first trial in the recording). This is NOT the
+    original block-start time. Record the inference and require nonempty cue
+    events plus downstream BIDS-to-cleaned-epoch validation. Ambiguous markers
+    cause a hard error rather than silently assigning incorrect trials.
+    """
     if "trial_type" not in events or "onset" not in events:
-        raise ValueError("BIDS events.tsv must contain onset and trial_type columns.")
+        raise ValueError("BIDS events.tsv needs onset and trial_type columns.")
     ev = events.copy()
     ev["onset"] = pd.to_numeric(ev["onset"], errors="coerce")
-    ev = ev.dropna(subset=["onset"]).sort_values("onset").reset_index(drop=True)
+    ev = ev.dropna(subset=["onset"]).sort_values(
+        "onset"
+    ).reset_index(drop=True)
     ev["_label"] = ev["trial_type"].map(norm_label)
-    starts = ev[ev["_label"].str.contains("block_onset", regex=False)]
-    ends = ev[ev["_label"].str.contains("block_end", regex=False)]
+
+    starts = ev.loc[ev["_label"] == "block_onset", "onset"].to_numpy()
+    ends = ev.loc[ev["_label"] == "block_end", "onset"].to_numpy()
+    trials = ev.loc[ev["_label"] == "trial_onset", "onset"].to_numpy()
+    if not len(ends):
+        raise ValueError("No block_end events found in BIDS.")
+    if len(starts) > len(ends):
+        raise ValueError("More block_onset than block_end markers.")
+    if not len(trials):
+        raise ValueError("No trial_onset events available for validation.")
+
     blocks = []
-    used_ends = set()
-    for _, start_row in starts.iterrows():
-        start = float(start_row["onset"])
-        candidates = ends[(ends["onset"] > start) & (~ends.index.isin(used_ends))]
-        if candidates.empty:
-            continue
-        later_starts = starts[starts["onset"] > start]["onset"]
-        next_start = float(later_starts.min()) if len(later_starts) else float("inf")
-        candidates = candidates[candidates["onset"] < next_start]
-        if candidates.empty:
-            continue
-        end_idx = int(candidates.index[0])
-        end = float(ends.loc[end_idx, "onset"])
-        used_ends.add(end_idx)
+    previous_end = float("-inf")
+    for index, end in enumerate(ends):
+        candidates = starts[(starts > previous_end) & (starts < end)]
+        if len(candidates) > 1:
+            raise ValueError(
+                f"Block {index + 1}: multiple start markers before end {end}."
+            )
+        segment_trials = trials[
+            (trials > previous_end) & (trials < end)
+        ]
+        if not len(segment_trials):
+            raise ValueError(
+                f"Block {index + 1}: no trial_onset between block ends."
+            )
+        if len(candidates) == 1:
+            start = float(candidates[0])
+            source = "recorded_block_onset"
+            if segment_trials[0] < start:
+                raise ValueError(
+                    f"Block {index + 1}: trial occurs before recorded onset."
+                )
+        else:
+            start = float(segment_trials[0])
+            source = "inferred_first_trial_onset"
         within = ev[(ev["onset"] >= start) & (ev["onset"] <= end)]
         labels = within["_label"].tolist()
+        left = sum(label == "cue_onset_left" for label in labels)
+        right = sum(label == "cue_onset_right" for label in labels)
+        if not (left + right):
+            raise ValueError(
+                f"Block {index + 1}: no cue events in reconstructed interval."
+            )
         blocks.append({
-            "onset_s": start, "offset_s": end, "duration_s": end - start,
-            "cue_left_n": sum("cue_onset_left" in x for x in labels),
-            "cue_right_n": sum("cue_onset_right" in x for x in labels),
+            "onset_s": start,
+            "offset_s": float(end),
+            "duration_s": float(end - start),
+            "onset_source": source,
+            "onset_inferred": source != "recorded_block_onset",
+            "cue_left_n": left,
+            "cue_right_n": right,
             "n_events": int(len(within)),
-            "event_types": "; ".join(sorted(set(within["trial_type"].astype(str)))),
+            "event_types": "; ".join(
+                sorted(set(within["trial_type"].astype(str)))
+            ),
         })
-    return sorted(blocks, key=lambda x: x["onset_s"])
+        previous_end = float(end)
+    if len(blocks) not in (4, 8):
+        raise ValueError(
+            f"Found {len(blocks)} block_end markers, "
+            f"{len(starts)} block_onset markers; expected 4 or 8 blocks."
+        )
+    return blocks
+
 
 def read_reference():
     return json.loads(SEQUENCE_PATH.read_text(encoding="utf-8"))
@@ -96,6 +145,9 @@ def review_rows(root, subjects, session, task, run):
                     "first_task_block_offset_s": first["offset_s"],
                     "second_task_block_onset_s": second["onset_s"],
                     "second_task_block_offset_s": second["offset_s"],
+                    "first_onset_source": first["onset_source"],
+                    "second_onset_source": second["onset_source"],
+                    "inferred_onsets": int(first["onset_inferred"]) + int(second["onset_inferred"]),
                 })
             note = ("Eight BIDS task blocks grouped as (1,2), (3,4), (5,6), (7,8). "
                     "The two task blocks in each pair must have the same STN condition.")
@@ -104,13 +156,20 @@ def review_rows(root, subjects, session, task, run):
                         "first_task_block_onset_s": block["onset_s"],
                         "first_task_block_offset_s": block["offset_s"],
                         "second_task_block_onset_s": "",
-                        "second_task_block_offset_s": ""}
+                        "second_task_block_offset_s": "",
+                        "first_onset_source": block["onset_source"],
+                        "second_onset_source": "",
+                        "inferred_onsets": int(block["onset_inferred"])}
                        for i, block in enumerate(blocks, 1)]
             note = "Four BIDS block intervals detected; one interval per condition period."
         else:
             grouped = []
             note = (f"Found {len(blocks)} BIDS block intervals; expected 8 task blocks "
                     "or 4 condition periods. This participant requires manual BIDS review.")
+        inferred_count = sum(block["onset_inferred"] for block in blocks)
+        if inferred_count:
+            note += (f" WARNING: {inferred_count} missing block_onset markers "
+                     "reconstructed using first trial_onset; onset is approximate.")
         if sub == "110":
             note += " WARNING: legacy records indicate VLM rather than STN stimulation; exclude unless independently verified."
         if len(proposed) != 4:
@@ -128,6 +187,8 @@ def review_rows(root, subjects, session, task, run):
                 "onset_s": "", "offset_s": "", "duration_s": "",
                 "cue_left_n": "", "cue_right_n": "", "n_events": "",
                 "event_types": "", "source_task_blocks": "",
+                "first_onset_source": "", "second_onset_source": "",
+                "inferred_onsets": "",
                 "first_task_block_onset_s": "", "first_task_block_offset_s": "",
                 "second_task_block_onset_s": "", "second_task_block_offset_s": "",
                 "source_event_file": str(path), "wiki_proposed_condition": "unknown",

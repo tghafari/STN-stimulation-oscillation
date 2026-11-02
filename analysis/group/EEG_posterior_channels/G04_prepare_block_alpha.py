@@ -107,7 +107,8 @@ def confirm_sequences(root, subjects, args, failures):
             )
             if len(rows) != 4:
                 raise ValueError(
-                    f"Expected four stimulation periods, found {len(rows)}"
+                    f"Expected four stimulation periods, found {len(rows)}. "
+                    f"Review note: {rows.iloc[0].get('review_note', 'unknown')}"
                 )
             rows = rows.sort_values(
                 "block_index_chronological"
@@ -266,6 +267,8 @@ def prepare_subject(root, subject, peak, sequence, crops, args):
                 "bids_cue_onset_s": mapping["matched_bids_onsets_s"][index],
                 "block_start_s": intervals[task_index][0],
                 "block_end_s": intervals[task_index][1],
+                "block_onset_source": blocks[task_index]["onset_source"],
+                "block_onset_inferred": blocks[task_index]["onset_inferred"],
                 "alpha_peak_hz": peak,
                 "alpha_power": float(power),
                 "n_posterior_channels": len(channels),
@@ -280,6 +283,10 @@ def prepare_subject(root, subject, peak, sequence, crops, args):
             "mapped_epochs": len(indices),
             "sample_offset": mapping["sample_offset"],
             "unretained_bids_cues": mapping["n_unretained_bids_cues"],
+            "inferred_task_blocks": ";".join(
+                str(i + 1) for i, block in enumerate(blocks)
+                if block["onset_inferred"]
+            ),
             "label_source": "interactive_user_confirmation",
             "label_verified": True,
         })
@@ -312,6 +319,8 @@ def save_outputs(output, trials, audits, failures):
         mean_absolute_alpha=("alpha_power", "mean"),
         block_start_s=("block_start_s", "first"),
         block_end_s=("block_end_s", "first"),
+        block_onset_source=("block_onset_source", "first"),
+        block_onset_inferred=("block_onset_inferred", "first"),
     )
     summary.to_csv(output / "block_summary.csv", index=False)
     pd.DataFrame(audits).to_csv(output / "mapping_audit.csv", index=False)
