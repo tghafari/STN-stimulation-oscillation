@@ -1,0 +1,122 @@
+{
+  "sub-101": [
+    "off",
+    "off",
+    "stim_right",
+    "stim_left"
+  ],
+  "sub-102": [
+    "off",
+    "off",
+    "stim_left",
+    "stim_right"
+  ],
+  "sub-103": [
+    "stim_right",
+    "off",
+    "off",
+    "stim_left"
+  ],
+  "sub-104": [
+    "stim_right",
+    "stim_left",
+    "off",
+    "off"
+  ],
+  "sub-105": [
+    "stim_left",
+    "stim_right",
+    "off",
+    "off"
+  ],
+  "sub-106": [
+    "stim_left",
+    "off",
+    "off",
+    "stim_right"
+  ],
+  "sub-107": [
+    "off",
+    "off",
+    "stim_right",
+    "stim_left"
+  ],
+  "sub-108": [
+    "off",
+    "off",
+    "stim_left",
+    "stim_right"
+  ],
+  "sub-110": [
+    "stim_right",
+    "stim_left",
+    "off",
+    "off"
+  ],
+  "sub-112": [
+    "stim_left",
+    "off",
+    "off",
+    "stim_right"
+  ],
+  "sub-113": [
+    "off",
+    "off",
+    "stim_right",
+    "stim_left"
+  ],
+  "sub-114": [
+    "off",
+    "off",
+    "stim_left",
+    "stim_right"
+  ],
+  "sub-115": [
+    "stim_right",
+    "stim_left",
+    "off",
+    "off"
+  ],
+  "sub-116": [
+    "stim_right",
+    "stim_left",
+    "off",
+    "off"
+  ],
+  "sub-118": [
+    "stim_left",
+    "off",
+    "off",
+    "stim_right"
+  ],
+  "sub-119": [
+    "off",
+    "off",
+    "stim_right",
+    "stim_left"
+  ],
+  "sub-120": [
+    "stim_left",
+    "stim_right",
+    "off",
+    "off"
+  ],
+  "sub-121": [
+    "stim_right",
+    "off",
+    "off",
+    "stim_left"
+  ],
+  "sub-122": [
+    "stim_right",
+    "stim_left",
+    "off",
+    "off"
+  ],
+  "sub-123": [
+    "stim_left",
+    "stim_right",
+    "off",
+    "off"
+  ]
+}
