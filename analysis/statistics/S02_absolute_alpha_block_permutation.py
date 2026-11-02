@@ -16,12 +16,13 @@ the existing validated BIDS-to-cleaned-epochs mapping is used.
 
 Run from repository root:
 python analysis/statistics/S02_absolute_alpha_block_permutation.py \\
-    --subjects 101 102 103 --confirmation-csv /path/to/confirmed_blocks.csv
+    --subjects 101 102 103 
 
 The output includes a PDF with methods, observed statistic, null histogram,
 participant effects, and a CSV with per-participant results.
 ==================================================================
 """
+
 from __future__ import annotations
 
 import argparse
@@ -60,7 +61,7 @@ def arguments():
     """Parse paths, participant identifiers and reproducibility settings."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--subjects", nargs="+", required=True)
-    parser.add_argument("--confirmation-csv", required=True, type=Path)
+    parser.add_argument("--input-csv", type=Path, default=None, help="Validated trial-level alpha CSV produced by G04.")
     parser.add_argument("--peaks-csv", type=Path, default=None)
     parser.add_argument("--platform", choices=("mac", "bluebear"), default="mac")
     parser.add_argument("--project-root", default=None)
@@ -252,11 +253,11 @@ def methods_page(n_subjects, n_perm):
          "The group statistic T_observed is the mean of participant D_i, "
          "so each participant contributes equally."),
         ("5. Block-label permutations",
-         "Reconstruct four verified stimulation periods from BIDS block "
-         "events and the confirmed stimulation-block CSV. Each period "
-         "contains two consecutive task blocks. At each permutation, "
-         "shuffle the four period labels within each participant, "
-         "preserving two ON and two OFF periods. All trials stay with "
+         "Four stimulation periods per participant were obtained from "
+         "the validated G04 trial-level dataset. The original block assignments "
+         "and confirmed stimulation labels were preserved. Whole stimulation-period "
+         "labels were permuted within participants, maintaining two ON and two OFF periods. " 
+         "All trials stay with "
          "their original period. Recalculate D_i and their group mean. "
          f"Repeat {n_perm:,} times using the recorded random seed."),
         ("6. Permutation significance",
@@ -309,65 +310,271 @@ def results_page(observed, null, pvalue, subjects, differences):
     fig.tight_layout()
     return fig
 
-
 def main():
-    """Validate inputs, compute effects, permute labels and export report."""
+    """Run block-label permutations using validated G04 trial data.
+
+    Each participant contributes one DBS ON-minus-OFF difference.
+    The permutation test shuffles entire stimulation periods, not
+    individual trials. Each participant has four stimulation periods:
+    two OFF, one left STN ON, and one right STN ON.
+
+    Alpha power has already been calculated by G04 without baseline
+    correction, using the participant's individual alpha peak.
+    """
     args = arguments()
     root = resolve_project_root(args.platform, args.project_root)
-    peaks_path = args.peaks_csv or (
-        root / "derivatives" / "reports" / "group"
-        / "individual_alpha_peaks.csv"
+
+    input_csv = args.input_csv or (
+        root
+        / "derivatives"
+        / "reports"
+        / "group"
+        / "EEG_posterior_channels_block_mapping"
+        / "trial_alpha.csv"
     )
-    peaks = read_peaks(peaks_path)
-    review = pd.read_csv(args.confirmation_csv, dtype=str).fillna("")
-    crops = json.loads(
-        (SUBJECT_DIR / "stimulation_cropped_time.json").read_text(
-            encoding="utf-8"
+
+    # Load validated trial-level absolute alpha power from G04.
+    data_frame = pd.read_csv(
+        input_csv,
+        dtype={"subject": str},
+    )
+
+    required_columns = {
+        "subject",
+        "stimulation_period",
+        "stimulation_side",
+        "dbs_on",
+        "alpha_power",
+        "alpha_peak_hz",
+        "label_verified",
+    }
+
+    missing_columns = required_columns - set(data_frame.columns)
+
+    if missing_columns:
+        raise ValueError(
+            f"Missing required columns: {sorted(missing_columns)}"
         )
+
+    data_frame["subject"] = (
+        data_frame["subject"].str.removeprefix("sub-")
     )
-    subjects = [value.removeprefix("sub-") for value in args.subjects]
-    data = []
-    rows = []
+
+    subjects = [
+        subject.removeprefix("sub-")
+        for subject in args.subjects
+    ]
+
+    if len(subjects) != len(set(subjects)):
+        raise ValueError("Duplicate participant IDs supplied.")
+
+    participant_data = []
+    results = []
+
+    # Calculate one observed ON-minus-OFF effect per participant.
     for subject in subjects:
-        peak = peaks.get(subject)
-        if peak is None or not np.isfinite(peak):
-            raise ValueError(f"Missing/invalid peak for sub-{subject}")
-        periods, labels, n_channels = participant_data(
-            root, subject, float(peak), review, crops, args
+        subject_data = data_frame.loc[
+            data_frame["subject"] == subject
+        ]
+
+        if subject_data.empty:
+            raise ValueError(
+                f"Participant {subject} is missing from G04 data."
+            )
+
+        verified = (
+            subject_data["label_verified"]
+            .astype(str)
+            .str.lower()
+            .eq("true")
         )
-        observed = effect(periods, labels)
-        rows.append({
-            "subject": subject, "peak_hz": peak, "n_channels": n_channels,
-            "n_on": sum(len(x) for x, flag in zip(periods, labels) if flag),
-            "n_off": sum(len(x) for x, flag in zip(periods, labels) if not flag),
-            "on_minus_off": observed,
+
+        if not verified.all():
+            raise ValueError(
+                f"Participant {subject} has unverified labels."
+            )
+
+        if subject_data["alpha_peak_hz"].nunique() != 1:
+            raise ValueError(
+                f"Participant {subject} has inconsistent alpha peaks."
+            )
+
+        periods = []
+        labels = []
+
+        for period_number in range(1, 5):
+            period_data = subject_data.loc[
+                subject_data["stimulation_period"]
+                == period_number
+            ]
+
+            if period_data.empty:
+                raise ValueError(
+                    f"Participant {subject}: "
+                    f"period {period_number} is empty."
+                )
+
+            if period_data["dbs_on"].nunique() != 1:
+                raise ValueError(
+                    f"Participant {subject}: "
+                    f"mixed stimulation labels in period "
+                    f"{period_number}."
+                )
+
+            if period_data["stimulation_side"].nunique() != 1:
+                raise ValueError(
+                    f"Participant {subject}: "
+                    f"mixed stimulation sides in period "
+                    f"{period_number}."
+                )
+
+            alpha_values = period_data[
+                "alpha_power"
+            ].to_numpy(dtype=float)
+
+            if not np.isfinite(alpha_values).all():
+                raise ValueError(
+                    f"Participant {subject}: "
+                    "non-finite alpha power."
+                )
+
+            stimulation_side = str(
+                period_data["stimulation_side"].iloc[0]
+            ).strip().lower()
+
+            is_on = (
+                str(period_data["dbs_on"].iloc[0])
+                .strip()
+                .lower()
+                == "true"
+            )
+
+            if is_on != (stimulation_side != "off"):
+                raise ValueError(
+                    f"Participant {subject}: inconsistent "
+                    "stimulation condition."
+                )
+
+            periods.append(alpha_values)
+            labels.append(is_on)
+
+        labels = np.asarray(labels, dtype=bool)
+
+        if labels.sum() != 2:
+            raise ValueError(
+                f"Participant {subject}: expected "
+                "two ON and two OFF periods."
+            )
+
+        # effect() calculates trial-weighted ON minus OFF power.
+        observed_difference = effect(periods, labels)
+
+        n_on = sum(
+            len(values)
+            for values, is_on in zip(periods, labels)
+            if is_on
+        )
+
+        n_off = sum(
+            len(values)
+            for values, is_on in zip(periods, labels)
+            if not is_on
+        )
+
+        results.append({
+            "subject": subject,
+            "peak_hz": float(
+                subject_data["alpha_peak_hz"].iloc[0]
+            ),
+            "n_on": n_on,
+            "n_off": n_off,
+            "on_minus_off": observed_difference,
         })
-        data.append((periods, labels))
-        print(f"sub-{subject}: peak={peak:g} Hz; ON-OFF={observed:.6g}")
-    differences = np.asarray([row["on_minus_off"] for row in rows])
-    statistic = float(differences.mean())
-    null = permutation_distribution(data, args.n_permutations, args.seed)
-    pvalue = (1 + np.count_nonzero(np.abs(null) >= abs(statistic))) / (
-        args.n_permutations + 1
+
+        participant_data.append((periods, labels))
+
+        print(
+            f"sub-{subject}: "
+            f"ON - OFF = {observed_difference:.6g}"
+        )
+
+    # Average participant-level differences equally.
+    differences = np.asarray([
+        result["on_minus_off"]
+        for result in results
+    ])
+
+    observed_statistic = float(differences.mean())
+
+    # Randomly permute whole stimulation-period labels
+    # independently within each participant.
+    null_distribution = permutation_distribution(
+        participant_data,
+        args.n_permutations,
+        args.seed,
     )
-    output = (
-        root / "derivatives" / "reports" / "group"
+
+    # Two-sided Monte Carlo permutation p-value.
+    p_value = (
+        1
+        + np.count_nonzero(
+            np.abs(null_distribution)
+            >= abs(observed_statistic)
+        )
+    ) / (args.n_permutations + 1)
+
+    # Save statistical results and PDF report.
+    output_dir = (
+        root
+        / "derivatives"
+        / "reports"
+        / "group"
         / "absolute_alpha_block_permutation"
     )
-    output.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(rows).to_csv(output / "participant_effects.csv", index=False)
-    pd.DataFrame({"permuted_group_effect": null}).to_csv(
-        output / "permutation_null.csv", index=False
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    pd.DataFrame(results).to_csv(
+        output_dir / "participant_effects.csv",
+        index=False,
     )
-    with PdfPages(output / "absolute_alpha_block_permutation.pdf") as pdf:
-        for figure in (
-            methods_page(len(subjects), args.n_permutations),
-            results_page(statistic, null, pvalue, subjects, differences),
-        ):
+
+    pd.DataFrame({
+        "permuted_group_effect": null_distribution
+    }).to_csv(
+        output_dir / "permutation_null.csv",
+        index=False,
+    )
+
+    report_path = (
+        output_dir / "absolute_alpha_block_permutation.pdf"
+    )
+
+    with PdfPages(report_path) as pdf:
+        figures = [
+            methods_page(
+                len(subjects),
+                args.n_permutations,
+            ),
+            results_page(
+                observed_statistic,
+                null_distribution,
+                p_value,
+                subjects,
+                differences,
+            ),
+        ]
+
+        for figure in figures:
             pdf.savefig(figure)
             plt.close(figure)
-    print(f"Observed group effect: {statistic:.6g}; two-sided p={pvalue:.6g}")
-    print(f"Report: {output}")
+
+    print("\nPermutation analysis complete.")
+    print(f"Participants: {len(subjects)}")
+    print(f"Observed ON - OFF: {observed_statistic:.6g}")
+    print(f"Two-sided p-value: {p_value:.6g}")
+    print(f"Report: {report_path}")
+
 
 
 if __name__ == "__main__":
