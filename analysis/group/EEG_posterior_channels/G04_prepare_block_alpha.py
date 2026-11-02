@@ -39,7 +39,8 @@ for folder in (
         sys.path.insert(0, str(folder))
 
 from pipeline_config import resolve_project_root, stage_path
-from A00_review_stimulation_blocks import events_path, get_blocks
+from A00_review_stimulation_blocks import events_path, get_blocks, review_rows
+from run_all_participants import choose_order
 from A02_validate_bids_epoch_mapping import map_condition_epochs
 
 # Edit these constants for subsequent analyses.
@@ -47,7 +48,6 @@ ATTENTION_WINDOW = (0.3, 0.8)
 ALPHA_PEAK_RANGE = 1.0
 FREQS = np.arange(2.0, 32.0, 0.5)
 ROI8 = ("PO3", "POz", "PO4", "O1", "Oz", "O2", "PO7", "PO8")
-SEQUENCE_FILE = SUBJECT_DIR / "stimulation_sequence_reference.json"
 CROP_FILE = SUBJECT_DIR / "stimulation_cropped_time.json"
 
 
@@ -65,64 +65,38 @@ def parse_args():
     return parser.parse_args()
 
 
-def confirm_sequences(subjects, reference):
-    """Interactively confirm all four stimulation periods before processing.
+def confirm_sequences(root, subjects, args):
+    """Confirm every participant using the existing laterality review UI.
 
-    Proposed labels originate from the wiki and must be checked against
-    the actual stimulation log. 'exclude' is a placeholder, NOT an
-    exclusion instruction: enter the four real labels for such subjects.
-
-    No EEG files, alpha peaks, or BIDS events are processed until every
-    requested participant has an explicitly confirmed valid sequence.
+    Reuses choose_order() from run_all_participants.py, including its
+    familiar l/r/o prompts and actual BIDS block times. A skip or quit
+    aborts G04: exclusion decisions belong to the later statistics step.
+    No cleaned EEG epochs or alpha-power calculations occur until ALL
+    requested sequences have been confirmed.
     """
     confirmed = {}
-    allowed = {"off", "stim_left", "stim_right"}
-    expected = ["off", "off", "stim_left", "stim_right"]
-
-    print("\\nConfirm chronological stimulation sequences for ALL subjects.")
-    print("Each entry represents two consecutive task blocks.")
-    print("Allowed labels: off, stim_left, stim_right.")
-    print("Check the stimulation log; the JSON is only a proposal.")
-    print("Type 'yes' to confirm, 'edit' to replace, or 'quit' to abort.")
-
     for subject in subjects:
-        proposed = reference.get(f"sub-{subject}", [])
-        labels = list(proposed)
-        while True:
-            print(f"\\nsub-{subject}: {', '.join(labels) if labels else 'unknown'}")
-            if sorted(labels) != sorted(expected):
-                print("A valid sequence is required; no subject is excluded.")
-                action = "edit"
-            else:
-                action = input("Confirm sequence? [yes/edit/quit]: ").strip().lower()
-
-            if action in ("quit", "q"):
-                raise SystemExit("Cancelled before any EEG processing.")
-            if action in ("edit", "e"):
-                response = input(
-                    "Enter four labels in chronological order, comma-separated: "
-                ).strip().lower()
-                candidate = [
-                    item.strip().replace("-", "_")
-                    for item in response.split(",")
-                ]
-                if len(candidate) != 4 or not all(
-                    item in allowed for item in candidate
-                ) or sorted(candidate) != sorted(expected):
-                    print(
-                        "Invalid sequence. Expected two off, one stim_left "
-                        "and one stim_right. Try again."
-                    )
-                    continue
-                labels = candidate
-                continue
-            if action in ("yes", "y"):
-                confirmed[f"sub-{subject}"] = labels.copy()
-                print(f"Confirmed sub-{subject}.")
-                break
-            print("Please enter yes, edit, or quit.")
-
-    print("\\nAll requested sequences confirmed. Starting processing.")
+        rows = pd.DataFrame(
+            review_rows(
+                root, [subject], args.session, args.task, args.run
+            )
+        )
+        if len(rows) != 4:
+            raise ValueError(
+                f"sub-{subject}: expected four stimulation periods; "
+                f"found {len(rows)}. Check original BIDS events."
+            )
+        rows = rows.sort_values(
+            "block_index_chronological"
+        ).reset_index(drop=True)
+        action, labels = choose_order(subject, rows)
+        if action != "confirmed":
+            raise SystemExit(
+                f"sub-{subject}: no sequence confirmed. "
+                "G04 stopped without excluding participants."
+            )
+        confirmed[f"sub-{subject}"] = labels
+    print("\\nAll stimulation sequences confirmed; processing EEG.")
     return confirmed
 
 
@@ -285,9 +259,8 @@ def main():
     subjects = [value.removeprefix("sub-") for value in args.subjects]
     if len(subjects) != len(set(subjects)):
         raise ValueError("Duplicate subject identifiers supplied")
-    reference = json.loads(SEQUENCE_FILE.read_text(encoding="utf-8"))
-    sequence = confirm_sequences(subjects, reference)
     root = resolve_project_root(args.platform, args.project_root)
+    sequence = confirm_sequences(root, subjects, args)
     peaks_path = args.peaks_csv or (
         root / "derivatives" / "reports" / "group"
         / "EEG_posterior_channels_alpha_changes_stimOn_stimOff"
