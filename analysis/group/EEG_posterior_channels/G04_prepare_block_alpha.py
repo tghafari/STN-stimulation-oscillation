@@ -346,7 +346,6 @@ def main():
         sequence = confirm_sequences(root, subjects, args, failures)
         peaks_path = args.peaks_csv or (
             root / "derivatives" / "reports" / "group"
-            / "EEG_posterior_channels_alpha_changes_stimOn_stimOff"
             / "individual_alpha_peaks.csv"
         )
         peaks = pd.read_csv(peaks_path, dtype={"subject": str})
