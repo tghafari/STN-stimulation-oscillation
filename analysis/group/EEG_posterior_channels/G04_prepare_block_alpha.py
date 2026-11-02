@@ -238,6 +238,11 @@ def prepare_subject(root, subject, peak, sequence, crops, args):
         mapping = map_condition_epochs(
             ep, bids, crop_ranges(crops[key][condition]),
             intervals, condition,
+            diagnostic_csv=(
+                root / "derivatives" / "reports" / "group"
+                / "EEG_posterior_channels_block_mapping"
+                / "diagnostics" / f"sub-{subject}_{condition}_timing.csv"
+            ),
         )
         values = absolute_alpha(ep, channels, peak, args.n_jobs)
         indices = mapping["matched_task_block_indices"]

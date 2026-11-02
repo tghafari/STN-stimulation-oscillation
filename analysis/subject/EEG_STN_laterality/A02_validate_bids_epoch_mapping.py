@@ -5,6 +5,8 @@ against cue onset events in the original BIDS events.tsv. All cleaned epochs
 must match uniquely; ambiguity or outdated crop times is a hard error.
 """
 from __future__ import annotations
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 
@@ -48,68 +50,132 @@ def build_expected(events, crop_ranges, task_blocks, sfreq):
     return expected
 
 
-def validate_mapping(epochs, expected, condition, tolerance_samples=2):
-    """Find and validate a single sample-origin offset, never assume its value."""
+def _match_shift(observed, sides, expected, shift, tolerance):
+    """Match every retained cue uniquely, in chronological order."""
+    exp_samples = np.asarray([row[0] for row in expected], dtype=np.int64)
+    exp_sides = [row[1] for row in expected]
+    matches = []
+    previous = -1
+    for sample, side in zip(observed, sides):
+        target = int(sample - shift)
+        position = int(np.searchsorted(exp_samples, target))
+        possible = [
+            k for k in (position - 1, position, position + 1)
+            if previous < k < len(expected)
+            and exp_sides[k] == side
+            and abs(int(exp_samples[k]) - target) <= tolerance
+        ]
+        if len(possible) != 1:
+            return None
+        previous = possible[0]
+        matches.append(previous)
+    return matches
+
+
+def _diagnostic_rows(observed, sides, expected, shift):
+    """Describe nearest same-cue timing residuals without claiming matches."""
+    rows = []
+    for index, (sample, side) in enumerate(zip(observed, sides)):
+        choices = [
+            (abs(int(sample) - int(item[0]) - shift), j)
+            for j, item in enumerate(expected) if item[1] == side
+        ]
+        nearest = min(choices) if choices else None
+        matched = expected[nearest[1]] if nearest else None
+        rows.append({
+            "clean_epoch_index": index,
+            "clean_event_sample": int(sample),
+            "cue_direction": side,
+            "nearest_bids_onset_s": matched[3] if matched else np.nan,
+            "nearest_bids_block_index": matched[2] if matched else np.nan,
+            "nearest_residual_samples": nearest[0] if nearest else np.nan,
+            "candidate_shift_samples": shift,
+            "verified": False,
+        })
+    return rows
+
+
+def validate_mapping(
+    epochs, expected, condition, tolerance_samples=2,
+    diagnostic_csv=None,
+):
+    """Validate a unique global offset; save detailed diagnostics on failure.
+
+    Search all possible same-direction event pairs, not just the first
+    20 cleaned and 50 BIDS events. A valid offset must match EVERY
+    retained cue uniquely and in chronological order within two samples.
+
+    Per-crop discontinuities are investigated in the diagnostic CSV but
+    never accepted automatically: a piecewise mapping must be separately
+    established and validated before block-level inference.
+    """
     if not expected:
-        raise ValueError(f"{condition}: no BIDS cue events in the saved crop intervals.")
-    observed_samples = epochs.events[:, 0].astype(np.int64)
-    inverse_ids = {int(v): _cue_code(k) for k, v in epochs.event_id.items()}
-    observed_sides = [inverse_ids.get(int(x)) for x in epochs.events[:, 2]]
-    if any(x is None for x in observed_sides):
-        raise ValueError(f"{condition}: cleaned epochs contain non-cue event IDs.")
-    exp_samples = np.asarray([x[0] for x in expected], dtype=np.int64)
-    exp_sides = [x[1] for x in expected]
-    if len(observed_samples) > len(expected):
-        raise ValueError(f"{condition}: {len(observed_samples)} cleaned epochs exceed "
-                         f"{len(expected)} BIDS cue events inside crops. Check the JSON.")
-    # The sample origin of concatenated Raw depends on first_samp and crop
-    # operations. Test candidate offsets and require unique cue identity and
-    # near-exact timing for every retained epoch.
-    candidates = set()
-    for i in range(min(20, len(observed_samples))):
-        for j in range(min(50, len(expected))):
-            if observed_sides[i] == exp_sides[j]:
-                candidates.add(int(observed_samples[i] - exp_samples[j]))
-    results = []
-    for shift in candidates:
-        matches = []
-        used = set()
-        for sample, side in zip(observed_samples, observed_sides):
-            target = int(sample - shift)
-            ix = int(np.searchsorted(exp_samples, target))
-            neighbors = [k for k in (ix-1, ix, ix+1) if 0 <= k < len(expected)]
-            possible = [k for k in neighbors if k not in used
-                        and exp_sides[k] == side
-                        and abs(int(exp_samples[k]) - target) <= tolerance_samples]
-            if len(possible) != 1:
-                break
-            k = possible[0]
-            used.add(k)
-            matches.append(k)
-        if len(matches) == len(observed_samples):
-            results.append((shift, matches))
-    if len(results) != 1:
-        raise ValueError(
-            f"{condition}: could not uniquely verify BIDS-to-clean-epoch timing "
-            f"({len(observed_samples)} retained, {len(expected)} BIDS cues, "
-            f"{len(results)} valid sample offsets). Crop JSON may differ from "
-            "the version used to generate the cleaned epochs. Re-run preprocessing "
-            "with corrected crop times; do not use unverified TFR results."
+        raise ValueError(f"{condition}: no BIDS cues in crop intervals")
+    observed = epochs.events[:, 0].astype(np.int64)
+    inverse = {int(code): _cue_code(name)
+               for name, code in epochs.event_id.items()}
+    sides = [inverse.get(int(code)) for code in epochs.events[:, 2]]
+    if any(side is None for side in sides):
+        raise ValueError(f"{condition}: non-cue event in cleaned epochs")
+    if len(observed) > len(expected):
+        raise ValueError(f"{condition}: more cleaned than BIDS cues")
+
+    candidates = {
+        int(sample - item[0])
+        for sample, side in zip(observed, sides)
+        for item in expected if item[1] == side
+    }
+    solutions = []
+    for shift in sorted(candidates):
+        matches = _match_shift(
+            observed, sides, expected, shift, tolerance_samples
         )
-    shift, matches = results[0]
-    if matches != sorted(matches):
-        raise ValueError(f"{condition}: mapped events are not chronologically ordered.")
+        if matches is not None:
+            solutions.append((shift, matches))
+            if len(solutions) > 1:
+                break
+
+    if len(solutions) != 1:
+        # Select the candidate matching the largest number of early
+        # events for diagnostics ONLY, never for block assignment.
+        scored = []
+        for shift in candidates:
+            count = 0
+            for sample, side in zip(observed, sides):
+                if any(
+                    item[1] == side
+                    and abs(int(sample - item[0] - shift))
+                    <= tolerance_samples
+                    for item in expected
+                ):
+                    count += 1
+            scored.append((count, shift))
+        best_count, best_shift = max(scored) if scored else (0, 0)
+        if diagnostic_csv is not None:
+            path = Path(diagnostic_csv)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            pd.DataFrame(
+                _diagnostic_rows(observed, sides, expected, best_shift)
+            ).to_csv(path, index=False)
+        raise ValueError(
+            f"{condition}: {len(solutions)} valid global offsets; "
+            f"best candidate explains {best_count}/{len(observed)} "
+            f"cue timings within {tolerance_samples} samples. "
+            f"Diagnostic CSV: {diagnostic_csv}. "
+            "Do not assign blocks until timing is uniquely verified."
+        )
+
+    shift, matches = solutions[0]
     return {
         "sample_offset": int(shift),
         "matched_expected_indices": matches,
         "matched_bids_onsets_s": [float(expected[i][3]) for i in matches],
         "matched_task_block_indices": [int(expected[i][2]) for i in matches],
         "n_bids_cues_in_crops": len(expected),
-        "n_clean_epochs": len(observed_samples),
-        "n_unretained_bids_cues": len(expected) - len(observed_samples),
+        "n_clean_epochs": len(observed),
+        "n_unretained_bids_cues": len(expected) - len(observed),
     }
 
-
-def map_condition_epochs(epochs, events, crop_ranges, task_blocks, condition):
+def map_condition_epochs(\n    epochs, events, crop_ranges, task_blocks, condition, diagnostic_csv=None\n):
     expected = build_expected(events, crop_ranges, task_blocks, float(epochs.info["sfreq"]))
-    return validate_mapping(epochs, expected, condition)
+    return validate_mapping(\n        epochs, expected, condition, diagnostic_csv=diagnostic_csv\n    )
