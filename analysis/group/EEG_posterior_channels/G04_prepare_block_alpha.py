@@ -3,7 +3,8 @@
 
 IMPORTANT: Run ALL intended participants together in ONE G04 invocation.
 The output CSV files (trial_alpha.csv, block_summary.csv and mapping_audit.csv)
-are replaced on every run. Running only one participant will overwrite
+are replaced on every run. For testing a subset, supply --output-dir
+with a separate directory so the full-group outputs are not overwritten. Running only one participant will overwrite
 the previous multi-participant outputs; G04 does not append across runs.
 
 Confirm each stimulation sequence before processing. Confirmed sequences
@@ -64,6 +65,10 @@ def parse_args():
     parser.add_argument("--run", default="01")
     parser.add_argument("--n-jobs", type=int, default=4)
     parser.add_argument("--peaks-csv", type=Path)
+    parser.add_argument(
+        "--output-dir", type=Path, default=None,
+        help="Write test runs to a separate directory to protect group CSVs.",
+    )
     parser.add_argument(
         "--reconfirm", action="store_true",
         help="Ask again for previously confirmed stimulation sequences.",
@@ -272,9 +277,11 @@ def prepare_subject(root, subject, peak, sequence, crops, args):
             ep, bids, crop_ranges(crops[key][condition]),
             intervals, condition,
             diagnostic_csv=(
+                args.output_dir
+                if args.output_dir is not None else
                 root / "derivatives" / "reports" / "group"
                 / "EEG_posterior_channels_block_mapping"
-                / "diagnostics" / f"sub-{subject}_{condition}_timing.csv"
+            ) / "diagnostics" / f"sub-{subject}_{condition}_timing.csv"
             ),
         )
         values = absolute_alpha(ep, channels, peak, args.n_jobs)
@@ -320,6 +327,10 @@ def prepare_subject(root, subject, peak, sequence, crops, args):
             "clean_epochs": len(ep),
             "mapped_epochs": len(indices),
             "sample_offset": mapping["sample_offset"],
+            "segment_sample_offsets": str(
+                mapping.get("segment_sample_offsets", [])
+            ),
+            "segment_split_epoch": mapping.get("segment_split_epoch"),
             "coordinate_system": mapping["coordinate_system"],
             "unretained_bids_cues": mapping["n_unretained_bids_cues"],
             "inferred_task_blocks": ";".join(
@@ -376,6 +387,8 @@ def main():
         root / "derivatives" / "reports" / "group"
         / "EEG_posterior_channels_block_mapping"
     )
+    if args.output_dir is not None:
+        output = args.output_dir.expanduser().resolve()
     failures = []
     trials = []
     audits = []

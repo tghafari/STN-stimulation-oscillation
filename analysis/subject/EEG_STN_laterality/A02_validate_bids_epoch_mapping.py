@@ -199,6 +199,130 @@ def validate_mapping(
         "n_unretained_bids_cues": len(expected) - len(observed),
     }
 
+
+def _piecewise_solutions(observed, sides, expected):
+    """Return distinct valid event-index assignments and their offsets."""
+    if not len(observed) or not expected:
+        return {}
+    candidates = {
+        int(observed[0] - item[0])
+        for item in expected if item[1] == sides[0]
+    }
+    solutions = {}
+    for shift in candidates:
+        matches = _match_shift(observed, sides, expected, shift, 2)
+        if matches is not None:
+            solutions.setdefault(tuple(matches), []).append(int(shift))
+    return solutions
+
+
+def validate_piecewise_mapping(
+    epochs, events, crop_ranges, task_blocks, condition
+):
+    """Try two crop-specific offsets with unique full-trial validation.
+
+    Search all possible chronological split points; never assume trial
+    counts identify crop boundaries. Require one unique complete sequence
+    of BIDS cue identities across both original and concatenated models.
+    """
+    if len(crop_ranges) != 2:
+        raise ValueError("Piecewise mapping requires two crop intervals.")
+    observed = epochs.events[:, 0].astype(np.int64)
+    inverse = {
+        int(code): _cue_code(name)
+        for name, code in epochs.event_id.items()
+    }
+    sides = [inverse.get(int(code)) for code in epochs.events[:, 2]]
+    if any(side is None for side in sides):
+        raise ValueError("Non-cue event in cleaned epochs.")
+    solutions = {}
+    for system in ("original", "concatenated"):
+        expected = build_expected(
+            events, crop_ranges, task_blocks,
+            float(epochs.info["sfreq"]), coordinate_system=system
+        )
+        groups = [
+            [(i, item) for i, item in enumerate(expected)
+             if start <= item[3] <= end]
+            for start, end in crop_ranges
+        ]
+        if any(not group for group in groups):
+            continue
+        for split in range(1, len(observed)):
+            left = _piecewise_solutions(
+                observed[:split], sides[:split],
+                [item for _, item in groups[0]]
+            )
+            if not left:
+                continue
+            right = _piecewise_solutions(
+                observed[split:], sides[split:],
+                [item for _, item in groups[1]]
+            )
+            for li, loff in left.items():
+                for ri, roff in right.items():
+                    indices = (
+                        tuple(groups[0][i][0] for i in li)
+                        + tuple(groups[1][i][0] for i in ri)
+                    )
+                    identity = tuple(expected[i][3] for i in indices)
+                    solutions.setdefault(
+                        identity,
+                        (system, expected, indices, split, loff, roff)
+                    )
+                    if len(solutions) > 1:
+                        raise ValueError(
+                            "Ambiguous piecewise BIDS cue assignments."
+                        )
+    if len(solutions) != 1:
+        raise ValueError(
+            "No unique two-segment mapping within two samples."
+        )
+    system, expected, indices, split, loff, roff = (
+        next(iter(solutions.values()))
+    )
+    offsets = []
+    for candidates, samples, matched in (
+        (loff, observed[:split], indices[:split]),
+        (roff, observed[split:], indices[split:]),
+    ):
+        shift = min(
+            candidates,
+            key=lambda value: (
+                max(
+                    abs(int(sample) - int(expected[i][0]) - value)
+                    for sample, i in zip(samples, matched)
+                ),
+                sum(
+                    abs(int(sample) - int(expected[i][0]) - value)
+                    for sample, i in zip(samples, matched)
+                ),
+                abs(value),
+            )
+        )
+        offsets.append(int(shift))
+    print(
+        f"{condition}: piecewise {system} mapping verified; "
+        f"split={split}, offsets={offsets}"
+    )
+    return {
+        "sample_offset": None,
+        "segment_sample_offsets": offsets,
+        "segment_split_epoch": split,
+        "coordinate_system": f"piecewise_{system}",
+        "matched_expected_indices": list(indices),
+        "matched_bids_onsets_s": [
+            float(expected[i][3]) for i in indices
+        ],
+        "matched_task_block_indices": [
+            int(expected[i][2]) for i in indices
+        ],
+        "n_bids_cues_in_crops": len(expected),
+        "n_clean_epochs": len(observed),
+        "n_unretained_bids_cues": len(expected) - len(observed),
+    }
+
+
 def map_condition_epochs(
     epochs, events, crop_ranges, task_blocks, condition, diagnostic_csv=None
 ):
@@ -228,10 +352,18 @@ def map_condition_epochs(
             failures[system] = str(exc)
 
     if not solutions:
+        if len(crop_ranges) == 2:
+            try:
+                return validate_piecewise_mapping(
+                    epochs, events, crop_ranges, task_blocks, condition
+                )
+            except ValueError as exc:
+                failures["piecewise"] = str(exc)
         raise ValueError(
             f"{condition}: both timing coordinate systems failed. "
             f"Original: {failures.get('original')}. "
-            f"Concatenated: {failures.get('concatenated')}."
+            f"Concatenated: {failures.get('concatenated')}. "
+            f"Piecewise: {failures.get('piecewise')}."
         )
     if len(solutions) == 2:
         original = solutions["original"]["matched_bids_onsets_s"]
