@@ -301,6 +301,7 @@ def prepare_subject(root, subject, peak, sequence, crops, args):
             "clean_epochs": len(ep),
             "mapped_epochs": len(indices),
             "sample_offset": mapping["sample_offset"],
+            "coordinate_system": mapping["coordinate_system"],
             "unretained_bids_cues": mapping["n_unretained_bids_cues"],
             "inferred_task_blocks": ";".join(
                 str(i + 1) for i, block in enumerate(blocks)

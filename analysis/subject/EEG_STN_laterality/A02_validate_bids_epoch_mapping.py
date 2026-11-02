@@ -20,8 +20,12 @@ def _cue_code(label):
     return None
 
 
-def build_expected(events, crop_ranges, task_blocks, sfreq, coordinate_system="concatenated"):
-    """Map BIDS cue events into concatenated-condition sample coordinates."""
+def build_expected(
+    events, crop_ranges, task_blocks, sfreq, coordinate_system="concatenated"
+):
+    """Project BIDS cue events onto original or concatenated sample coordinates."""
+    if coordinate_system not in ("original", "concatenated"):
+        raise ValueError(f"Unknown coordinate system: {coordinate_system}")
     if "trial_type" not in events or "onset" not in events:
         raise ValueError("BIDS events.tsv lacks trial_type or onset.")
     events = events.copy()
@@ -41,8 +45,11 @@ def build_expected(events, crop_ranges, task_blocks, sfreq, coordinate_system="c
                 raise ValueError(
                     f"Cue at {onset:.3f}s is in a crop but not uniquely inside a BIDS task block."
                 )
-            expected.append((int(round((offset + onset - crop_start) * sfreq)),
-                             side, matched[0], onset))
+            if coordinate_system == "original":
+                sample = int(round(onset * sfreq))
+            else:
+                sample = int(round((offset + onset - crop_start) * sfreq))
+            expected.append((sample, side, matched[0], onset))
         offset += crop_end - crop_start
     expected.sort(key=lambda x: x[0])
     if len({e[0] for e in expected}) != len(expected):
@@ -179,10 +186,50 @@ def validate_mapping(
 def map_condition_epochs(
     epochs, events, crop_ranges, task_blocks, condition, diagnostic_csv=None
 ):
-    """Build and validate BIDS-to-epoch mapping, saving diagnostics if needed."""
-    expected = build_expected(
-        events, crop_ranges, task_blocks, float(epochs.info["sfreq"])
+    """Try both event coordinate systems without accepting ambiguous mappings.
+
+    An original-coordinate mapping uses BIDS onset * sampling frequency.
+    A concatenated-coordinate mapping subtracts crop starts and accumulates
+    retained crop durations. Both undergo identical strict one-to-one
+    validation. If both succeed they must identify identical BIDS events.
+    """
+    solutions = {}
+    failures = {}
+    for system in ("original", "concatenated"):
+        expected = build_expected(
+            events, crop_ranges, task_blocks,
+            float(epochs.info["sfreq"]), coordinate_system=system,
+        )
+        output = None
+        if diagnostic_csv is not None:
+            path = Path(diagnostic_csv)
+            output = path.with_name(f"{path.stem}_{system}{path.suffix}")
+        try:
+            solutions[system] = validate_mapping(
+                epochs, expected, condition, diagnostic_csv=output
+            )
+        except ValueError as exc:
+            failures[system] = str(exc)
+
+    if not solutions:
+        raise ValueError(
+            f"{condition}: both timing coordinate systems failed. "
+            f"Original: {failures.get('original')}. "
+            f"Concatenated: {failures.get('concatenated')}."
+        )
+    if len(solutions) == 2:
+        original = solutions["original"]["matched_bids_onsets_s"]
+        concatenated = solutions["concatenated"]["matched_bids_onsets_s"]
+        if original != concatenated:
+            raise ValueError(
+                f"{condition}: original and concatenated systems produce "
+                "different BIDS cue assignments; mapping is ambiguous."
+            )
+
+    selected = (
+        "original" if "original" in solutions else "concatenated"
     )
-    return validate_mapping(
-        epochs, expected, condition, diagnostic_csv=diagnostic_csv
-    )
+    result = solutions[selected]
+    result["coordinate_system"] = selected
+    print(f"{condition}: validated using {selected} coordinates")
+    return result
