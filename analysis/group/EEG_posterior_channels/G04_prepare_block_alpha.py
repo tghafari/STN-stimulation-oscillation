@@ -7,8 +7,7 @@ cue direction, absolute posterior alpha power and the source of the labels.
 
 The wiki-derived JSON provides proposed labels. The user must confirm or
 correct each participant sequence interactively BEFORE EEG processing. Original BIDS block-onset/end events determine the
-actual boundaries. The validated BIDS-to-cleaned-Epochs mapping must match
-every retained cue epoch uniquely or processing stops.
+actual boundaries. The validated BIDS-to-cleaned-Epochs mapping must match every retained\ncue epoch uniquely. On error, the user may skip the participant or stop;\nerrors are recorded and successful participant results are retained.
 
 Output: trial_alpha.csv, block_summary.csv and mapping_audit.csv.
 These outputs can be reused for ON/OFF, left/right and cue-side analyses.
@@ -22,6 +21,8 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import traceback
+from datetime import datetime, timezone
 from pathlib import Path
 
 import mne
@@ -65,38 +66,72 @@ def parse_args():
     return parser.parse_args()
 
 
-def confirm_sequences(root, subjects, args):
-    """Confirm every participant using the existing laterality review UI.
+def ask_on_error(subject, stage, exc, failures):
+    """Record an error and ask whether to skip or stop.
 
-    Reuses choose_order() from run_all_participants.py, including its
-    familiar l/r/o prompts and actual BIDS block times. A skip or quit
-    aborts G04: exclusion decisions belong to the later statistics step.
-    No cleaned EEG epochs or alpha-power calculations occur until ALL
-    requested sequences have been confirmed.
+    Never silently omit a participant. Preserve the full traceback in
+    the error log for debugging, including errors in block confirmation.
+    """
+    detail = traceback.format_exc()
+    failures.append({
+        "subject": subject,
+        "stage": stage,
+        "error_type": type(exc).__name__,
+        "error_message": str(exc),
+        "traceback": detail,
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+    })
+    print(f"\\nERROR sub-{subject} ({stage}): {exc}")
+    while True:
+        choice = input(
+            "Skip this participant and continue [s], or stop [q]? "
+        ).strip().lower()
+        if choice in ("s", "skip"):
+            return "skip"
+        if choice in ("q", "quit"):
+            return "quit"
+        print("Please enter s or q.")
+
+
+def confirm_sequences(root, subjects, args, failures):
+    """Confirm block orders using the existing l/r/o interface.
+
+    Any failure prompts the user to skip or quit. A skipped participant
+    remains eligible for future runs and is never excluded automatically.
     """
     confirmed = {}
     for subject in subjects:
-        rows = pd.DataFrame(
-            review_rows(
-                root, [subject], args.session, args.task, args.run
+        try:
+            rows = pd.DataFrame(
+                review_rows(root, [subject], args.session, args.task, args.run)
             )
-        )
-        if len(rows) != 4:
-            raise ValueError(
-                f"sub-{subject}: expected four stimulation periods; "
-                f"found {len(rows)}. Check original BIDS events."
-            )
-        rows = rows.sort_values(
-            "block_index_chronological"
-        ).reset_index(drop=True)
-        action, labels = choose_order(subject, rows)
-        if action != "confirmed":
-            raise SystemExit(
-                f"sub-{subject}: no sequence confirmed. "
-                "G04 stopped without excluding participants."
-            )
-        confirmed[f"sub-{subject}"] = labels
-    print("\\nAll stimulation sequences confirmed; processing EEG.")
+            if len(rows) != 4:
+                raise ValueError(
+                    f"Expected four stimulation periods, found {len(rows)}"
+                )
+            rows = rows.sort_values(
+                "block_index_chronological"
+            ).reset_index(drop=True)
+            action, labels = choose_order(subject, rows)
+            if action == "q":
+                raise KeyboardInterrupt("User quit during confirmation")
+            if action == "s":
+                failures.append({
+                    "subject": subject, "stage": "confirmation",
+                    "error_type": "UserSkip",
+                    "error_message": "Participant skipped by user",
+                    "traceback": "",
+                    "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+                })
+                continue
+            if action != "confirmed":
+                raise ValueError("Stimulation sequence was not confirmed")
+            confirmed[f"sub-{subject}"] = labels
+        except KeyboardInterrupt:
+            raise
+        except Exception as exc:
+            if ask_on_error(subject, "confirmation", exc, failures) == "quit":
+                break
     return confirmed
 
 
@@ -253,48 +288,21 @@ def prepare_subject(root, subject, peak, sequence, crops, args):
     return trial_rows, audits
 
 
-def main():
-    """Prepare reusable tables; fail rather than silently mislabel trials."""
-    args = parse_args()
-    subjects = [value.removeprefix("sub-") for value in args.subjects]
-    if len(subjects) != len(set(subjects)):
-        raise ValueError("Duplicate subject identifiers supplied")
-    root = resolve_project_root(args.platform, args.project_root)
-    sequence = confirm_sequences(root, subjects, args)
-    peaks_path = args.peaks_csv or (
-        root / "derivatives" / "reports" / "group"
-        / "EEG_posterior_channels_alpha_changes_stimOn_stimOff"
-        / "individual_alpha_peaks.csv"
-    )
-    peaks = pd.read_csv(peaks_path, dtype={"subject": str})
-    peaks["subject"] = peaks["subject"].str.removeprefix("sub-")
-    if peaks["subject"].duplicated().any():
-        raise ValueError("Duplicate subject in alpha-peak CSV")
-    peaks = peaks.set_index("subject")
-    crops = json.loads(CROP_FILE.read_text(encoding="utf-8"))
-
-    trials = []
-    audits = []
-    for subject in subjects:
-        if subject not in peaks.index:
-            raise ValueError(f"sub-{subject}: missing individual alpha peak")
-        peak = float(peaks.loc[subject, "peak_hz"])
-        if not np.isfinite(peak):
-            raise ValueError(f"sub-{subject}: invalid alpha peak")
-        trial_rows, audit_rows = prepare_subject(
-            root, subject, peak, sequence, crops, args
-        )
-        trials.extend(trial_rows)
-        audits.extend(audit_rows)
-        print(f"sub-{subject}: mapped {len(trial_rows)} cleaned trials")
-
-    out = (
-        root / "derivatives" / "reports" / "group"
-        / "EEG_posterior_channels_block_mapping"
-    )
-    out.mkdir(parents=True, exist_ok=True)
+def save_outputs(output, trials, audits, failures):
+    """Write partial successful data and complete diagnostics to disk."""
+    output.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(
+        failures,
+        columns=[
+            "subject", "stage", "error_type", "error_message",
+            "traceback", "timestamp_utc",
+        ],
+    ).to_csv(output / "G04_error_log.csv", index=False)
+    if not trials:
+        print("No successful participant data to save.")
+        return
     frame = pd.DataFrame(trials)
-    frame.to_csv(out / "trial_alpha.csv", index=False)
+    frame.to_csv(output / "trial_alpha.csv", index=False)
     summary = frame.groupby(
         ["subject", "stimulation_period", "task_block",
          "stimulation_side", "dbs_on"],
@@ -305,10 +313,67 @@ def main():
         block_start_s=("block_start_s", "first"),
         block_end_s=("block_end_s", "first"),
     )
-    summary.to_csv(out / "block_summary.csv", index=False)
-    pd.DataFrame(audits).to_csv(out / "mapping_audit.csv", index=False)
-    print(f"Saved reusable mapping and power tables: {out}")
-    print("Stimulation sequences were explicitly confirmed in this run.")
+    summary.to_csv(output / "block_summary.csv", index=False)
+    pd.DataFrame(audits).to_csv(output / "mapping_audit.csv", index=False)
+
+
+def main():
+    """Process confirmed participants, offering skip/stop on failures."""
+    args = parse_args()
+    subjects = [value.removeprefix("sub-") for value in args.subjects]
+    if len(subjects) != len(set(subjects)):
+        raise ValueError("Duplicate subject identifiers supplied")
+    root = resolve_project_root(args.platform, args.project_root)
+    output = (
+        root / "derivatives" / "reports" / "group"
+        / "EEG_posterior_channels_block_mapping"
+    )
+    failures = []
+    trials = []
+    audits = []
+
+    try:
+        # Confirmation is completed before any EEG power calculation.
+        sequence = confirm_sequences(root, subjects, args, failures)
+        peaks_path = args.peaks_csv or (
+            root / "derivatives" / "reports" / "group"
+            / "EEG_posterior_channels_alpha_changes_stimOn_stimOff"
+            / "individual_alpha_peaks.csv"
+        )
+        peaks = pd.read_csv(peaks_path, dtype={"subject": str})
+        peaks["subject"] = peaks["subject"].str.removeprefix("sub-")
+        if peaks["subject"].duplicated().any():
+            raise ValueError("Duplicate subject in alpha-peak CSV")
+        peaks = peaks.set_index("subject")
+        crops = json.loads(CROP_FILE.read_text(encoding="utf-8"))
+
+        for subject in subjects:
+            if f"sub-{subject}" not in sequence:
+                continue
+            try:
+                if subject not in peaks.index:
+                    raise ValueError("Missing individual alpha peak")
+                peak = float(peaks.loc[subject, "peak_hz"])
+                if not np.isfinite(peak):
+                    raise ValueError("Invalid individual alpha peak")
+                trial_rows, audit_rows = prepare_subject(
+                    root, subject, peak, sequence, crops, args
+                )
+                trials.extend(trial_rows)
+                audits.extend(audit_rows)
+                print(
+                    f"sub-{subject}: mapped {len(trial_rows)} cleaned trials"
+                )
+            except Exception as exc:
+                if ask_on_error(subject, "processing", exc, failures) == "quit":
+                    break
+    finally:
+        save_outputs(output, trials, audits, failures)
+        print(f"Saved results and error log in: {output}")
+        print(f"Successful participants: {len(set(row['subject'] for row in trials))}")
+        print(f"Skipped/error records: {len(failures)}")
+
+
 
 
 if __name__ == "__main__":
