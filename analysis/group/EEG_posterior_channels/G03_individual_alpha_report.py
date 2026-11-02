@@ -109,23 +109,41 @@ def averaged_tfr(epochs, channels, n_jobs):
 
 
 def alpha_peak(off_tfr):
-    """Select an individual peak from trial-averaged, unbaselined OFF power.
+    """Identify each participant's alpha peak from DBS OFF power.
 
-    The input is an AverageTFR containing linear multitaper power, with
-    dimensions (retained_channels, frequencies, times). Left- and right-cue
-    epochs have been pooled and power has already been averaged over trials.
+    The input is an unbaselined multitaper TFR, already averaged
+    across trials using compute_tfr(average=True).
+    The input shape is:
+        (n_channels, n_frequencies, n_times)
 
-    For each 0.5-Hz frequency bin, average raw DBS OFF power over the
-    0.3-0.8-s post-cue interval and all retained posterior ROI channels.
-    Search the resulting mean spectrum between 8 and 12 Hz (inclusive)
-    and select the frequency bin with the largest mean power. If bins tie,
-    np.argmax chooses the lowest-frequency candidate. This is a raw
-    spectral maximum, not an aperiodic-corrected or fitted alpha peak.
+    Steps
+    -----
+    1. Select the time interval 0.3-0.8 seconds after cue onset.
 
-    Peak selection is performed using DBS OFF only, never DBS ON.
-    The same participant-specific peak +/- the configured half-width
-    (default 1 Hz) is subsequently used for BOTH stimulation conditions.
-    """
+    2. Average absolute power across the selected time points
+       and all retained posterior channels, independently for
+       each frequency.
+
+    3. Restrict the resulting power spectrum to 8-12 Hz.
+
+    4. Identify the frequency with the highest mean power.
+       Frequencies are sampled in 0.5 Hz steps.
+
+    5. Return this frequency as the participant's alpha peak.
+
+    The peak is identified using DBS OFF only, avoiding selection
+    based on the stimulation effect.
+
+    The same peak +/- 1 Hz frequency band is subsequently used
+    for DBS ON and DBS OFF alpha time courses.
+
+    Important
+    ---------
+    No baseline correction is applied during peak identification.
+    The algorithm selects the maximum raw power within 8-12 Hz.
+    It does not remove the aperiodic 1/f background or require
+    the selected maximum to be a genuine local oscillatory peak.
+    """""""""
     frequencies = off_tfr.freqs
     frequency_mask = (
         (frequencies >= PEAK_SEARCH[0])
@@ -221,82 +239,6 @@ def plot_participant(subject, raw, channels, counts, half_width):
     return fig, peak
 
 
-def methods_page(half_width, page_number):
-    """Document all calculations in the exported PDF report."""
-    fig, ax = plt.subplots(figsize=(11.7, 8.3))
-    ax.axis("off")
-    fig.suptitle(
-        f"Methods ({page_number}/2) | posterior TFRs and individual alpha curves",
-        x=0.07, ha="left", y=0.96, fontsize=18, fontweight="bold",
-    )
-    paragraphs = [
-        (
-            "1. Input data and channel selection",
-            "For each participant, load final cleaned cue-locked epochs for "
-            "DBS OFF and DBS ON. Pool left- and right-cue trials within "
-            "each condition. Use posterior electrodes PO3, POz, PO4, O1, "
-            "Oz, O2, PO7 and PO8, retaining only channels present and "
-            "not marked bad in BOTH conditions. The number of retained "
-            "channels and epochs is shown on each participant page.",
-        ),
-        (
-            "2. Trial-averaged multitaper time-frequency power",
-            "Compute power separately for OFF and ON with MNE-Python "
-            "compute_tfr(method='multitaper', average=True). Frequencies "
-            "are 2.0-31.5 Hz in 0.5-Hz steps; n_cycles=f/2, "
-            "time_bandwidth=2, use_fft=True, zero_mean=True and decim=2. "
-            "The algorithm estimates power per trial and then averages "
-            "power over trials (not the EEG voltage waveforms).",
-        ),
-        (
-            "3. Condition-specific baseline correction and TFR plots",
-            "For EACH condition, apply MNE mode='percent' to the "
-            "trial-averaged TFR, using -0.3 to -0.1 s relative to cue "
-            "onset. For each channel and frequency, this computes "
-            "100 x (power(t) - mean_baseline_power) / mean_baseline_power. "
-            "Only AFTER baseline correction, average equally across "
-            "available posterior channels. Plot OFF and ON from "
-            "-0.5 to 1.5 s, using identical symmetric colour limits "
-            "within each participant (98th percentile of absolute "
-            "plotted values). Blue indicates below-baseline power.",
-        ),
-        (
-            "4. Individual alpha peak selection",
-            "Use the ORIGINAL, unbaselined, trial-averaged DBS OFF TFR. "
-            "For each frequency, average linear power across available "
-            "posterior channels and 0.3-0.8 s after cue onset. Search "
-            "8-12 Hz inclusive (0.5-Hz bins), selecting the frequency "
-            "with maximum mean power. No aperiodic/1-f correction or "
-            "local-peak criterion is applied. Selecting the peak from "
-            "OFF avoids choosing frequencies based on the DBS effect.",
-        ),
-        (
-            "5. Alpha time courses and interpretation",
-            f"Select frequency bins within the OFF-defined peak +/- "
-            f"{half_width:g} Hz (inclusive) for BOTH conditions. "
-            "For each time point, average the already baseline-corrected "
-            "posterior TFR across selected frequencies. Plot OFF and "
-            "ON together in percent change from each condition's own "
-            "baseline. No additional baseline correction, trial-wise "
-            "percentage averaging, across-participant averaging, or "
-            "inferential statistics are performed.",
-        ),
-    ]
-    paragraphs = paragraphs[:3] if page_number == 1 else paragraphs[3:]
-    y = 0.83
-    import textwrap
-    for heading, paragraph in paragraphs:
-        ax.text(0.07, y, heading, transform=ax.transAxes, va="top",
-                fontsize=12.0, fontweight="bold")
-        y -= 0.035
-        wrapped = textwrap.fill(paragraph, width=103)
-        ax.text(0.07, y, wrapped, transform=ax.transAxes, va="top",
-                fontsize=9.8, linespacing=1.38)
-        y -= 0.033 * (wrapped.count("\n") + 1) + 0.048
-    fig.subplots_adjust(left=0.03, right=0.97, top=0.93, bottom=0.03)
-    return fig
-
-
 def main():
     """Generate a multi-page PDF and a companion peak-frequency CSV."""
     args = parse_args()
@@ -311,10 +253,6 @@ def main():
     summary = ["subject,peak_hz,channels,n_off,n_on,status"]
 
     with PdfPages(report_path) as pdf:
-        for page_number in (1, 2):
-            method_fig = methods_page(args.alpha_peak_half_width, page_number)
-            pdf.savefig(method_fig)
-            plt.close(method_fig)
         for subject in subjects:
             try:
                 epochs = load_epochs(root, subject, args)
