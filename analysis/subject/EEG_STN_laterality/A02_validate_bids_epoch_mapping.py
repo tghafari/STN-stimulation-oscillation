@@ -176,6 +176,13 @@ def validate_mapping(
         "n_unretained_bids_cues": len(expected) - len(observed),
     }
 
-def map_condition_epochs(\n    epochs, events, crop_ranges, task_blocks, condition, diagnostic_csv=None\n):
-    expected = build_expected(events, crop_ranges, task_blocks, float(epochs.info["sfreq"]))
-    return validate_mapping(\n        epochs, expected, condition, diagnostic_csv=diagnostic_csv\n    )
+def map_condition_epochs(
+    epochs, events, crop_ranges, task_blocks, condition, diagnostic_csv=None
+):
+    """Build and validate BIDS-to-epoch mapping, saving diagnostics if needed."""
+    expected = build_expected(
+        events, crop_ranges, task_blocks, float(epochs.info["sfreq"])
+    )
+    return validate_mapping(
+        epochs, expected, condition, diagnostic_csv=diagnostic_csv
+    )
