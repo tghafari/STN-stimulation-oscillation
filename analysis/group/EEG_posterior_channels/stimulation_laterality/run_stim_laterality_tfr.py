@@ -550,8 +550,7 @@ def methods_page(report_key):
             0.055, y, wrapped, fontsize=9.4, linespacing=1.4,
             va="top", transform=ax.transAxes,
         )
-        y -= 0.019 * (wrapped.count("
-") + 1) + 0.041
+        y -= 0.019 * (wrapped.count("\n") + 1) + 0.041
     return fig
 
 
