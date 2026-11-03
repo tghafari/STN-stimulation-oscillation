@@ -118,6 +118,32 @@ def report_text_page(title, sections):
     return fig
 
 
+def save_figure(fig, directory, stem):
+    """Export publication-quality vector SVG and 600-dpi TIFF."""
+    directory.mkdir(parents=True, exist_ok=True)
+    for suffix in ("svg", "tiff"):
+        fig.savefig(
+            directory / f"{stem}.{suffix}",
+            dpi=600, bbox_inches="tight",
+        )
+
+
+def mark_two_sided_thresholds(ax, distribution):
+    """Mark the two-sided alpha=0.05 absolute-null critical threshold.
+
+    The p-value compares absolute permuted and observed statistics.
+    Therefore both critical lines are at +/- the 95th percentile of
+    absolute null statistics, rather than signed-tail quantiles.
+    """
+    cutoff = float(np.quantile(np.abs(distribution), 0.95))
+    ax.axvline(
+        -cutoff, color="#404040", linestyle="--", linewidth=1.5,
+        label="Two-sided p = 0.05 threshold",
+    )
+    ax.axvline(cutoff, color="#404040", linestyle="--", linewidth=1.5)
+    ax.legend(frameon=False)
+
+
 def create_report(out, subjects, absolute, normalised, loo, seed):
     """Write a combined primary and sensitivity PDF from actual results."""
     absolute_effects = pd.read_csv(out / "participant_effects.csv")
@@ -137,6 +163,7 @@ def create_report(out, subjects, absolute, normalised, loo, seed):
     ) / (len(primary_null) + 1)
     values, norm_observed, norm_null, norm_p = normalised
     report_path = out / "absolute_alpha_block_permutation.pdf"
+    figures_dir = out / "figures"
     with PdfPages(report_path) as pdf:
         pages = [
             report_text_page("Absolute alpha: data and observed effect", [
@@ -193,7 +220,9 @@ def create_report(out, subjects, absolute, normalised, loo, seed):
             xlabel="Group ON - OFF (microvolt squared)",
             ylabel="Permutations",
         )
+        mark_two_sided_thresholds(ax, primary_null * 1e12)
         fig.tight_layout()
+        save_figure(fig, figures_dir, "absolute_alpha_permutation")
         pdf.savefig(fig)
         plt.close(fig)
         page = report_text_page("Sensitivity analysis: methods", [
@@ -234,7 +263,9 @@ def create_report(out, subjects, absolute, normalised, loo, seed):
             xlabel="Group mean (ON - OFF) / (ON + OFF)",
             ylabel="Permutations",
         )
+        mark_two_sided_thresholds(ax, norm_null)
         fig.tight_layout()
+        save_figure(fig, figures_dir, "normalised_alpha_permutation")
         pdf.savefig(fig)
         plt.close(fig)
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(11.7, 8.3))
@@ -249,6 +280,7 @@ def create_report(out, subjects, absolute, normalised, loo, seed):
         for axis in (ax1, ax2):
             axis.tick_params(axis="x", rotation=50)
         fig.tight_layout()
+        save_figure(fig, figures_dir, "leave_one_out_effect_and_p")
         pdf.savefig(fig)
         plt.close(fig)
         fig, ax = plt.subplots(figsize=(11.7, 8.3))
