@@ -47,8 +47,8 @@ All are saved under
 Every page analyses one participant's confirmed **right STN ON**
 period compared with both OFF periods pooled. Five panels:
 
-1. Right STN ON: left-versus-right sensor absolute alpha curves.
-2. DBS OFF: left-versus-right sensor absolute alpha curves.
+1. Right STN ON: left-versus-right sensor baseline-corrected alpha curves.
+2. DBS OFF: left-versus-right sensor baseline-corrected alpha curves.
 3. Left sensors: right STN ON minus OFF absolute-power TFR.
 4. Right sensors: right STN ON minus OFF absolute-power TFR.
 5. During right STN ON: right minus left sensor absolute-power TFR.
@@ -65,8 +65,8 @@ Four panels:
 
 1. Left sensors: right STN ON minus left STN ON absolute-power TFR.
 2. Right sensors: right STN ON minus left STN ON absolute-power TFR.
-3. Right sensors: right STN ON versus left STN ON alpha time courses.
-4. Left sensors: right STN ON versus left STN ON alpha time courses.
+3. Right sensors: right STN ON versus left STN ON baseline-corrected alpha time courses.
+4. Left sensors: right STN ON versus left STN ON baseline-corrected alpha time courses.
 
 ## Sensors
 
@@ -93,9 +93,14 @@ are displayed from -0.5 to 1.5 seconds relative to cue onset.
 The shaded 0.3-0.8 second interval identifies the attention interval;
 the curve itself is not restricted to this time window.
 
-**No baseline correction or normalisation is performed anywhere.**
-All curves and TFR contrasts use linear power in microvolt squared
-(converted from MNE V squared using multiplication by 10^12).
+**Alpha curves are baseline corrected, but all TFR contrasts remain unbaselined.**
+For each condition, multitaper power is averaged across trials FIRST, then
+across the retained sensors. For each frequency, the condition-specific
+mean power from -0.3 to -0.1 s is used to calculate percent change:
+`100 * (power / baseline - 1)`. Frequency bins within the participant's
+alpha peak +/-1 Hz are then averaged to form the curve. Alpha curves
+are in percent baseline change, not microvolt squared. TFR differences
+remain in linear microvolt squared (MNE V squared multiplied by 10^12).
 TFR differences use the order given in their titles. Red means
 a positive difference; blue means a negative difference.
 
@@ -105,6 +110,11 @@ page*. The third report's two TFRs likewise share a scale. Colour
 limits may vary across participants.
 
 ## Validation, limitations, and omissions
+
+- Each PDF begins with a detailed methods page explaining trial selection,
+frequency analysis, baseline correction and the meaning of every panel.
+Each participant page reports their alpha peak, trial counts per condition
+and the exact channel names used.
 
 - The runner verifies that the G04/B03 trial indices cover all current
   cleaned cue epochs exactly once, and that all four periods and

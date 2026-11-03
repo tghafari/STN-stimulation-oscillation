@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Plot unbaselined posterior TFRs and individual-alpha curves by STN side.
+"""Plot unbaselined TFR contrasts and baselined alpha curves by STN side.
 
 Three PDF reports are produced, with one page per eligible participant:
 
 RIGHT STN ON versus DBS OFF, and LEFT STN ON versus DBS OFF:
-    1. ON: absolute alpha time courses on left versus right sensors.
-    2. OFF: absolute alpha time courses on left versus right sensors.
+    1. ON: baseline-corrected alpha time courses on left versus right sensors.
+    2. OFF: baseline-corrected alpha time courses on left versus right sensors.
     3. Left sensors: ON minus OFF absolute-power TFR.
     4. Right sensors: ON minus OFF absolute-power TFR.
     5. ON only: right minus left sensor absolute-power TFR.
@@ -13,11 +13,12 @@ RIGHT STN ON versus DBS OFF, and LEFT STN ON versus DBS OFF:
 RIGHT STN ON versus LEFT STN ON:
     1. Left sensors: right-STN ON minus left-STN ON TFR.
     2. Right sensors: right-STN ON minus left-STN ON TFR.
-    3. Right sensors: right-STN ON and left-STN ON alpha curves.
-    4. Left sensors: right-STN ON and left-STN ON alpha curves.
+    3. Right sensors: baseline-corrected right/left STN alpha curves.
+    4. Left sensors: baseline-corrected right/left STN alpha curves.
 
-All power is LINEAR, UNBASELINED multitaper power. Differences and alpha
-time courses are shown in microvolt squared (MNE source units: V squared).
+TFR contrasts are unbaselined linear power differences in microvolt squared.
+Alpha curves use condition-specific percent baseline correction from
+-0.3 to -0.1 s AFTER averaging power over trials.
 
 Use B03's validated trial_alpha.csv to select the exact cleaned epochs
 associated with the two confirmed ON stimulation periods and both OFF
@@ -37,7 +38,7 @@ Run from the repository root:
     python analysis/group/EEG_posterior_channels/stim_laterality/\
 run_stim_laterality_tfr.py --subjects 101 102 103
 
-The script outputs only PDF reports. No baseline correction, normalisation,
+The script outputs only PDF reports. No TFR baseline correction,
 interpolation, inferential tests or statistical exclusions are performed.
 """
 
@@ -45,6 +46,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import textwrap
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -67,6 +69,7 @@ RIGHT_SENSORS = ("PO4", "PO8", "O2")
 FREQUENCIES = np.arange(2.0, 32.0, 0.5)
 PLOT_TIME = (-0.5, 1.5)
 ALPHA_HALF_WIDTH_HZ = 1.0
+ALPHA_BASELINE = (-0.3, -0.1)
 STIM_LABELS = {"right": "stim_right", "left": "stim_left"}
 POWER_SCALE = 1e12  # V squared to microvolt squared.
 
@@ -256,19 +259,34 @@ def participant_power(conditions, channels, n_jobs):
     return times, maps
 
 
-def alpha_curve(power, peak_hz):
-    """Average absolute power over peak +/-1 Hz; preserve time points."""
+def alpha_curve(power, peak_hz, times):
+    """Baseline trial-averaged power per Hz, then average alpha Hz.
+
+    Power is already averaged over trials and sensors for this condition.
+    Percent baseline uses the same condition at -0.3 to -0.1 seconds.
+    TFR difference panels remain entirely unbaselined.
+    """
     frequencies = (
         (FREQUENCIES >= peak_hz - ALPHA_HALF_WIDTH_HZ - 1e-9)
         & (FREQUENCIES <= peak_hz + ALPHA_HALF_WIDTH_HZ + 1e-9)
     )
     if not np.any(frequencies):
         raise ValueError(f"No frequency bins at peak {peak_hz:g} Hz.")
-    return power[frequencies].mean(axis=0)
+    baseline = (
+        (times >= ALPHA_BASELINE[0])
+        & (times <= ALPHA_BASELINE[1])
+    )
+    if not baseline.any():
+        raise ValueError("No samples in the alpha baseline interval.")
+    reference = power[:, baseline].mean(axis=1, keepdims=True)
+    if not np.isfinite(reference).all() or np.any(reference <= 0):
+        raise ValueError("Invalid condition-specific baseline power.")
+    corrected = 100.0 * (power / reference - 1.0)
+    return corrected[frequencies].mean(axis=0)
 
 
 def add_curve(ax, times, curves, peak_hz, title):
-    """Show unbaselined alpha power for each labelled trace."""
+    """Show condition-specific baseline-corrected alpha curves."""
     visible = (times >= PLOT_TIME[0]) & (times <= PLOT_TIME[1])
     for label, values, colour in curves:
         ax.plot(
@@ -280,7 +298,7 @@ def add_curve(ax, times, curves, peak_hz, title):
     ax.set(
         title=title,
         xlabel="Time after cue (s)",
-        ylabel="Absolute alpha power (microvolt squared)",
+        ylabel="Alpha change from baseline (%)",
         xlim=PLOT_TIME,
     )
     ax.legend(loc="best", frameon=False, fontsize=9)
@@ -343,17 +361,19 @@ def plot_on_off_page(subject, side, times, maps, channels, peak, counts):
     ]
     add_curve(
         axes[0], times, [
-            ("Left sensors", alpha_curve(maps[(on_label, "left")], peak),
+            ("Left sensors",
+             alpha_curve(maps[(on_label, "left")], peak, times),
              "tab:blue"),
-            ("Right sensors", alpha_curve(maps[(on_label, "right")], peak),
+            ("Right sensors",
+             alpha_curve(maps[(on_label, "right")], peak, times),
              "tab:orange"),
         ], peak, "DBS ON: left versus right sensors",
     )
     add_curve(
         axes[1], times, [
-            ("Left sensors", alpha_curve(maps[("off", "left")], peak),
+            ("Left sensors", alpha_curve(maps[("off", "left")], peak, times),
              "tab:blue"),
-            ("Right sensors", alpha_curve(maps[("off", "right")], peak),
+            ("Right sensors", alpha_curve(maps[("off", "right")], peak, times),
              "tab:orange"),
         ], peak, "DBS OFF: left versus right sensors",
     )
@@ -373,14 +393,15 @@ def plot_on_off_page(subject, side, times, maps, channels, peak, counts):
         )
     fig.suptitle(
         f"sub-{subject} | {side.upper()} STN ON vs OFF | "
-        f"ON {counts[on_label]}, OFF {counts['off']} trials",
+        f"ON {counts[on_label]}, OFF {counts['off']} trials | "
+        f"peak {peak:g} Hz",
         fontsize=16,
     )
     fig.text(
         0.5, 0.004,
         f"Left: {', '.join(channels['left'])} | "
         f"Right: {', '.join(channels['right'])} | "
-        "All power unbaselined. Both cue directions pooled.",
+        "Alpha curves: baseline-corrected. TFRs: unbaselined.",
         ha="center", fontsize=9,
     )
     return fig
@@ -426,28 +447,111 @@ def plot_stim_comparison_page(subject, times, maps, channels, peak, counts):
             ax, times, [
                 (
                     "Right STN ON",
-                    alpha_curve(maps[("stim_right", hemisphere)], peak),
+                    alpha_curve(maps[("stim_right", hemisphere)], peak, times),
                     "tab:orange",
                 ),
                 (
                     "Left STN ON",
-                    alpha_curve(maps[("stim_left", hemisphere)], peak),
+                    alpha_curve(maps[("stim_left", hemisphere)], peak, times),
                     "tab:blue",
                 ),
             ], peak, title,
         )
     fig.suptitle(
         f"sub-{subject} | RIGHT vs LEFT STN ON | "
-        f"right {counts['stim_right']}, left {counts['stim_left']} trials",
+        f"right {counts['stim_right']}, left {counts['stim_left']} trials | "
+        f"peak {peak:g} Hz",
         fontsize=16,
     )
     fig.text(
         0.5, 0.003,
         f"Left: {', '.join(channels['left'])} | "
         f"Right: {', '.join(channels['right'])} | "
-        "No baseline correction; both cue directions pooled.",
+        "Alpha curves: baseline-corrected. TFRs: unbaselined.",
         ha="center", fontsize=9,
     )
+    return fig
+
+
+def methods_page(report_key):
+    """Create a dedicated readable methodology page for each PDF."""
+    shared = [
+        ("Trial selection",
+         "Read the validated B03 trial_alpha.csv and cleaned cue epochs. "
+         "Check that every cleaned epoch has exactly one validated BIDS "
+         "assignment. Use confirmed stimulation labels to select periods. "
+         "Both cue directions are pooled; no trial is reassigned."),
+        ("Sensor selection",
+         "Left sensors: PO3, PO7, O1. Right sensors: PO4, PO8, O2. "
+         "Midline POz and Oz are excluded. Only sensors present and "
+         "marked good in all three conditions are retained. "
+         "The actual sensors and trial counts appear on each subject page."),
+        ("Power and individual alpha frequency",
+         "Compute multitaper power separately for each condition using "
+         "2-31.5 Hz in 0.5-Hz steps, n_cycles=frequency/2, "
+         "time_bandwidth=2 and decim=2. Average power across trials "
+         "FIRST and then across retained sensors. Read each participant's "
+         "OFF-derived peak from individual_alpha_peaks.csv; use peak "
+         "+/-1 Hz for the alpha curves."),
+        ("Alpha baseline correction (curves only)",
+         "For each condition and sensor group independently, calculate "
+         "the mean trial-averaged power from -0.3 to -0.1 seconds at "
+         "each frequency. Convert the trial-averaged power to percent "
+         "change: 100 * (power / baseline - 1). Only then average "
+         "frequencies within the peak +/-1 Hz band to obtain the curve. "
+         "No baseline correction is applied to any TFR panel."),
+        ("Plot conventions",
+         "Cue onset is time zero; plots cover -0.5 to 1.5 seconds. "
+         "The shaded 0.3-0.8-second interval on alpha curves marks "
+         "attention. Alpha curves use percent baseline change; "
+         "TFR contrasts use linear power differences in microvolt squared. "
+         "All figures are descriptive, without statistical testing."),
+    ]
+    if report_key == "comparison":
+        details = (
+            "Panels 1 and 2 are unbaselined right-STN-ON minus "
+            "left-STN-ON TFRs on left and right sensors, respectively. "
+            "Panel 3 shows baseline-corrected alpha curves for right "
+            "sensors under right-STN ON and left-STN ON. Panel 4 "
+            "shows the same comparison for left sensors. Both ON "
+            "periods are analysed separately; OFF is not used in "
+            "these comparisons."
+        )
+        title = "RIGHT versus LEFT STN ON: analysis methods"
+    else:
+        side = report_key.upper()
+        details = (
+            f"This report uses only {side} STN ON trials for its ON "
+            "condition and pools both DBS OFF periods as its OFF "
+            "reference. Panel 1 shows baseline-corrected alpha curves "
+            "for left versus right sensors during ON. Panel 2 shows "
+            "the same sensor comparison during OFF. Panels 3 and 4 "
+            "are unbaselined ON minus OFF TFRs on left and right "
+            "sensors, respectively. Panel 5 is unbaselined right "
+            "minus left sensor power during ON only."
+        )
+        title = f"{side} STN ON versus OFF: analysis methods"
+    sections = [("What each participant page contains", details)] + shared
+    fig, ax = plt.subplots(figsize=(11.7, 10.5))
+    ax.axis("off")
+    ax.text(
+        0.055, 0.965, title, fontsize=16, weight="bold",
+        va="top", transform=ax.transAxes,
+    )
+    y = 0.90
+    for heading, paragraph in sections:
+        ax.text(
+            0.055, y, heading, fontsize=11.5, weight="bold",
+            va="top", transform=ax.transAxes,
+        )
+        y -= 0.031
+        wrapped = textwrap.fill(paragraph, width=103)
+        ax.text(
+            0.055, y, wrapped, fontsize=9.4, linespacing=1.4,
+            va="top", transform=ax.transAxes,
+        )
+        y -= 0.019 * (wrapped.count("
+") + 1) + 0.041
     return fig
 
 
@@ -489,6 +593,10 @@ def main():
     }
     pages = {key: 0 for key in names}
     try:
+        for report_key, pdf in pdfs.items():
+            page = methods_page(report_key)
+            pdf.savefig(page)
+            plt.close(page)
         for subject in args.subjects:
             try:
                 peak = peaks.get(subject)
