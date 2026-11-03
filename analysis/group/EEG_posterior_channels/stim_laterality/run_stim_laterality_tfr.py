@@ -1,40 +1,46 @@
 #!/usr/bin/env python3
-"""Participant-wise posterior TFR reports split by stimulated STN side.
+"""Plot unbaselined posterior TFRs and individual-alpha curves by STN side.
 
-Generate two PDFs, one for RIGHT STN ON and one for LEFT STN ON.
-Each participant has one page with five cue-locked multitaper TFRs:
+Three PDF reports are produced, with one page per eligible participant:
 
-1. Left posterior ROI: ON minus OFF (each condition baseline corrected).
-2. Right posterior ROI: ON minus OFF (each condition baseline corrected).
-3. Left posterior ROI: unbaselined ON minus unbaselined OFF.
-4. Right posterior ROI: unbaselined ON minus unbaselined OFF.
-5. ON only: right posterior ROI minus left posterior ROI (unbaselined).
+RIGHT STN ON versus DBS OFF, and LEFT STN ON versus DBS OFF:
+    1. ON: absolute alpha time courses on left versus right sensors.
+    2. OFF: absolute alpha time courses on left versus right sensors.
+    3. Left sensors: ON minus OFF absolute-power TFR.
+    4. Right sensors: ON minus OFF absolute-power TFR.
+    5. ON only: right minus left sensor absolute-power TFR.
 
-The ON epochs in each report belong exclusively to the confirmed
-stim_right or stim_left stimulation period. OFF reference epochs come
-from BOTH verified OFF periods for the same participant.
+RIGHT STN ON versus LEFT STN ON:
+    1. Left sensors: right-STN ON minus left-STN ON TFR.
+    2. Right sensors: right-STN ON minus left-STN ON TFR.
+    3. Right sensors: right-STN ON and left-STN ON alpha curves.
+    4. Left sensors: right-STN ON and left-STN ON alpha curves.
 
-Trial allocation relies on B03's validated trial_alpha.csv, NOT inferred
-epoch positions or raw time heuristics. The table's
-trial_index_in_condition is an index into the cue-filtered cleaned
-epoch object. A full mapping is required for each condition.
+All power is LINEAR, UNBASELINED multitaper power. Differences and alpha
+time courses are shown in microvolt squared (MNE source units: V squared).
 
-Lateral posterior channels: LEFT = PO3, PO7, O1;
-RIGHT = PO4, PO8, O2. Midline POz and Oz cannot be assigned to a
-hemisphere and are excluded from left/right sensor contrasts.
-All eight channels remain the parent posterior ROI.
+Use B03's validated trial_alpha.csv to select the exact cleaned epochs
+associated with the two confirmed ON stimulation periods and both OFF
+periods. Reject missing, duplicate or inconsistent trial mappings rather
+than guessing a laterality assignment. Both cue directions are pooled.
 
-Baseline-corrected contrasts are differences of percent baseline
-changes: 100*(ON/ON_baseline-1) - 100*(OFF/OFF_baseline-1).
-Unbaselined contrasts subtract linear absolute power without correction.
-Condition power is trial averaged first, then sensor averaged.
+Sensor groups: LEFT (PO3, PO7, O1); RIGHT (PO4, PO8, O2).
+POz and Oz belong to the parent eight-sensor posterior ROI but are
+midline, so they are excluded from lateralised sensor comparisons.
+Use only good channels shared by all three stimulation conditions.
 
-Run from repository root:
-python analysis/group/EEG_posterior_channels/stim_laterality/run_stim_laterality_tfr.py \
-    --subjects 101 102 103 105 106 107 108 112 113 114 115 116 118 120 121 123
+Alpha frequency is each participant's precomputed OFF-derived peak
+(peak_hz column) from individual_alpha_peaks.csv, with a +/-1 Hz band.
+No alpha peak is estimated from the current stimulation contrasts.
 
-Requirements: MNE, NumPy, pandas, Matplotlib, mne-bids.
+Run from the repository root:
+    python analysis/group/EEG_posterior_channels/stim_laterality/\
+run_stim_laterality_tfr.py --subjects 101 102 103
+
+The script outputs only PDF reports. No baseline correction, normalisation,
+interpolation, inferential tests or statistical exclusions are performed.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -56,128 +62,167 @@ if str(CONFIG_DIR) not in sys.path:
 
 from pipeline_config import resolve_project_root, stage_path
 
-LEFT = ("PO3", "PO7", "O1")
-RIGHT = ("PO4", "PO8", "O2")
-MIDLINE = ("POz", "Oz")
-FREQS = np.arange(2.0, 32.0, 0.5)
-BASELINE = (-0.3, -0.1)
-DISPLAY_TIME = (-0.5, 1.5)
-SIDES = {"right": "stim_right", "left": "stim_left"}
+LEFT_SENSORS = ("PO3", "PO7", "O1")
+RIGHT_SENSORS = ("PO4", "PO8", "O2")
+FREQUENCIES = np.arange(2.0, 32.0, 0.5)
+PLOT_TIME = (-0.5, 1.5)
+ALPHA_HALF_WIDTH_HZ = 1.0
+STIM_LABELS = {"right": "stim_right", "left": "stim_left"}
+POWER_SCALE = 1e12  # V squared to microvolt squared.
 
 
 def parse_args():
-    """Parse dataset paths and computational settings."""
+    """Read participant IDs, BIDS settings and optional input/output paths."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--subjects", nargs="+", required=True)
-    parser.add_argument("--platform", choices=("mac", "bluebear"),
-                        default="mac")
+    parser.add_argument(
+        "--platform", choices=("mac", "bluebear"), default="mac"
+    )
     parser.add_argument("--project-root", type=Path)
     parser.add_argument("--session", default="01")
     parser.add_argument("--task", default="SpAtt")
     parser.add_argument("--run", default="01")
     parser.add_argument("--n-jobs", type=int, default=4)
-    parser.add_argument("--trial-csv", type=Path, default=None,
-                        help="B03's validated trial_alpha.csv")
-    parser.add_argument("--output-dir", type=Path, default=None)
+    parser.add_argument("--trial-csv", type=Path)
+    parser.add_argument("--peaks-csv", type=Path)
+    parser.add_argument("--output-dir", type=Path)
     args = parser.parse_args()
-    args.subjects = [str(s).removeprefix("sub-") for s in args.subjects]
-    if len(set(args.subjects)) != len(args.subjects):
-        parser.error("Duplicate subject identifiers.")
+    args.subjects = [
+        str(subject).removeprefix("sub-") for subject in args.subjects
+    ]
+    if len(args.subjects) != len(set(args.subjects)):
+        parser.error("Participant identifiers must not be duplicated.")
+    if args.n_jobs < 1:
+        parser.error("--n-jobs must be positive.")
     return args
 
 
+def locate_peaks_csv(root, explicit_path):
+    """Find the existing subject alpha-peak CSV without re-estimating peaks."""
+    if explicit_path is not None:
+        path = explicit_path.expanduser().resolve()
+        if not path.is_file():
+            raise FileNotFoundError(f"Alpha peaks CSV not found: {path}")
+        return path
+
+    group = root / "derivatives" / "reports" / "group"
+    candidates = (
+        group / "individual_alpha_peaks.csv",
+        group / "EEG_posterior_channels_alpha_changes_stimOn_stimOff"
+        / "individual_alpha_peaks.csv",
+    )
+    for path in candidates:
+        if path.is_file():
+            return path
+    raise FileNotFoundError(
+        "No individual_alpha_peaks.csv was found. "
+        "Provide its exact location with --peaks-csv."
+    )
+
+
+def load_alpha_peaks(path):
+    """Read unique, finite participant peaks from the existing CSV."""
+    frame = pd.read_csv(path, dtype={"subject": str})
+    if not {"subject", "peak_hz"}.issubset(frame.columns):
+        raise ValueError("Alpha CSV needs subject and peak_hz columns.")
+    frame["subject"] = frame["subject"].str.removeprefix("sub-")
+    if frame["subject"].duplicated().any():
+        raise ValueError("Duplicate participant in alpha-peak CSV.")
+    frame["peak_hz"] = pd.to_numeric(frame["peak_hz"], errors="coerce")
+    return frame.set_index("subject")["peak_hz"].to_dict()
+
+
 def load_cue_epochs(root, subject, condition, args):
-    """Read exactly the cue-filtered epochs indexed by B03."""
+    """Reproduce B03's cue filtering to preserve its saved epoch indices."""
     path = stage_path(
         root, subject, args.session, args.task, args.run,
         condition, "clean", "epo",
     )
     epochs = mne.read_epochs(path, preload=True, verbose=False)
     cues = [
-        key for key in ("cue_onset_left", "cue_onset_right")
-        if key in epochs.event_id
+        cue for cue in ("cue_onset_left", "cue_onset_right")
+        if cue in epochs.event_id
     ]
     if not cues:
-        raise ValueError("No cue events in " + str(path))
+        raise ValueError(f"sub-{subject}: no cue events in {path}")
     return epochs[cues]
 
 
-def verified_rows(frame, subject, epochs):
-    """Verify that every cue epoch maps to exactly one confirmed row.
-
-    An incomplete or outdated B03 table must never silently assign
-    stimulation laterality to the wrong cleaned EEG epoch.
-    """
-    rows = frame.loc[frame["subject"] == subject].copy()
+def verified_rows(trials, subject, epochs):
+    """Require a complete, uniquely indexed mapping for both epoch files."""
+    rows = trials.loc[trials["subject"] == subject].copy()
     if rows.empty:
-        raise ValueError("No validated B03 rows for sub-" + subject)
+        raise ValueError("No B03 trial mapping.")
     if not rows["label_verified"].astype(str).str.lower().eq("true").all():
-        raise ValueError("Unconfirmed stimulation labels in B03 input")
+        raise ValueError("Stimulation sequence is not fully confirmed.")
+
     for condition in ("no-stim", "stim"):
         subset = rows.loc[rows["source_condition"] == condition]
         indices = subset["trial_index_in_condition"].to_numpy(dtype=int)
         expected = np.arange(len(epochs[condition]))
-        if len(indices) != len(expected) or not np.array_equal(
-            np.sort(indices), expected
-        ):
+        if not np.array_equal(np.sort(indices), expected):
             raise ValueError(
-                f"sub-{subject}: B03 mapping does not cover every "
-                f"{condition} cue epoch exactly once; rerun B03."
+                f"Incomplete or duplicated {condition} mapping; rerun B03."
             )
-        expected_on = condition == "stim"
-        if not (
-            subset["dbs_on"].astype(str).str.lower()
-            == str(expected_on).lower()
-        ).all():
-            raise ValueError("Contradictory ON/OFF labels in B03 input")
-    labels = rows.groupby("stimulation_period")["stimulation_side"].unique()
-    if len(labels) != 4 or any(len(value) != 1 for value in labels):
-        raise ValueError("Expected four consistently labelled periods")
-    all_labels = [value[0] for value in labels.values]
-    if sorted(all_labels) != sorted(
+        flags = subset["dbs_on"].astype(str).str.lower()
+        if not flags.eq(str(condition == "stim").lower()).all():
+            raise ValueError("Inconsistent DBS ON/OFF labels.")
+
+    grouped = rows.groupby("stimulation_period")["stimulation_side"].unique()
+    if len(grouped) != 4 or any(len(values) != 1 for values in grouped):
+        raise ValueError("Expected four internally consistent periods.")
+    labels = [values[0] for values in grouped.values]
+    if sorted(labels) != sorted(
         ("off", "off", "stim_left", "stim_right")
     ):
-        raise ValueError("Four stimulation periods have invalid labels")
+        raise ValueError("Missing a confirmed stimulation period.")
     return rows
 
 
-def choose_condition_epochs(epochs, rows, side):
-    """Select side-specific ON epochs and both OFF stimulation periods."""
-    off_rows = rows.loc[rows["stimulation_side"] == "off"]
-    on_rows = rows.loc[rows["stimulation_side"] == side]
-    if on_rows.empty or off_rows.empty:
-        raise ValueError("No retained trials for " + side + " or OFF")
-    off_indices = np.sort(
-        off_rows["trial_index_in_condition"].to_numpy(dtype=int)
-    )
-    on_indices = np.sort(
-        on_rows["trial_index_in_condition"].to_numpy(dtype=int)
-    )
-    return epochs["stim"][on_indices], epochs["no-stim"][off_indices]
+def extract_conditions(epochs, rows):
+    """Separate both OFF periods and each single-side ON period."""
+    conditions = {}
+    for label, source in (
+        ("off", "no-stim"),
+        ("stim_left", "stim"),
+        ("stim_right", "stim"),
+    ):
+        subset = rows.loc[rows["stimulation_side"] == label]
+        indices = np.sort(
+            subset["trial_index_in_condition"].to_numpy(dtype=int)
+        )
+        if not len(indices):
+            raise ValueError(f"No retained trials for {label}.")
+        conditions[label] = epochs[source][indices]
+    return conditions
 
 
-def common_channels(on, off):
-    """Use channels present and marked good in both compared conditions."""
-    return {
-        "left": [
-            ch for ch in LEFT
-            if ch in on.ch_names and ch in off.ch_names
-            and ch not in on.info["bads"] and ch not in off.info["bads"]
-        ],
-        "right": [
-            ch for ch in RIGHT
-            if ch in on.ch_names and ch in off.ch_names
-            and ch not in on.info["bads"] and ch not in off.info["bads"]
-        ],
-    }
+def shared_sensors(conditions):
+    """Exclude channels absent or bad in any of the three conditions."""
+    common = {}
+    for hemisphere, candidates in (
+        ("left", LEFT_SENSORS),
+        ("right", RIGHT_SENSORS),
+    ):
+        common[hemisphere] = [
+            channel for channel in candidates
+            if all(
+                channel in epochs.ch_names
+                and channel not in epochs.info["bads"]
+                for epochs in conditions.values()
+            )
+        ]
+        if not common[hemisphere]:
+            raise ValueError(f"No common good {hemisphere} sensors.")
+    return common
 
 
-def condition_tfr(epochs, channels, n_jobs):
-    """Return linear multitaper power averaged over retained trials."""
+def multitaper_power(epochs, channels, n_jobs):
+    """Average linear multitaper power over trials; never baseline."""
     tfr = epochs.copy().pick(channels).compute_tfr(
         method="multitaper",
-        freqs=FREQS,
-        n_cycles=FREQS / 2.0,
+        freqs=FREQUENCIES,
+        n_cycles=FREQUENCIES / 2.0,
         time_bandwidth=2.0,
         use_fft=True,
         zero_mean=True,
@@ -187,85 +232,108 @@ def condition_tfr(epochs, channels, n_jobs):
         n_jobs=n_jobs,
         verbose=False,
     )
-    return tfr
+    return tfr.times, tfr.data * POWER_SCALE
 
 
-def percent_from_baseline(power, times):
-    """Compute percentage change per frequency and sensor."""
-    mask = (times >= BASELINE[0]) & (times <= BASELINE[1])
-    if not mask.any():
-        raise ValueError("No samples in baseline interval")
-    mean = power[:, :, mask].mean(axis=-1, keepdims=True)
-    if (mean <= 0).any():
-        raise ValueError("Baseline power must be positive")
-    return (power / mean - 1.0) * 100.0
+def participant_power(conditions, channels, n_jobs):
+    """Compute time-matched left/right sensor-average TFRs.
 
-
-def calculate_maps(on, off, channels, n_jobs):
-    """Compute four left/right maps from the two trial conditions."""
+    Every condition is calculated once for all selected lateral sensors.
+    Sensor averaging occurs after trial-averaged TFR computation.
+    """
+    picks = channels["left"] + channels["right"]
     maps = {}
     times = None
-    for hemi, picks in channels.items():
-        if not picks:
-            raise ValueError(f"No shared good {hemi} posterior sensors")
-        on_tfr = condition_tfr(on, picks, n_jobs)
-        off_tfr = condition_tfr(off, picks, n_jobs)
-        if not np.array_equal(on_tfr.times, off_tfr.times):
-            raise ValueError("Stim ON/OFF TFR time grids differ")
+    for condition, epochs in conditions.items():
+        condition_times, data = multitaper_power(epochs, picks, n_jobs)
         if times is None:
-            times = on_tfr.times
-        elif not np.array_equal(times, on_tfr.times):
-            raise ValueError("Left/right TFR time grids differ")
+            times = condition_times
+        elif not np.array_equal(times, condition_times):
+            raise ValueError("TFR time axes differ between conditions.")
+        for hemi, selected in channels.items():
+            indices = [picks.index(channel) for channel in selected]
+            maps[(condition, hemi)] = data[indices].mean(axis=0)
+    return times, maps
 
-        on_raw = on_tfr.data.mean(axis=0)
-        off_raw = off_tfr.data.mean(axis=0)
-        on_pct = percent_from_baseline(on_tfr.data, times).mean(axis=0)
-        off_pct = percent_from_baseline(off_tfr.data, times).mean(axis=0)
-        maps[(hemi, "baselined")] = on_pct - off_pct
-        maps[(hemi, "raw_diff")] = (on_raw - off_raw) * 1e12
-        maps[(hemi, "on_raw")] = on_raw * 1e12
 
-    maps[("right_minus_left", "on_raw")] = (
-        maps[("right", "on_raw")] - maps[("left", "on_raw")]
+def alpha_curve(power, peak_hz):
+    """Average absolute power over peak +/-1 Hz; preserve time points."""
+    frequencies = (
+        (FREQUENCIES >= peak_hz - ALPHA_HALF_WIDTH_HZ - 1e-9)
+        & (FREQUENCIES <= peak_hz + ALPHA_HALF_WIDTH_HZ + 1e-9)
     )
-    return maps, times
+    if not np.any(frequencies):
+        raise ValueError(f"No frequency bins at peak {peak_hz:g} Hz.")
+    return power[frequencies].mean(axis=0)
 
 
-def add_tfr(ax, times, values, title, limit, unit):
-    """Show a zero-centred diverging TFR with a consistent colour scale."""
-    shown = (times >= DISPLAY_TIME[0]) & (times <= DISPLAY_TIME[1])
-    image = ax.pcolormesh(
-        times[shown], FREQS, values[:, shown],
-        cmap="RdBu_r",
-        norm=TwoSlopeNorm(vcenter=0, vmin=-limit, vmax=limit),
-        shading="auto",
-        rasterized=True,
-    )
-    ax.axvline(0, color="black", linewidth=0.8, linestyle="--")
+def add_curve(ax, times, curves, peak_hz, title):
+    """Show unbaselined alpha power for each labelled trace."""
+    visible = (times >= PLOT_TIME[0]) & (times <= PLOT_TIME[1])
+    for label, values, colour in curves:
+        ax.plot(
+            times[visible], values[visible],
+            label=label, color=colour, linewidth=1.8,
+        )
+    ax.axvline(0, color="black", linestyle="--", linewidth=0.8)
+    ax.axvspan(0.3, 0.8, alpha=0.08, color="gray")
     ax.set(
         title=title,
-        xlabel="Time from cue onset (s)",
-        ylabel="Frequency (Hz)",
+        xlabel="Time after cue (s)",
+        ylabel="Absolute alpha power (microvolt squared)",
+        xlim=PLOT_TIME,
     )
-    ax.set_ylim(2, 31.5)
-    return image
+    ax.legend(loc="best", frameon=False, fontsize=9)
+    ax.grid(alpha=0.16)
+    ax.text(
+        0.02, 0.94, f"Peak {peak_hz:g} Hz +/-1 Hz",
+        transform=ax.transAxes, va="top", fontsize=9,
+    )
 
 
-def symmetric_limit(maps, keys, times):
-    """Use the 99th percentile of absolute displayed contrasts."""
-    shown = (times >= DISPLAY_TIME[0]) & (times <= DISPLAY_TIME[1])
-    values = np.concatenate(
-        [np.abs(maps[key][:, shown]).ravel() for key in keys]
-    )
+def colour_limit(maps, times):
+    """Choose a shared symmetric scale for a set of absolute contrasts."""
+    visible = (times >= PLOT_TIME[0]) & (times <= PLOT_TIME[1])
+    values = np.concatenate([
+        np.abs(matrix[:, visible]).ravel() for matrix in maps
+    ])
+    if not np.isfinite(values).all():
+        raise ValueError("Nonfinite TFR values.")
     return max(float(np.nanpercentile(values, 99)), 1e-12)
 
 
-def plot_page(subject, side, maps, times, channels, n_on, n_off):
-    """Arrange two baselined, two raw and one ON lateralisation TFR."""
-    fig = plt.figure(figsize=(14.5, 13), layout="constrained")
-    grid = fig.add_gridspec(
-        3, 2, height_ratios=(1, 1, 1),
+def add_tfr(ax, times, values, title, limit):
+    """Plot an unbaselined difference TFR with a zero-centred colourmap."""
+    visible = (times >= PLOT_TIME[0]) & (times <= PLOT_TIME[1])
+    image = ax.pcolormesh(
+        times[visible], FREQUENCIES, values[:, visible],
+        cmap="RdBu_r",
+        norm=TwoSlopeNorm(vmin=-limit, vcenter=0, vmax=limit),
+        shading="auto",
+        rasterized=True,
     )
+    ax.axvline(0, color="black", linestyle="--", linewidth=0.8)
+    ax.set(
+        title=title,
+        xlabel="Time after cue (s)",
+        ylabel="Frequency (Hz)",
+        ylim=(2.0, 31.5),
+    )
+    return image
+
+
+def plot_on_off_page(subject, side, times, maps, channels, peak, counts):
+    """Two sensor-comparison curves and three unbaselined TFR panels."""
+    on_label = STIM_LABELS[side]
+    left_diff = maps[(on_label, "left")] - maps[("off", "left")]
+    right_diff = maps[(on_label, "right")] - maps[("off", "right")]
+    on_right_left = maps[(on_label, "right")] - maps[(on_label, "left")]
+    limit = colour_limit(
+        [left_diff, right_diff, on_right_left], times
+    )
+
+    fig = plt.figure(figsize=(14, 13), layout="constrained")
+    grid = fig.add_gridspec(3, 2, height_ratios=(0.8, 1, 1.05))
     axes = [
         fig.add_subplot(grid[0, 0]),
         fig.add_subplot(grid[0, 1]),
@@ -273,110 +341,201 @@ def plot_page(subject, side, maps, times, channels, n_on, n_off):
         fig.add_subplot(grid[1, 1]),
         fig.add_subplot(grid[2, :]),
     ]
-    baseline_keys = [
-        ("left", "baselined"), ("right", "baselined")
-    ]
-    raw_keys = [
-        ("left", "raw_diff"), ("right", "raw_diff"),
-        ("right_minus_left", "on_raw"),
-    ]
-    pct_limit = symmetric_limit(maps, baseline_keys, times)
-    raw_limit = symmetric_limit(maps, raw_keys, times)
-    specifications = [
-        (baseline_keys[0], "Left sensors: ON - OFF (baseline %)",
-         pct_limit, "Percentage points"),
-        (baseline_keys[1], "Right sensors: ON - OFF (baseline %)",
-         pct_limit, "Percentage points"),
-        (raw_keys[0], "Left sensors: ON - OFF (absolute)",
-         raw_limit, "Power difference (microvolt squared)"),
-        (raw_keys[1], "Right sensors: ON - OFF (absolute)",
-         raw_limit, "Power difference (microvolt squared)"),
-        (raw_keys[2], "ON only: right sensors - left sensors",
-         raw_limit, "Power difference (microvolt squared)"),
-    ]
-
-    for axis, (key, label, limit, unit) in zip(axes, specifications):
-        image = add_tfr(axis, times, maps[key], label, limit, unit)
-        fig.colorbar(image, ax=axis, label=unit, shrink=0.85, pad=0.01)
-
+    add_curve(
+        axes[0], times, [
+            ("Left sensors", alpha_curve(maps[(on_label, "left")], peak),
+             "tab:blue"),
+            ("Right sensors", alpha_curve(maps[(on_label, "right")], peak),
+             "tab:orange"),
+        ], peak, "DBS ON: left versus right sensors",
+    )
+    add_curve(
+        axes[1], times, [
+            ("Left sensors", alpha_curve(maps[("off", "left")], peak),
+             "tab:blue"),
+            ("Right sensors", alpha_curve(maps[("off", "right")], peak),
+             "tab:orange"),
+        ], peak, "DBS OFF: left versus right sensors",
+    )
+    for ax, data, title in zip(
+        axes[2:],
+        (left_diff, right_diff, on_right_left),
+        (
+            "Left sensors: ON - OFF",
+            "Right sensors: ON - OFF",
+            "ON only: right sensors - left sensors",
+        ),
+    ):
+        image = add_tfr(ax, times, data, title, limit)
+        fig.colorbar(
+            image, ax=ax, label="Power difference (microvolt squared)",
+            shrink=0.85, pad=0.01,
+        )
     fig.suptitle(
-        f"sub-{subject} | {side.upper()} STN stimulation | "
-        f"ON n={n_on}; OFF n={n_off}",
-        fontsize=17,
+        f"sub-{subject} | {side.upper()} STN ON vs OFF | "
+        f"ON {counts[on_label]}, OFF {counts['off']} trials",
+        fontsize=16,
     )
     fig.text(
-        0.5, 0.005,
-        f"Left: {', '.join(channels['left'])}  |  "
-        f"Right: {', '.join(channels['right'])}  |  "
-        "Midline POz/Oz excluded. "
-        "Baseline -0.3 to -0.1 s; cue directions pooled.",
+        0.5, 0.004,
+        f"Left: {', '.join(channels['left'])} | "
+        f"Right: {', '.join(channels['right'])} | "
+        "All power unbaselined. Both cue directions pooled.",
+        ha="center", fontsize=9,
+    )
+    return fig
+
+
+def plot_stim_comparison_page(subject, times, maps, channels, peak, counts):
+    """Two right-minus-left STN TFRs and two alpha-condition curves."""
+    left_diff = (
+        maps[("stim_right", "left")] - maps[("stim_left", "left")]
+    )
+    right_diff = (
+        maps[("stim_right", "right")] - maps[("stim_left", "right")]
+    )
+    limit = colour_limit([left_diff, right_diff], times)
+    fig, axes = plt.subplots(
+        2, 2, figsize=(14, 10), layout="constrained",
+    )
+    for ax, values, title in zip(
+        axes[0],
+        (left_diff, right_diff),
+        (
+            "Left sensors: right STN ON - left STN ON",
+            "Right sensors: right STN ON - left STN ON",
+        ),
+    ):
+        image = add_tfr(ax, times, values, title, limit)
+        fig.colorbar(
+            image, ax=ax, label="Power difference (microvolt squared)",
+            shrink=0.85, pad=0.01,
+        )
+
+    for ax, hemisphere, title in (
+        (
+            axes[1, 0], "right",
+            "Right sensors: right STN ON vs left STN ON",
+        ),
+        (
+            axes[1, 1], "left",
+            "Left sensors: right STN ON vs left STN ON",
+        ),
+    ):
+        add_curve(
+            ax, times, [
+                (
+                    "Right STN ON",
+                    alpha_curve(maps[("stim_right", hemisphere)], peak),
+                    "tab:orange",
+                ),
+                (
+                    "Left STN ON",
+                    alpha_curve(maps[("stim_left", hemisphere)], peak),
+                    "tab:blue",
+                ),
+            ], peak, title,
+        )
+    fig.suptitle(
+        f"sub-{subject} | RIGHT vs LEFT STN ON | "
+        f"right {counts['stim_right']}, left {counts['stim_left']} trials",
+        fontsize=16,
+    )
+    fig.text(
+        0.5, 0.003,
+        f"Left: {', '.join(channels['left'])} | "
+        f"Right: {', '.join(channels['right'])} | "
+        "No baseline correction; both cue directions pooled.",
         ha="center", fontsize=9,
     )
     return fig
 
 
 def main():
-    """Generate both reports; write one page per successful participant."""
+    """Create three PDF reports from verified participant-specific epochs."""
     args = parse_args()
     root = resolve_project_root(args.platform, args.project_root)
-    trial_csv = args.trial_csv or (
-        root / "derivatives" / "reports" / "group"
-        / "EEG_posterior_channels_block_mapping" / "trial_alpha.csv"
+    group = root / "derivatives" / "reports" / "group"
+    trial_path = args.trial_csv or (
+        group / "EEG_posterior_channels_block_mapping" / "trial_alpha.csv"
     )
+    peak_path = locate_peaks_csv(root, args.peaks_csv)
     output = args.output_dir or (
-        root / "derivatives" / "reports" / "group"
-        / "EEG_posterior_channels_stim_laterality"
+        group / "EEG_posterior_channels_stim_laterality"
     )
     output.mkdir(parents=True, exist_ok=True)
-    frame = pd.read_csv(trial_csv, dtype={"subject": str})
+
+    trials = pd.read_csv(trial_path, dtype={"subject": str})
     required = {
         "subject", "source_condition", "trial_index_in_condition",
         "label_verified", "dbs_on", "stimulation_period",
         "stimulation_side",
     }
-    if not required.issubset(frame.columns):
+    if not required.issubset(trials.columns):
         raise ValueError(
-            f"Missing B03 trial_alpha columns: {required - set(frame.columns)}"
+            f"Missing trial_alpha columns: {required - set(trials.columns)}"
         )
-    frame["subject"] = frame["subject"].str.removeprefix("sub-")
-    pdfs = {
-        side: PdfPages(output / f"posterior_TFR_{side}_STN_ON.pdf")
-        for side in SIDES
+    trials["subject"] = trials["subject"].str.removeprefix("sub-")
+    peaks = load_alpha_peaks(peak_path)
+
+    names = {
+        "right": "posterior_TFR_right_STN_ON.pdf",
+        "left": "posterior_TFR_left_STN_ON.pdf",
+        "comparison": "posterior_TFR_right_vs_left_STN_ON.pdf",
     }
-    page_count = {side: 0 for side in SIDES}
+    pdfs = {
+        key: PdfPages(output / filename)
+        for key, filename in names.items()
+    }
+    pages = {key: 0 for key in names}
     try:
         for subject in args.subjects:
             try:
+                peak = peaks.get(subject)
+                if peak is None or not np.isfinite(peak):
+                    raise ValueError(
+                        "Missing/invalid individual OFF-derived alpha peak."
+                    )
                 epochs = {
                     condition: load_cue_epochs(
                         root, subject, condition, args
                     )
                     for condition in ("no-stim", "stim")
                 }
-                rows = verified_rows(frame, subject, epochs)
-                for side, stimulation in SIDES.items():
-                    on, off = choose_condition_epochs(
-                        epochs, rows, stimulation
+                rows = verified_rows(trials, subject, epochs)
+                conditions = extract_conditions(epochs, rows)
+                channels = shared_sensors(conditions)
+                times, maps = participant_power(
+                    conditions, channels, args.n_jobs
+                )
+                counts = {
+                    name: len(value) for name, value in conditions.items()
+                }
+                for side in STIM_LABELS:
+                    fig = plot_on_off_page(
+                        subject, side, times, maps, channels, peak, counts
                     )
-                    channels = common_channels(on, off)
-                    maps, times = calculate_maps(
-                        on, off, channels, args.n_jobs
-                    )
-                    fig = plot_page(
-                        subject, side, maps, times, channels,
-                        len(on), len(off),
-                    )
-                    pdfs[side].savefig(fig, bbox_inches="tight")
+                    pdfs[side].savefig(fig)
                     plt.close(fig)
-                    page_count[side] += 1
-                print(f"sub-{subject}: completed LEFT and RIGHT STN PDFs")
-            except (FileNotFoundError, ValueError, RuntimeError) as exc:
-                print(f"sub-{subject}: skipped, {exc}")
+                    pages[side] += 1
+
+                fig = plot_stim_comparison_page(
+                    subject, times, maps, channels, peak, counts
+                )
+                pdfs["comparison"].savefig(fig)
+                plt.close(fig)
+                pages["comparison"] += 1
+                print(f"sub-{subject}: saved all three report pages.")
+            except (
+                FileNotFoundError, ValueError, RuntimeError, KeyError
+            ) as exc:
+                print(f"sub-{subject}: skipped - {exc}")
     finally:
         for pdf in pdfs.values():
             pdf.close()
-    for side, count in page_count.items():
-        print(f"{side.upper()} STN PDF: {count} participant pages")
+    for name, count in pages.items():
+        print(f"{names[name]}: {count} participant pages")
+    print(f"Report directory: {output}")
 
 
 if __name__ == "__main__":
