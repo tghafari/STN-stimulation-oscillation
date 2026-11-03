@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Participant posterior TFR QC: stimulation OFF/ON and individual alpha peak.
+"""
+====================================================================
+Participant posterior TFR QC: stimulation OFF/ON and individual alpha peak.
 
 Run from repository root:
     python analysis/group/EEG_posterior_channels/G03_individual_alpha_report.py \
@@ -18,6 +20,7 @@ The PDF and a CSV containing individual alpha peak frequencies will be saved und
 run in Bash by:
     python analysis/group/EEG_posterior_channels/G03_individual_alpha_report.py \
     --subjects 101 102 103 104 105 106 107 108 110 111 112 113 114 115 116 118 119 120 121 122 123
+====================================================================
 """
 
 import argparse

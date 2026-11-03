@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Optional sensitivity tests for S02's validated G04 alpha data.
+"""
+===================================================================
+Optional sensitivity tests for S02's validated G04 alpha data.
 
 Symmetric normalised effect: (mean ON - mean OFF) / (mean ON + mean OFF).
 Both ON and OFF means in the denominator are recalculated for EVERY permutation. Whole
@@ -12,7 +14,9 @@ independent tests.
 
 Usage:
 python analysis/statistics/S02_sensitivity_alpha.py --subjects 101 102 103
+===================================================================
 """
+
 import argparse
 import sys
 from pathlib import Path

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Prepare reusable posterior alpha power and verified block assignments.
+"""
+===================================================================
+Prepare reusable posterior alpha power and verified block assignments.
 
 IMPORTANT: Run ALL intended participants together in ONE G04 invocation.
 The output CSV files (trial_alpha.csv, block_summary.csv and mapping_audit.csv)
@@ -16,6 +18,7 @@ Run from the repository root with all intended subjects:
 python analysis/group/EEG_posterior_channels/G04_prepare_block_alpha.py \\
     --subjects 101 102 103 104 105 106 107 108 110 111 112 113 \\
     114 115 116 118 119 120 121 122 123
+===================================================================
 """
 from __future__ import annotations
 
