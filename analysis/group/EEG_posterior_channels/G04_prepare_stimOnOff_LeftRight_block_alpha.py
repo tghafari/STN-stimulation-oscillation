@@ -15,9 +15,9 @@ Errors can be logged and participants skipped without excluding them from
 later statistical analysis. Absolute trial-level alpha is not baselined.
 
 Run from the repository root with all intended subjects:
-python analysis/group/EEG_posterior_channels/G04_prepare_block_alpha.py \\
-    --subjects 101 102 103 104 105 106 107 108 110 111 112 113 \\
-    114 115 116 118 119 120 121 122 123
+python analysis/group/EEG_posterior_channels/G04_prepare_stimOnOff_LeftRight_block_alpha.py \\
+    --subjects 101 102 103 105 106 107 108 112 113 114 115 116 \\
+    118 120 121 123
 ===================================================================
 """
 from __future__ import annotations
@@ -94,7 +94,7 @@ def ask_on_error(subject, stage, exc, failures):
         "traceback": detail,
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
     })
-    print(f"\\nERROR sub-{subject} ({stage}): {exc}")
+    print(f"\nERROR sub-{subject} ({stage}): {exc}")
     while True:
         choice = input(
             "Skip this participant and continue [s], or stop [q]? "
@@ -497,7 +497,7 @@ def main():
                     break
     finally:
         save_outputs(output, trials, audits, failures)
-        print(f"Saved results and error log in: {output}")
+        print(f"Saved trial-level input and QC PDF in: {output}")
         print(f"Successful participants: {len(set(row['subject'] for row in trials))}")
         print(f"Skipped/error records: {len(failures)}")
 
