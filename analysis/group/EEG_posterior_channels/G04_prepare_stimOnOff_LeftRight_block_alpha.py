@@ -45,7 +45,7 @@ for folder in (
 
 from pipeline_config import resolve_project_root, stage_path
 from A00_review_stimulation_blocks import events_path, get_blocks, review_rows
-from run_all_participants import choose_order
+
 from A02_validate_bids_epoch_mapping import map_condition_epochs
 
 # Edit these constants for subsequent analyses.
@@ -104,6 +104,64 @@ def ask_on_error(subject, stage, exc, failures):
         if choice in ("q", "quit"):
             return "quit"
         print("Please enter s or q.")
+
+
+def choose_order(subject, rows):
+    """Confirm or correct four stimulation periods directly within G04.
+
+    This is the single interactive stimulation-order confirmation workflow.
+    Confirmed values are then persisted by confirm_sequences().
+    """
+    proposed = rows["wiki_proposed_condition"].astype(str).str.lower().tolist()
+    correct = sorted(("off", "off", "stim_left", "stim_right"))
+    pretty = {
+        "off": "STN OFF",
+        "stim_left": "LEFT STN ON",
+        "stim_right": "RIGHT STN ON",
+    }
+
+    def display(labels):
+        print(f"\\nsub-{subject} - stimulation period sequence")
+        print("Task-block pairs: (1,2), (3,4), (5,6), (7,8)")
+        for (_, row), label in zip(rows.iterrows(), labels):
+            print(
+                f"  Task blocks {row.get('source_task_blocks', '?')}: "
+                f"{pretty.get(label, label)}; "
+                f"BIDS {row['onset_s']}-{row['offset_s']} s; "
+                f"cue L={row['cue_left_n']}, R={row['cue_right_n']}"
+            )
+
+    if sorted(proposed) == correct:
+        display(proposed)
+        while True:
+            answer = input(
+                "Confirm order? [y/n/s(skip)/q(quit)]: "
+            ).strip().lower()
+            if answer == "y":
+                return "confirmed", proposed
+            if answer in ("s", "q"):
+                return answer, None
+            if answer == "n":
+                break
+    else:
+        print(f"sub-{subject}: no valid saved proposal; enter manually.")
+
+    print("Enter four chronological labels: o=OFF, l=left, r=right.")
+    conversion = {"o": "off", "l": "stim_left", "r": "stim_right"}
+    while True:
+        raw = input("Four labels [l/r/o], or s(skip), q(quit): ")
+        answer = raw.strip().lower()
+        if answer in ("s", "q"):
+            return answer, None
+        tokens = answer.replace(",", " ").split()
+        if len(tokens) == 4 and all(token in conversion for token in tokens):
+            labels = [conversion[token] for token in tokens]
+            if sorted(labels) == correct:
+                display(labels)
+                confirm = input("Confirm this order? [y/n]: ").strip().lower()
+                if confirm == "y":
+                    return "confirmed", labels
+        print("Expected two OFF, one left ON and one right ON.")
 
 
 def confirm_sequences(root, subjects, args, failures):

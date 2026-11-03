@@ -150,21 +150,8 @@ def mark_two_sided_thresholds(ax, distribution):
 
 def create_report(out, subjects, absolute, normalised, loo, seed):
     """Write a combined primary and sensitivity PDF from actual results."""
-    absolute_effects = pd.read_csv(out / "participant_effects.csv")
-    primary_null = pd.read_csv(out / "permutation_null.csv")[
-        "permuted_group_effect"
-    ].to_numpy(dtype=float)
-    if set(absolute_effects["subject"].astype(str)) != set(subjects):
-        raise ValueError(
-            "Primary S02 participant list differs from sensitivity run. "
-            "Rerun primary S02 with exactly the same participants."
-        )
-    absolute_observed = float(absolute_effects["on_minus_off"].mean())
-    primary_p = (
-        1 + np.count_nonzero(
-            np.abs(primary_null) >= abs(absolute_observed)
-        )
-    ) / (len(primary_null) + 1)
+    absolute_values, absolute_observed, primary_null, primary_p = absolute
+    # All three analyses are computed from the same validated G04 trials.
     values, norm_observed, norm_null, norm_p = normalised
     report_path = out / "absolute_alpha_block_permutation.pdf"
     figures_dir = out / "figures"
@@ -245,7 +232,7 @@ def create_report(out, subjects, absolute, normalised, loo, seed):
              "distribution using the two-sided Monte Carlo formula."),
             ("Leave-one-participant-out",
              "Remove one participant, repeat the original absolute "
-             "group test with all remaining participants and 10,000 "
+             "group test with all remaining participants and the configured number of "
              "whole-period label permutations, then restore that "
              "participant and omit the next. Report the new group "
              "effect and two-sided p-value for each omission. "
@@ -272,21 +259,6 @@ def create_report(out, subjects, absolute, normalised, loo, seed):
         save_figure(fig, figures_dir, "normalised_alpha_permutation")
         pdf.savefig(fig)
         plt.close(fig)
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(11.7, 8.3))
-        ax1.scatter(loo["omitted_subject"], loo["observed_on_minus_off_v2"] * 1e12)
-        ax1.axhline(0, color="gray", lw=1)
-        ax1.set(ylabel="ON - OFF (microvolt squared)",
-                title="Leave-one-out: absolute group effect")
-        ax2.scatter(loo["omitted_subject"], loo["two_sided_p"])
-        ax2.axhline(0.05, color="gray", linestyle="--")
-        ax2.set(xlabel="Omitted participant", ylabel="Two-sided p",
-                title="Leave-one-out: permutation p-values")
-        for axis in (ax1, ax2):
-            axis.tick_params(axis="x", rotation=50)
-        fig.tight_layout()
-        save_figure(fig, figures_dir, "leave_one_out_effect_and_p")
-        pdf.savefig(fig)
-        plt.close(fig)
         fig, ax = plt.subplots(figsize=(11.7, 8.3))
         ax.axis("off")
         ax.set_title("Leave-one-out: full numerical results", fontsize=15)
@@ -306,11 +278,35 @@ def create_report(out, subjects, absolute, normalised, loo, seed):
         fig.tight_layout()
         pdf.savefig(fig)
         plt.close(fig)
+        fig, ax = plt.subplots(figsize=(11.7, 8.3))
+        ax.axis("off")
+        ax.set_title("Participant exclusions and reasons", fontsize=15)
+        exclusions = [
+            ("104", "VLM stimulation; non-STN target"),
+            ("109", "No available data"),
+            ("110", "VLM stimulation; non-STN target"),
+            ("111", "Incomplete: six of eight task blocks recorded"),
+            ("117", "Substantial missing recording data"),
+            ("119", "First ON period: all 80 epochs rejected in cleaning"),
+            ("122", "Unresolved DBS ON BIDS-to-task-block mapping"),
+        ]
+        exclusion_table = ax.table(
+            cellText=exclusions,
+            colLabels=["Excluded subject", "Reason"],
+            colWidths=[0.2, 0.76],
+            loc="center", cellLoc="left",
+        )
+        exclusion_table.auto_set_font_size(False)
+        exclusion_table.set_fontsize(10)
+        exclusion_table.scale(1, 1.6)
+        fig.tight_layout()
+        pdf.savefig(fig)
+        plt.close(fig)
     print(f"Updated combined report: {report_path}")
 
 
 def main():
-    """Export optional percentage and leave-one-out sensitivity results."""
+    """Generate a combined PDF report without intermediate CSV outputs."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--subjects", nargs="+", required=True)
     parser.add_argument("--platform", default="mac",
@@ -333,15 +329,12 @@ def main():
     data = read_data(path, subjects)
     out = group / "absolute_alpha_block_permutation"
     out.mkdir(parents=True, exist_ok=True)
+    absolute_result = run_test(
+        data, args.n_permutations, args.seed, percentage=False
+    )
     percentages, observed, null, p_value = run_test(
         data, args.n_permutations, args.seed, percentage=True
     )
-    pd.DataFrame({
-        "subject": subjects, "normalised_on_minus_off": percentages
-    }).to_csv(out / "participant_normalised_effects.csv", index=False)
-    pd.DataFrame({
-        "permuted_group_normalised": null
-    }).to_csv(out / "permutation_null_normalised.csv", index=False)
     rows = []
     for index, subject in enumerate(subjects):
         remaining = [d for j, d in enumerate(data) if j != index]
@@ -355,9 +348,8 @@ def main():
             "two_sided_p": p,
         })
     loo = pd.DataFrame(rows)
-    loo.to_csv(out / "leave_one_out_absolute.csv", index=False)
     create_report(
-        out, subjects, None, (percentages, observed, null, p_value),
+        out, subjects, absolute_result, (percentages, observed, null, p_value),
         loo, args.seed
     )
     print(f"Normalised (ON-OFF)/(ON+OFF) = {observed:.5g}, p = {p_value:.5g}")

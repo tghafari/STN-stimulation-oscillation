@@ -534,18 +534,6 @@ def main():
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    pd.DataFrame(results).to_csv(
-        output_dir / "participant_effects.csv",
-        index=False,
-    )
-
-    pd.DataFrame({
-        "permuted_group_effect": null_distribution
-    }).to_csv(
-        output_dir / "permutation_null.csv",
-        index=False,
-    )
-
     report_path = (
         output_dir / "absolute_alpha_block_permutation.pdf"
     )

@@ -1,17 +1,22 @@
-# Posterior-channel group analyses
+# Posterior-channel group analysis
 
-**First process every participant with the posterior-channel subject runner**, then run the all-channel subject pipeline for the same participants. These group scripts analyse posterior-channel results; they do not perform preprocessing.
+Run the subject-level posterior preprocessing before these group analyses.
+See [the group README](../README.md) for G04/S02 instructions, report
+outputs, exclusions, and permutation-test methods.
 
-From the repository root:
+## Available report scripts
 
-```bash
-python analysis/group/EEG_posterior_channels/G01_concatenated_epochs_report.py --subjects 101 102 103
-python analysis/group/EEG_posterior_channels/G02_grand_average_report.py --subjects 101 102 103
-```
+- `G01_concatenated_epochs_report.py`: concatenates trial epochs, then
+  produces pooled posterior ERP/TFR plots; participants with more trials
+  contribute more to pooled trial results.
+- `G02_grand_average_report.py`: first computes participant ERP/TFR, then
+  averages participants equally.
+- `G03_individual_stimOn_stimOff_alpha_report.py`: participant-specific
+  posterior TFR and alpha curves, individual alpha peak documentation.
+- `G04_prepare_stimOnOff_LeftRight_block_alpha.py`: prompts for stimulation
+  order only when not already saved; validates BIDS trial-to-block mapping
+  and writes the minimal `trial_alpha.csv` input plus a QC PDF.
 
-- **G01:** concatenate retained cue epochs before ERP/TFR computation; subjects with more epochs contribute more trials. Includes PO3/PO4/POz and posterior ROI comparisons, stimulation contrasts and PDF report.
-- **G02:** calculate subject-level ERP/TFR first, then grand-average participants with equal subject weighting. Includes cue/grating ERP views, channel/ROI TFR and stimulation contrasts.
-
-Stim/no-stim TFR displays use percent baseline (-0.3 to -0.1 s). Ratio is calculated from unbaselined power as `(stim - no-stim)/(stim + no-stim)`; difference baseline handling is selected interactively where supported. Inspect the figure captions and saved analysis notes for the exact choice.
-
-All-channel group analysis: `analysis/group/EEG_all_channels/run_grand_average.py`.
+The G01/G02 TFR displays may use percent baseline correction, whereas G04
+and S02 analyse **absolute, non-baseline-corrected** alpha power during
+the cue-locked attention interval. Do not confuse these measures.
