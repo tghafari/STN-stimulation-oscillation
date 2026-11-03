@@ -13,7 +13,7 @@ outputs, exclusions, and permutation-test methods.
   averages participants equally.
 - `G03_individual_stimOn_stimOff_alpha_report.py`: participant-specific
   posterior TFR and alpha curves, individual alpha peak documentation.
-- `G04_prepare_stimOnOff_LeftRight_block_alpha.py`: prompts for stimulation
+- `B03_prepare_block_alpha.py`: prompts for stimulation
   order only when not already saved; validates BIDS trial-to-block mapping
   and writes the minimal `trial_alpha.csv` input plus a QC PDF.
 

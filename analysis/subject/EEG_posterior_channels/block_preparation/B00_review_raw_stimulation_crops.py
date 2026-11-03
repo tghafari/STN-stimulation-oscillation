@@ -8,8 +8,7 @@ Usage:
  python review_raw_stimulation_crops.py --subjects 102 104 105 107 110 116 120 122 123
 
 For each participant, inspect the raw EEG browser, close it, enter one or two
-intervals per condition, and explicitly confirm before saving. A timestamped
-backup is made before the first change. Existing unrelated subjects are kept.
+intervals per condition, and explicitly confirm before saving. The original crop-time table is preserved by atomic writing. Existing unrelated subjects are kept.
 """
 from __future__ import annotations
 
@@ -28,7 +27,7 @@ import mne
 from mne_bids import read_raw_bids
 
 HERE = Path(__file__).resolve().parent
-SUBJECT_DIR = HERE.parent
+SUBJECT_DIR = HERE.parents[1]
 CONFIG_DIR = SUBJECT_DIR / "EEG_all_channels"
 sys.path.insert(0, str(CONFIG_DIR))
 from pipeline_config import base_bids_path, crop_table_path, resolve_project_root

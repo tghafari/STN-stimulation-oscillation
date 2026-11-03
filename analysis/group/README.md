@@ -6,7 +6,7 @@ EEG preprocessing must be completed before group analyses.
 ## Posterior workflow
 
 1. Run `analysis/group/EEG_posterior_channels/G03_individual_stimOn_stimOff_alpha_report.py` to establish individual alpha peaks where needed.
-2. Run `G04_prepare_stimOnOff_LeftRight_block_alpha.py` for all intended participants. G04 is the **only supported interactive interface** for confirming stimulation order. Confirmations are persisted in `analysis/subject/stimulation_sequence_confirmed.json`.
+2. Run `B03_prepare_block_alpha.py` for all intended participants. G04 is the **only supported interactive interface** for confirming stimulation order. Confirmations are persisted in `analysis/subject/stimulation_sequence_confirmed.json`.
 3. Run `analysis/statistics/S02_absolute_alpha_block_permutation.py` for the primary two-sided whole-period permutation test.
 4. Run `analysis/statistics/S02_sensitivity_alpha.py` to regenerate the full PDF with symmetric normalised sensitivity and leave-one-out checks.
 
@@ -85,9 +85,9 @@ Document any later changes to eligibility and rerun the group report.
 
 `analysis/subject/stimulation_cropped_time.json` defines crop times.
 It is distinct from `stimulation_sequence_confirmed.json`.
-The shared `A00_review_stimulation_blocks.py` and
-`A02_validate_bids_epoch_mapping.py` modules under
-`analysis/subject/EEG_STN_laterality/` perform block detection and
+The shared `B01_review_bids_blocks.py` and
+`B02_validate_epoch_mapping.py` modules under
+`analysis/subject/EEG_posterior_channels/block_preparation/` perform block detection and
 timing validation; **they do not provide a second supported confirmation
 workflow**. `review_raw_stimulation_crops.py` is used only to inspect/change
 crop intervals, *not* stimulation labels.

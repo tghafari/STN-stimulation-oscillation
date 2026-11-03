@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Review actual BIDS block timing and confirm STN stimulation laterality.
+"""Review actual BIDS block timing for G04 block preparation.
 
 The HTML/CSV review is derived from each participant's BIDS events.tsv. The proposed
 sequence is only a proposal: the analysis runner requires explicit user confirmation.
@@ -12,14 +12,14 @@ import sys
 from pathlib import Path
 import pandas as pd
 
-HERE = Path(__file__).resolve().parents[1]
-SUBJECT_DIR = HERE.parent
+HERE = Path(__file__).resolve().parent
+SUBJECT_DIR = HERE.parents[1]
 PIPELINE_DIR = SUBJECT_DIR / "EEG_all_channels"
 if str(PIPELINE_DIR) not in sys.path:
     sys.path.insert(0, str(PIPELINE_DIR))
 from pipeline_config import resolve_project_root
 
-SEQUENCE_PATH = HERE / "stimulation_sequence_reference.json"
+SEQUENCE_PATH = SUBJECT_DIR / "stimulation_sequence_reference.json"
 
 def events_path(root, subject, session, task, run):
     return (root / "data" / "BIDS" / f"sub-{subject}" / f"ses-{session}" / "eeg" /

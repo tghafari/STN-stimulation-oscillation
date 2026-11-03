@@ -40,13 +40,13 @@ from matplotlib.backends.backend_pdf import PdfPages
 HERE = Path(__file__).resolve().parent
 ANALYSIS = HERE.parent
 SUBJECT_DIR = ANALYSIS / "subject"
-for folder in (SUBJECT_DIR / "EEG_all_channels", SUBJECT_DIR / "EEG_STN_laterality"):
+for folder in (SUBJECT_DIR / "EEG_all_channels", SUBJECT_DIR / "EEG_posterior_channels" / "block_preparation"):
     if str(folder) not in sys.path:
         sys.path.insert(0, str(folder))
 
 from pipeline_config import resolve_project_root, stage_path
-from A00_review_stimulation_blocks import events_path
-from A02_validate_bids_epoch_mapping import map_condition_epochs
+from B01_review_bids_blocks import events_path
+from B02_validate_epoch_mapping import map_condition_epochs
 
 # Edit these values to change the analysis without changing functions.
 ATTENTION_WINDOW = (0.3, 0.8)

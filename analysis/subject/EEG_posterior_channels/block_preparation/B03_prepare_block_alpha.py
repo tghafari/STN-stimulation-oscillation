@@ -15,7 +15,7 @@ Errors can be logged and participants skipped without excluding them from
 later statistical analysis. Absolute trial-level alpha is not baselined.
 
 Run from the repository root with all intended subjects:
-python analysis/group/EEG_posterior_channels/G04_prepare_stimOnOff_LeftRight_block_alpha.py \\
+python analysis/subject/EEG_posterior_channels/block_preparation/B03_prepare_block_alpha.py \\
     --subjects 101 102 103 105 106 107 108 112 113 114 115 116 \\
     118 120 121 123
 ===================================================================
@@ -34,19 +34,19 @@ import numpy as np
 import pandas as pd
 
 HERE = Path(__file__).resolve().parent
-ANALYSIS = HERE.parents[1]
+ANALYSIS = HERE.parents[2]
 SUBJECT_DIR = ANALYSIS / "subject"
 for folder in (
     SUBJECT_DIR / "EEG_all_channels",
-    SUBJECT_DIR / "EEG_STN_laterality",
+    HERE,
 ):
     if str(folder) not in sys.path:
         sys.path.insert(0, str(folder))
 
 from pipeline_config import resolve_project_root, stage_path
-from A00_review_stimulation_blocks import events_path, get_blocks, review_rows
+from B01_review_bids_blocks import events_path, get_blocks, review_rows
 
-from A02_validate_bids_epoch_mapping import map_condition_epochs
+from B02_validate_epoch_mapping import map_condition_epochs
 
 # Edit these constants for subsequent analyses.
 ATTENTION_WINDOW = (0.3, 0.8)
