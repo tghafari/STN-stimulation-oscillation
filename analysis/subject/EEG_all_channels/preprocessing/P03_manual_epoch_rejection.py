@@ -1,45 +1,242 @@
-"""P03_manual_epoch_rejection.py: detailed processing overview
+"""Manually reject ICA-cleaned EEG epochs and document spectral QC.
 
-Prerequisite: complete posterior-channel pipeline first to create raw BIDS and
-participant report. Then run this all-channel subject pipeline.
+Inputs are the two condition-specific ICA-cleaned epoch FIF files from P02.
+The researcher inspects the epochs, manually rejects bad trials and can
+mark additional EEG channels bad. The union of bad channels is applied to
+both conditions; no interpolation is performed.
 
-Opens ICA-cleaned epochs for manual bad-trial rejection, optionally marks further bad EEG channels, saves final clean epochs, epoch counts, Welch PSD and stimulation artifact QC. Both conditions share the final bad-channel list.
-
-Inputs and outputs use pipeline_config.py; inspect the QC JSON and report for
-participant-specific decisions and actual retained channel/epoch counts.
+Outputs are final clean epoch FIF files, Welch PSD figures, stimulation
+artifact QC and a JSON audit of retained epochs and channel decisions.
+The stimulation PSD comparison is diagnostic only; it does not alter data.
 """
 
 from __future__ import annotations
-import argparse,json
+
+import argparse
+import json
+
 import matplotlib.pyplot as plt
 import mne
 import numpy as np
-from pipeline_config import CONDITIONS,qc_dir,resolve_project_root,stage_path
-from all_channel_report import participant_report,figure_dir,fmt_channels
+
+from all_channel_report import figure_dir, fmt_channels, participant_report
+from pipeline_config import (
+    CONDITIONS,
+    qc_dir,
+    resolve_project_root,
+    stage_path,
+)
+
+
 def parse_args():
- p=argparse.ArgumentParser(description=__doc__);p.add_argument('--subject',required=True);p.add_argument('--session',default='01');p.add_argument('--task',default='SpAtt');p.add_argument('--run',default='01');p.add_argument('--platform',choices=['mac','bluebear'],default='mac');p.add_argument('--project-root',default=None);p.add_argument('--n-channels',type=int,default=20);return p.parse_args()
-def welch(ep):
- n=min(int(2*ep.info['sfreq']),len(ep.times));return ep.compute_psd(fmin=0.1,fmax=min(100.,ep.info['sfreq']/2.),method='welch',n_fft=n),n
-def mean_psd(spec):return spec.get_data().mean(axis=(0,1))
-def stimulation_qc(clean,report,figs,s):
- stim,nostim=clean['stim'],clean['no-stim'];common=[ch for ch in stim.copy().pick('eeg').ch_names if ch in nostim.ch_names and ch not in stim.info['bads'] and ch not in nostim.info['bads']]
- ss,_=welch(stim.copy().pick(common));ns,_=welch(nostim.copy().pick(common));f=ss.freqs;eps=np.finfo(float).tiny;sdb=10*np.log10(np.maximum(mean_psd(ss),eps));ndb=10*np.log10(np.maximum(mean_psd(ns),eps));fig,ax=plt.subplots(figsize=(10,5));ax.plot(f,ndb,label='no-stim');ax.plot(f,sdb,label='stim');ax.set_xlabel('Frequency (Hz)');ax.set_ylabel('Mean EEG PSD (dB)');ax.set_title(f'sub-{s}: stimulation artifact QC');ax.legend();ax.grid(True,alpha=.25);ax.set_xticks(np.arange(0,int(np.floor(f.max()/10))*10+1,10));ax.set_xlim(0,min(100.,float(f.max())));fig.tight_layout();report.add_figure(fig,str(figs/'P03_stimulation_artifact_QC.png'),'Stimulation artifact QC: stim versus no-stim PSD',f'Mean Welch PSD across epochs and the same {len(common)} good EEG channels. This is diagnostic only.','Stimulation artifact QC');return {'common_good_eeg_channels':common,'n_common_good_eeg_channels':len(common),'qc_only_no_correction':True}
+    """Parse the participant and epoch-browser display settings."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--subject", required=True)
+    parser.add_argument("--session", default="01")
+    parser.add_argument("--task", default="SpAtt")
+    parser.add_argument("--run", default="01")
+    parser.add_argument(
+        "--platform", choices=["mac", "bluebear"], default="mac"
+    )
+    parser.add_argument("--project-root", default=None)
+    parser.add_argument("--n-channels", type=int, default=20)
+    return parser.parse_args()
+
+
+def welch(epochs):
+    """Compute Welch PSD with approximately two-second FFT segments."""
+    n_fft = min(
+        int(2 * epochs.info["sfreq"]),
+        len(epochs.times),
+    )
+    spectrum = epochs.compute_psd(
+        fmin=0.1,
+        fmax=min(100.0, epochs.info["sfreq"] / 2.0),
+        method="welch",
+        n_fft=n_fft,
+    )
+    return spectrum, n_fft
+
+
+def mean_psd(spectrum):
+    """Average spectral power across epochs and channels."""
+    return spectrum.get_data().mean(axis=(0, 1))
+
+
+def stimulation_qc(clean, report, figures, subject):
+    """Compare the two conditions' PSD using shared good EEG channels."""
+    stim = clean["stim"]
+    no_stim = clean["no-stim"]
+    common = [
+        channel for channel in stim.copy().pick("eeg").ch_names
+        if channel in no_stim.ch_names
+        and channel not in stim.info["bads"]
+        and channel not in no_stim.info["bads"]
+    ]
+
+    stim_spectrum, _ = welch(stim.copy().pick(common))
+    off_spectrum, _ = welch(no_stim.copy().pick(common))
+    frequencies = stim_spectrum.freqs
+    tiny = np.finfo(float).tiny
+    stim_db = 10 * np.log10(
+        np.maximum(mean_psd(stim_spectrum), tiny)
+    )
+    off_db = 10 * np.log10(
+        np.maximum(mean_psd(off_spectrum), tiny)
+    )
+
+    figure, axis = plt.subplots(figsize=(10, 5))
+    axis.plot(frequencies, off_db, label="no-stim")
+    axis.plot(frequencies, stim_db, label="stim")
+    axis.set_xlabel("Frequency (Hz)")
+    axis.set_ylabel("Mean EEG PSD (dB)")
+    axis.set_title(f"sub-{subject}: stimulation artifact QC")
+    axis.legend()
+    axis.grid(True, alpha=0.25)
+    axis.set_xticks(
+        np.arange(0, int(np.floor(frequencies.max() / 10)) * 10 + 1, 10)
+    )
+    axis.set_xlim(0, min(100.0, float(frequencies.max())))
+    figure.tight_layout()
+    report.add_figure(
+        figure,
+        str(figures / "P03_stimulation_artifact_QC.png"),
+        "Stimulation artifact QC: stim versus no-stim PSD",
+        (
+            "Mean Welch PSD across epochs and the same "
+            f"{len(common)} good EEG channels. Diagnostic only."
+        ),
+        "Stimulation artifact QC",
+    )
+    return {
+        "common_good_eeg_channels": common,
+        "n_common_good_eeg_channels": len(common),
+        "qc_only_no_correction": True,
+    }
+
+
 def main():
- a=parse_args();s=a.subject.removeprefix('sub-');root=resolve_project_root(a.platform,a.project_root);report=participant_report(root,s);figs=figure_dir(root,s);epochs={};audit={'subject':f'sub-{s}','conditions':{}}
- for c in CONDITIONS:epochs[c]=mne.read_epochs(stage_path(root,s,a.session,a.task,a.run,c,'ica','epo'),preload=True)
- eeg=epochs['stim'].copy().pick('eeg').ch_names;existing=sorted(set().union(*(set(epochs[c].info['bads']) for c in CONDITIONS)));before={}
- for c in CONDITIONS:
-  before[c]=len(epochs[c]);good=[x for x in epochs[c].copy().pick('eeg').ch_names if x not in epochs[c].info['bads']];epochs[c].plot(picks=good,n_channels=min(a.n_channels,len(good)),block=True,title=f'sub-{s} {c}: manual bad-trial QC')
- while True:
-  add=input('Additional EEG channels to mark BAD after epoch inspection (space/comma separated, Enter for none): ').replace(',',' ').split();unknown=[x for x in add if x not in eeg]
-  if not unknown:break
-  print('Unknown EEG channels:',unknown)
- new=sorted(set(add)-set(existing));reasons={}
- for ch in new:
-  while not (r:=input(f'Reason for marking {ch} bad: ').strip()):print('Please enter a reason.')
-  reasons[ch]=r
- final=sorted(set(existing)|set(add));clean={}
- for c in CONDITIONS:
-  epochs[c].info['bads']=[x for x in final if x in epochs[c].ch_names];out=stage_path(root,s,a.session,a.task,a.run,c,'clean','epo');epochs[c].save(out,overwrite=True);clean[c]=epochs[c].copy();spec,n=welch(epochs[c]);fig=spec.plot(show=False);report.add_figure(fig,str(figs/f'P03_{c}_final_epoch_PSD.png'),f'{c}: PSD of final cleaned epochs',f'Welch PSD; retained epochs {len(epochs[c])}; manually rejected {before[c]-len(epochs[c])}.','All-channel EEG preprocessing');plt.close(fig);audit['conditions'][c]={'n_epochs_before_manual_rejection':before[c],'n_epochs_after_manual_rejection':len(epochs[c]),'final_bad_channels':final,'final_psd':{'method':'welch','fmin_hz':0.1,'fmax_hz':min(100.,epochs[c].info['sfreq']/2.),'n_fft':n}}
- audit['additional_bad_channels_at_epoch_qc']=new;audit['additional_bad_channel_reasons']=reasons;audit['final_bad_channels']=final;audit['stimulation_artifact_qc']=stimulation_qc(clean,report,figs,s);(qc_dir(root,s)/'P03_manual_epoch_rejection.json').write_text(json.dumps(audit,indent=2)+'\n');report.add_text('P03 manual epoch and channel QC',f'Bad trials were rejected manually. Additional bad channels: {fmt_channels(new)}. Reasons: '+('; '.join(f'{k}: {v}' for k,v in reasons.items()) or 'None')+f'. Final bad channels: {fmt_channels(final)}.','All-channel EEG preprocessing');print(f'Updated PDF: {report.pdf_fname}')
-if __name__=='__main__':main()
+    """Inspect and save final clean epochs and a detailed QC audit."""
+    args = parse_args()
+    subject = args.subject.removeprefix("sub-")
+    root = resolve_project_root(args.platform, args.project_root)
+    report = participant_report(root, subject)
+    figures = figure_dir(root, subject)
+    epochs = {}
+    audit = {"subject": f"sub-{subject}", "conditions": {}}
+
+    # Load both conditions before inspection. The interactive MNE
+    # browser updates each Epochs object when bad trials are dropped.
+    for condition in CONDITIONS:
+        path = stage_path(
+            root, subject, args.session, args.task, args.run,
+            condition, "ica", "epo",
+        )
+        epochs[condition] = mne.read_epochs(path, preload=True)
+
+    eeg = epochs["stim"].copy().pick("eeg").ch_names
+    existing = sorted(
+        set().union(
+            *(set(epochs[condition].info["bads"]) for condition in CONDITIONS)
+        )
+    )
+    before = {}
+    for condition in CONDITIONS:
+        before[condition] = len(epochs[condition])
+        good = [
+            channel for channel in epochs[condition].copy().pick("eeg").ch_names
+            if channel not in epochs[condition].info["bads"]
+        ]
+        epochs[condition].plot(
+            picks=good,
+            n_channels=min(args.n_channels, len(good)),
+            block=True,
+            title=f"sub-{subject} {condition}: manual bad-trial QC",
+        )
+
+    # Ask for any additional bad channels after reviewing both conditions.
+    while True:
+        additional = input(
+            "Additional EEG channels to mark BAD after epoch inspection "
+            "(space/comma separated, Enter for none): "
+        ).replace(",", " ").split()
+        unknown = [channel for channel in additional if channel not in eeg]
+        if not unknown:
+            break
+        print("Unknown EEG channels:", unknown)
+
+    new = sorted(set(additional) - set(existing))
+    reasons = {}
+    for channel in new:
+        while True:
+            reason = input(f"Reason for marking {channel} bad: ").strip()
+            if reason:
+                break
+            print("Please enter a reason.")
+        reasons[channel] = reason
+
+    final = sorted(set(existing) | set(additional))
+    clean = {}
+    for condition in CONDITIONS:
+        epochs[condition].info["bads"] = [
+            channel for channel in final
+            if channel in epochs[condition].ch_names
+        ]
+        output = stage_path(
+            root, subject, args.session, args.task, args.run,
+            condition, "clean", "epo",
+        )
+        epochs[condition].save(output, overwrite=True)
+        clean[condition] = epochs[condition].copy()
+
+        spectrum, n_fft = welch(epochs[condition])
+        figure = spectrum.plot(show=False)
+        report.add_figure(
+            figure,
+            str(figures / f"P03_{condition}_final_epoch_PSD.png"),
+            f"{condition}: PSD of final cleaned epochs",
+            (
+                f"Welch PSD; retained epochs {len(epochs[condition])}; "
+                f"manually rejected {before[condition] - len(epochs[condition])}."
+            ),
+            "All-channel EEG preprocessing",
+        )
+        plt.close(figure)
+        audit["conditions"][condition] = {
+            "n_epochs_before_manual_rejection": before[condition],
+            "n_epochs_after_manual_rejection": len(epochs[condition]),
+            "final_bad_channels": final,
+            "final_psd": {
+                "method": "welch",
+                "fmin_hz": 0.1,
+                "fmax_hz": min(100.0, epochs[condition].info["sfreq"] / 2.0),
+                "n_fft": n_fft,
+            },
+        }
+
+    audit["additional_bad_channels_at_epoch_qc"] = new
+    audit["additional_bad_channel_reasons"] = reasons
+    audit["final_bad_channels"] = final
+    audit["stimulation_artifact_qc"] = stimulation_qc(
+        clean, report, figures, subject
+    )
+    output = qc_dir(root, subject) / "P03_manual_epoch_rejection.json"
+    output.write_text(json.dumps(audit, indent=2) + "\n")
+
+    reason_text = "; ".join(
+        f"{channel}: {reason}" for channel, reason in reasons.items()
+    ) or "None"
+    report.add_text(
+        "P03 manual epoch and channel QC",
+        (
+            "Bad trials were rejected manually. Additional bad channels: "
+            f"{fmt_channels(new)}. Reasons: {reason_text}. "
+            f"Final bad channels: {fmt_channels(final)}."
+        ),
+        "All-channel EEG preprocessing",
+    )
+    print(f"Updated PDF: {report.pdf_fname}")
+
+
+if __name__ == "__main__":
+    main()
