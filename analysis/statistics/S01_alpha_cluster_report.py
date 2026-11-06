@@ -137,33 +137,43 @@ def sig_1d(T, cl, p, t):
                     "t_end": float(t[ix].max()),
                     "peak_t": float(t[ix[np.argmax(np.abs(T[ix]))]]),
                     "peak_stat": float(T[ix][np.argmax(np.abs(T[ix]))]),
+                    "n_samples": int(ix.size),
                 }
             )
     return out
 
 
-def shade(ax, rows):
-    ymin, ymax = ax.get_ylim()
-    for r in rows:
-        ax.axvspan(
-            r["t_start"],
-            r["t_end"],
-            facecolor="0.72",
-            edgecolor="0.25",
-            alpha=0.5,
-            zorder=0,
+def mark_significant_clusters(ax, rows, times):
+    """Show significant cluster samples as thick black bars at plot bottom.
+
+    Expand sample-centre boundaries by half the TFR sampling interval
+    for visibility. A one-sample bar does not imply sustained duration.
+    """
+    if not rows:
+        return
+    step = float(np.median(np.diff(times))) if len(times) > 1 else 0.0
+    for index, row in enumerate(rows):
+        start = max(WINDOW[0], row["t_start"] - step / 2)
+        stop = min(WINDOW[1], row["t_end"] + step / 2)
+        if stop <= start:
+            stop = start + max(step, 1e-6)
+        ax.plot(
+            [start, stop], [0.025, 0.025],
+            transform=ax.get_xaxis_transform(),
+            color="black", linewidth=6, solid_capstyle="butt",
+            clip_on=False, zorder=10,
+            label="Significant cluster" if index == 0 else None,
         )
-        mid = (r["t_start"] + r["t_end"]) / 2
-        p = r.get("p_cluster", r.get("p", np.nan))
-        ax.text(
-            mid,
-            ymax - (ymax - ymin) * 0.04,
-            f"cluster p={p:.4f}\n{r['t_start']:.3f}-{r['t_end']:.3f} s",
-            ha="center",
-            va="top",
-            fontsize=8,
-            bbox=dict(facecolor="white", alpha=0.85, edgecolor="0.4"),
-        )
+
+
+def cluster_time_label(row):
+    """Report single-point clusters without misleading zero-duration labels."""
+    if row["n_samples"] == 1:
+        return f"one sample at {row['t_start']:.4f} s"
+    return (
+        f"{row['t_start']:.4f}-{row['t_end']:.4f} s "
+        f"({row['n_samples']} samples)"
+    )
 
 
 def roi_plot(st, no, t, rows, title, ylabel):
@@ -181,7 +191,7 @@ def roi_plot(st, no, t, rows, title, ylabel):
     ax.set_ylabel(ylabel)
     ax.set_title(title)
     ax.legend()
-    shade(ax, rows)
+    mark_significant_clusters(ax, rows, t)
     return fig
 
 
@@ -241,7 +251,7 @@ def roi_difference_plot(diff, times, significant, title):
     ax.axhline(0, color="black", linestyle="--", linewidth=0.8)
     ax.set(xlim=WINDOW, xlabel="Time from cue (s)",
            ylabel="ON - OFF (percentage points)", title=title)
-    shade(ax, significant)
+    mark_significant_clusters(ax, significant, times)
     ax.legend()
     return fig
 
@@ -387,6 +397,24 @@ def main():
         "ROI means average sensors within participants first."
     )
     report.add_text("Analysis details", details, section)
+    report.add_text(
+        "How to read significant time intervals",
+        (
+            "A cluster time range lists the centres of sampled TFR time "
+            "points, not a continuous onset/offset estimate. A cluster "
+            "with one time sample is reported as one sample at its exact "
+            "time; it should not be interpreted as a sustained effect. "
+            "Thick black bars at the bottom of sensor and ROI time-course "
+            "plots identify cluster-corrected significant samples. "
+            "No bar means no cluster with p <= 0.05. "
+            "The tests are two-sided: either a positive or negative "
+            "consistent group ON-minus-OFF effect may be detected. "
+            "Opposing participant-level effects can cancel in the "
+            "group mean; these tests do not establish whether every "
+            "participant changes in either direction."
+        ),
+        section,
+    )
     report.add_text("Individual peaks", "\n".join(
         f"sub-{sub}: {peaks[sub]:.2f} Hz" for sub in subs), section)
     methods = (
@@ -514,23 +542,6 @@ def main():
     report.add_text("Single-sensor cluster-permutation results", sensor_text, section)
     for ch in sig_uncorrected:
         dat = sensor_results[ch]
-        sig = dat["significant_clusters"]
-        detail = (
-            f"{ch}: N={dat['n_subjects']}; cluster-forming threshold=+/-{dat['cluster_forming_threshold_t']:.4f}.\n"
-            + (
-                "\n".join(
-                    f"Significant cluster {r['cluster']}: {r['t_start']:.3f}-{r['t_end']:.3f} s; cluster statistic={r['cluster_stat']:.4f}; cluster p={r['p']:.4f}; n_samples={r['n_samples']}."
-                    for r in sig
-                )
-                if sig
-                else "No significant clusters."
-            )
-        )
-        report.add_text(
-            f"{ch}: significant single-sensor cluster details", detail, section
-        )
-    for ch in sig_uncorrected:
-        dat = sensor_results[ch]
         ch_subs = dat["included_subjects"]
         st = []
         no = []
@@ -544,11 +555,25 @@ def main():
             for r in sensor_cluster_records
             if r["sensor"] == ch and r["p_cluster"] <= PTHRESH
         ]
+        details = (
+            f"{ch}: N={dat['n_subjects']}; "
+            f"cluster-forming threshold=+/-"
+            f"{dat['cluster_forming_threshold_t']:.4f}.\\n"
+            + "\\n".join(
+                f"Cluster {r['cluster']}: {cluster_time_label(r)}; "
+                f"statistic={r['cluster_stat']:.4f}; "
+                f"two-sided p={r['p']:.4f}."
+                for r in dat["significant_clusters"]
+            )
+        )
+        report.add_text(
+            f"{ch}: significant cluster details", details, section
+        )
         report.add_figure(
             sensor_plot(np.asarray(st), np.asarray(no), ct, ch, rows),
             str(figs / f"sensor_{ch}_significant_clusters.png"),
             f"{ch}: single-sensor alpha cluster(s)",
-            f"Sensor-specific N={len(ch_subs)}. Gray vertical bands mark significant within-sensor cluster-permutation intervals and are labelled with cluster p-value and time range. Across-sensor FDR is not implied.",
+            f"Sensor-specific N={len(ch_subs)}. Thick black bars at the bottom mark significant cluster samples; a single-point bar does not imply a sustained interval. Across-sensor FDR is not implied.",
             section,
         )
     # ROI analyses use ROI-specific samples with at least one good ROI channel.
@@ -619,7 +644,7 @@ def main():
                 "No significant time clusters at corrected p <= 0.05."
                 if not rows
                 else " ".join(
-                    f"Cluster {r['cluster']}: p={r['p']:.4f}, {r['t_start']:.3f}-{r['t_end']:.3f} s."
+                    f"Cluster {r['cluster']}: p={r['p']:.4f}, {cluster_time_label(r)}."
                     for r in rows
                 )
             )
@@ -629,7 +654,7 @@ def main():
             f"\nActual ROI cluster-forming threshold: +/-{roi_thresh:.4f} (df={len(roi_subs)-1}; two-sided alpha={CLUSTER_FORMING_ALPHA:.2f}, 0.05 each tail).\nStrongest observed clusters, including non-significant:\n"
             + (
                 "\n".join(
-                    f"Cluster {r['cluster']}: p={r['p']:.4f}; stat={r['cluster_stat']:.3f}; n_samples={r['n_samples']}; {r['t_start']:.3f}-{r['t_end']:.3f} s"
+                    f"Cluster {r['cluster']}: p={r['p']:.4f}; stat={r['cluster_stat']:.3f}; n_samples={r['n_samples']}; {cluster_time_label(r)}"
                     for r in top_roi
                 )
                 if top_roi
@@ -642,7 +667,7 @@ def main():
             roi_plot(st, no, rt, rows, label, "Power change from baseline (%)"),
             str(figs / f"{tag}_alpha_clusters.png"),
             label + ": stimulation vs no stimulation",
-            f"ROI sample N={len(roi_subs)}. Available good ROI channels are averaged within each participant. Lines are group means; ribbons are SEM. Gray vertical bands mark significant cluster-permutation intervals and are labelled with cluster p-value and time range.",
+            f"ROI sample N={len(roi_subs)}. Available good ROI channels are averaged within each participant. Lines are group means; ribbons are SEM. Thick black bars at the bottom mark significant cluster samples.",
             section,
         )
         report.add_figure(
