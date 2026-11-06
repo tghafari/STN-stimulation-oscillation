@@ -234,7 +234,6 @@ def load_individual_alpha_peaks(project_root, subjects):
         / "derivatives"
         / "reports"
         / "group"
-        / "EEG_posterior_channels_alpha_changes_stimOn_stimOff"
         / "individual_alpha_peaks.csv"
     )
     if not csv_path.is_file():
