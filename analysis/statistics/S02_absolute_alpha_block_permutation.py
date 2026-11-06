@@ -242,7 +242,7 @@ def text_page(title, sections):
     return fig
 
 
-def distribution_page(null, observed, p, label, two_sided=True):
+def distribution_page(null, observed, p, label, two_sided=True, explanation=None):
     """Plot two-sided null, observed statistic and critical thresholds."""
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.hist(null, bins=50, color="lightsteelblue")
@@ -255,7 +255,12 @@ def distribution_page(null, observed, p, label, two_sided=True):
     ax.set(title=f"{label}: observed={observed:.4g}, p={p:.5g}",
            xlabel=label, ylabel="Permutations")
     ax.legend()
-    fig.tight_layout()
+    if explanation:
+        fig.text(0.08, 0.12, textwrap.fill(explanation, width=105),
+                 fontsize=9, va="top", ha="left")
+        fig.subplots_adjust(bottom=0.34)
+    else:
+        fig.tight_layout()
     return fig
 
 
@@ -380,11 +385,15 @@ def main():
              f"ON-OFF={diff:.4g} percentage points; peak={peak:g} Hz")
             for s, peak, _, on, off, diff in batch
         ]))
-    primary_fig = distribution_page(sq_null, sq_obs, sq_p, "Mean squared ON-OFF (pp squared)", two_sided=False)
-    absolute_fig = distribution_page(abs_null, abs_obs, abs_p, "Mean absolute ON-OFF (pp)", two_sided=False)
-    signed_fig = distribution_page(null, observed, p_perm, "Signed ON-OFF (pp)")
+    primary_fig = distribution_page(sq_null, sq_obs, sq_p, "Mean squared ON-OFF (pp squared)", two_sided=False,
+        explanation="PRIMARY TEST: Each participant contributes squared baseline-corrected ON-OFF. Increases and decreases cannot cancel. Blue bars are whole-period permutations, red is the observed statistic, and the dashed line is the upper 5% null cutoff. A red line beyond it indicates an unusually large effect under the null. Squaring emphasizes large individual effects.")
+    absolute_fig = distribution_page(abs_null, abs_obs, abs_p, "Mean absolute ON-OFF (pp)", two_sided=False,
+        explanation="SENSITIVITY TEST: Absolute baseline-corrected ON-OFF differences detect either direction, but weight extreme participants less than the squared statistic. Blue bars show the whole-period permutation null, red is the observed value, and dashed is the upper 5% cutoff. Compare with the primary squared-effect p-value.")
+    signed_fig = distribution_page(null, observed, p_perm, "Signed ON-OFF (pp)",
+        explanation="SECONDARY TEST: Signed participant differences are averaged, so increases and decreases may cancel. Blue bars show whole-period permutation statistics, red is the observed signed mean, and dashed lines indicate the two-sided 5% null cutoff.")
     normalized_fig = distribution_page(
-        norm_null, norm_observed, norm_p, "Unbaselined (ON-OFF)/(ON+OFF)"
+        norm_null, norm_observed, norm_p, "Unbaselined (ON-OFF)/(ON+OFF)",
+        explanation="SEPARATE RATIO SENSITIVITY: Both ON and OFF are original unbaselined alpha power. The ratio is never baseline corrected. Blue bars show the period-permutation null, red is observed, and dashed lines mark the two-sided 5% cutoff."
     )
     for name, fig in (("baseline_percent_squared_primary", primary_fig),
                       ("baseline_percent_absolute_sensitivity", absolute_fig),
