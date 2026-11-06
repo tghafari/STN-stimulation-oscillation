@@ -212,7 +212,7 @@ def participant_difference_traces(diff, t, subjects, title):
     return fig
 
 
-def participant_window_effects(diff, subjects, title):
+def participant_window_effects(diff, subjects, title, t_stat, p_value):
     values = diff.mean(1)
     fig, ax = plt.subplots(figsize=(10, 5), constrained_layout=True)
     x = np.arange(len(subjects))
@@ -225,7 +225,7 @@ def participant_window_effects(diff, subjects, title):
     ax.set_xticks(x)
     ax.set_xticklabels([f"sub-{z}" for z in subjects], rotation=60, ha="right")
     ax.set_ylabel(f"ON - OFF alpha (percentage points), {WINDOW[0]:g}-{WINDOW[1]:g} s")
-    ax.set_title(title)
+    ax.set_title(f'{title} | t={t_stat:.3f}, p={p_value:.4g}')
     ax.legend()
     return fig, values
 
@@ -639,7 +639,8 @@ def main():
             section,
         )
         effect_fig, effect_values = participant_window_effects(
-            roi_diff, roi_subs, label + ": participant mean effects"
+            roi_diff, roi_subs, label + ": participant mean effects",
+            window_t, window_p
         )
         report.add_figure(
             effect_fig,
