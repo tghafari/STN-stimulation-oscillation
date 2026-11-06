@@ -1,0 +1,22 @@
+name: Check analysis Python syntax
+
+on:
+  pull_request:
+    paths:
+      - 'analysis/statistics/*.py'
+      - '.github/workflows/check_statistics_syntax.yml'
+  push:
+    paths:
+      - 'analysis/statistics/*.py'
+      - '.github/workflows/check_statistics_syntax.yml'
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile statistics scripts
+        run: python -m py_compile analysis/statistics/S01_alpha_cluster_report.py analysis/statistics/S02_absolute_alpha_block_permutation.py
