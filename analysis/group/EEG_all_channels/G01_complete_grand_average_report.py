@@ -15,7 +15,7 @@ channels, and save PDF figures, channel counts and analysis JSON.
 
 Prepare subject inputs by running the posterior-channel subject pipeline first,
 then the all-channel pipeline when analysing the full montage.
-See this group's README for commands and output locations.
+See this group's README for prerequisites, commands and output locations.
 """
 
 import argparse

@@ -11,7 +11,8 @@ posterior-channel and all-channel preprocessing.
 
 Prepare subject inputs by running the posterior-channel subject pipeline first,
 then the all-channel pipeline when analysing the full montage.
-See this group's README for commands and output locations.
+See this group's README for prerequisites, commands and output locations.
+This runner adds figures to G01 rather than computing a separate analysis.
 """
 
 import matplotlib.pyplot as plt
