@@ -282,27 +282,49 @@ def estimate_individual_alpha_peak(subject_tfr):
 
 
 def align_tfr_to_individual_peak(data, frequencies, peak_hz):
-    """Interpolate a frequency-by-time TFR to a relative-alpha axis."""
+    """Align a TFR to the participant's individual alpha peak.
+
+    The frequency axis is expressed relative to the alpha peak.
+    Values below the peak are negative; values above are positive.
+    """
     target_frequencies = peak_hz + RELATIVE_FREQS
+
+    # Allow very small floating-point differences at the boundaries.
+    tolerance = 1e-6
+
     if (
-        target_frequencies.min() < frequencies.min()
-        or target_frequencies.max() > frequencies.max()
+        target_frequencies.min() < frequencies.min() - tolerance
+        or target_frequencies.max() > frequencies.max() + tolerance
     ):
         raise ValueError(
-            f"Peak {peak_hz:.2f} Hz cannot support the complete "
-            "relative-frequency range."
+            f"Alpha peak: {peak_hz:.2f} Hz\n"
+            f"Requested absolute range: "
+            f"{target_frequencies.min():.2f} to "
+            f"{target_frequencies.max():.2f} Hz\n"
+            f"Available TFR range: "
+            f"{frequencies.min():.2f} to "
+            f"{frequencies.max():.2f} Hz"
         )
+
+    # Keep target frequencies inside the available range.
+    target_frequencies = np.clip(
+        target_frequencies,
+        frequencies.min(),
+        frequencies.max(),
+    )
 
     aligned = np.empty(
         (len(RELATIVE_FREQS), data.shape[-1]),
         dtype=float,
     )
+
     for time_index in range(data.shape[-1]):
         aligned[:, time_index] = np.interp(
             target_frequencies,
             frequencies,
             data[:, time_index],
         )
+
     return aligned
 
 
