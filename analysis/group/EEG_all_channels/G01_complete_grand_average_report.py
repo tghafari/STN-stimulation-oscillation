@@ -232,7 +232,7 @@ def roi_fig(a, t, title, v):
 
 ALPHA_PEAK_SEARCH = (8.0, 12.0)
 ALPHA_PEAK_TIME = (0.3, 0.8)
-RELATIVE_FREQS = np.arange(-6.0, 6.0 + 0.25, 0.5)
+RELATIVE_FREQS = np.arange(-7.0, 18.0 + 0.25, 0.5)
 
 
 def estimate_individual_alpha_peak(subject_tfr):
