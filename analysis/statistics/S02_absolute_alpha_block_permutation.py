@@ -53,7 +53,6 @@ def arguments():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--subjects", nargs="+", required=True)
     parser.add_argument("--input-csv", type=Path, default=None)
-    parser.add_argument("--peaks-csv", type=Path, default=None)
     parser.add_argument("--platform", choices=("mac", "bluebear"), default="mac")
     parser.add_argument("--project-root", default=None)
     parser.add_argument("--session", default="01")
@@ -104,7 +103,7 @@ def alpha_trials(epochs, channels, peak, n_jobs):
     return percent_values, raw_values
 
 
-def validated_subject(frame, subject, root, args, peak):
+def validated_subject(frame, subject, root, args):
     """Match each CSV trial to the corresponding cleaned epoch index."""
     rows = frame.loc[frame.subject == subject].copy()
     if rows.empty:
@@ -113,8 +112,7 @@ def validated_subject(frame, subject, root, args, peak):
         raise ValueError(f"sub-{subject}: unverified stimulation labels")
     if rows.alpha_peak_hz.nunique() != 1:
         raise ValueError(f"sub-{subject}: inconsistent alpha peaks")
-    if not np.isclose(float(rows.alpha_peak_hz.iloc[0]), peak, atol=0.26):
-        raise ValueError("Individual peak CSV disagrees with B03; rerun B03")
+    peak = float(rows.alpha_peak_hz.iloc[0])
     if not np.isfinite(peak) or not 8 <= peak <= 12:
         raise ValueError(f"sub-{subject}: invalid OFF-derived peak")
     periods = [list() for _ in range(4)]
@@ -278,21 +276,10 @@ def main():
     if missing:
         raise ValueError(f"B03 CSV missing columns: {sorted(missing)}")
     frame["subject"] = frame.subject.str.removeprefix("sub-")
-    peaks_path = args.peaks_csv or group / "individual_alpha_peaks.csv"
-    peaks_frame = pd.read_csv(peaks_path, dtype={"subject": str})
-    if not {"subject", "peak_hz"}.issubset(peaks_frame.columns):
-        raise ValueError("Peak CSV requires subject and peak_hz")
-    peaks_frame["subject"] = peaks_frame.subject.str.removeprefix("sub-")
-    if peaks_frame.subject.duplicated().any():
-        raise ValueError("Duplicate individual peak IDs")
-    peaks = dict(zip(peaks_frame.subject, pd.to_numeric(peaks_frame.peak_hz, errors="coerce")))
-    for subject in args.subjects:
-        if subject not in peaks or not np.isfinite(peaks[subject]):
-            raise ValueError(f"Missing peak for sub-{subject}")
     data, included, details = [], [], []
     for subject in args.subjects:
         periods, raw_periods, labels, peak, channels = validated_subject(
-            frame, subject, root, args, float(peaks[subject])
+            frame, subject, root, args
         )
         data.append((periods, raw_periods, labels))
         included.append(subject)
@@ -334,7 +321,6 @@ def main():
             ("Included subjects (n=" + str(len(included)) + ")",
              ", ".join("sub-" + s for s in included)),
             ("Input", str(csv_path)),
-            ("Individual peaks CSV", str(peaks_path)),
             ("Participant-specific alpha peaks and retained sensors",
              "; ".join(f"sub-{s}: {peak:g} Hz, {','.join(chs)}"
                        for s, peak, chs, _, _, _ in details)),
@@ -388,41 +374,14 @@ def main():
         for extension in ("svg", "tiff"):
             fig.savefig(figures / f"{name}.{extension}",
                         dpi=600, bbox_inches="tight")
-    loo_figures = []
-    for start in range(0, len(loo), 16):
-        fig, ax = plt.subplots(figsize=(11, 8))
-        ax.axis("off")
-        ax.set_title("Leave-one-out: baseline-corrected ON - OFF")
-        table = ax.table(
-            cellText=[[f"sub-{sub}", f"{stat:.5f}", f"{p:.5g}"]
-                      for sub, stat, p in loo[start:start + 16]],
-            colLabels=["Omitted subject", "Mean difference (percentage points)",
-                       "Two-sided permutation p"],
-            colWidths=[0.22, 0.48, 0.30],
-            loc="center", cellLoc="center",
-        )
-        table.auto_set_font_size(False)
-        table.set_fontsize(10)
-        table.scale(1.0, 1.5)
-        loo_figures.append(fig)
-
-    paired_fig, axes = plt.subplots(1, 2, figsize=(12, 5),
-                                   constrained_layout=True)
-    axes[0].bar(["Negative", "Zero", "Positive"],
-                [n_negative, len(effects) - n_nonzero, n_positive])
-    axes[0].set(title=f"Sign test, two-sided p={sign_p:.5g}",
-                ylabel="Number of participants")
-    axes[1].axhline(0, color="black", linestyle="--")
-    order = np.argsort(np.abs(effects))
-    axes[1].scatter(np.arange(1, len(effects) + 1), effects[order])
-    axes[1].set(
-        title=f"Wilcoxon signed-rank, W={w_stat:g}, p={w_p:.5g}",
-        xlabel="Participants sorted by absolute effect",
-        ylabel="Baseline-corrected ON - OFF (percentage points)",
-    )
-    for ext in ("svg", "tiff"):
-        paired_fig.savefig(figures / f"paired_sign_wilcoxon.{ext}",
-                           dpi=600, bbox_inches="tight")
+    if loo:
+        for start in range(0, len(loo), 14):
+            pages.append(text_page("Leave-one-out sensitivity", [
+                (f"Exclude sub-{s}",
+                 f"Group ON-OFF={stat:.5g} percentage points; "
+                 f"two-sided permutation p={p:.6g}")
+                for s, stat, p in loo[start:start + 14]
+            ]))
     with PdfPages(report_path) as pdf:
         for page in pages[:2]:
             pdf.savefig(page)
@@ -431,11 +390,6 @@ def main():
         plt.close(primary_fig)
         pdf.savefig(normalized_fig)
         plt.close(normalized_fig)
-        pdf.savefig(paired_fig)
-        plt.close(paired_fig)
-        for fig in loo_figures:
-            pdf.savefig(fig)
-            plt.close(fig)
         for page in pages[2:]:
             pdf.savefig(page)
             plt.close(page)

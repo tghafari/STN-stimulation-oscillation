@@ -54,6 +54,7 @@ Whole-scalp sensor x time test:
 """
 from __future__ import annotations
 import argparse, csv, json, sys
+import pandas as pd
 from pathlib import Path
 import matplotlib.pyplot as plt
 import mne
@@ -70,8 +71,9 @@ from pipeline_config import CONDITIONS, resolve_project_root, stage_path
 from pdf_report import ParticipantPDF
 
 DEFAULT_ALPHA = (8.0, 12.0)
-WINDOW = (0.2, 1.2)
-FREQS = np.arange(2.0, 31.0, 1.0)
+WINDOW = (0.3, 0.8)
+BASELINE = (-0.3, -0.1)
+FREQS = np.arange(2.0, 32.0, 0.5)
 N_CYCLES = FREQS / 2.0
 TIME_BANDWIDTH = 2.0
 DECIM = 2
@@ -99,6 +101,8 @@ def args():
         help="Frequency range in Hz to average before cluster testing, e.g. --alpha 8 12",
     )
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--peaks-csv", type=Path, default=None)
+    p.add_argument("--peak-half-width", type=float, default=1.0)
     p.add_argument(
         "--sensor-fdr",
         action="store_true",
@@ -133,7 +137,7 @@ def good(x):
     ]
 
 
-def alpha(ep, chs, a):
+def alpha(ep, chs, a, peak):
     t = (
         ep.copy()
         .pick(chs)
@@ -143,6 +147,7 @@ def alpha(ep, chs, a):
             n_cycles=N_CYCLES,
             time_bandwidth=TIME_BANDWIDTH,
             use_fft=True,
+            zero_mean=True,
             return_itc=False,
             average=True,
             decim=DECIM,
@@ -150,9 +155,11 @@ def alpha(ep, chs, a):
             verbose=False,
         )
     )
-    fi = (t.freqs >= a.alpha[0]) & (t.freqs <= a.alpha[1])
+    lo, hi = (peak - a.peak_half_width, peak + a.peak_half_width)
+    fi = (t.freqs >= lo - 1e-9) & (t.freqs <= hi + 1e-9)
     ti = (t.times >= WINDOW[0]) & (t.times <= WINDOW[1])
-    return t.data[:, fi][:, :, ti].mean(1), t.times[ti], t.info
+    t.apply_baseline(BASELINE, mode='percent')
+    return 100.0 * t.data[:, fi][:, :, ti].mean(1), t.times[ti], t.info
 
 
 def one_d(X, seed):
@@ -378,6 +385,20 @@ def main():
     a = args()
     subs = [s.removeprefix("sub-") for s in a.subjects]
     root = resolve_project_root(a.platform, a.project_root)
+    peaks_path = a.peaks_csv or (
+        root / "derivatives" / "reports" / "group" / "individual_alpha_peaks.csv"
+    )
+    peaks_frame = pd.read_csv(peaks_path, dtype={"subject": str})
+    if not {"subject", "peak_hz"}.issubset(peaks_frame.columns):
+        raise ValueError("Peak CSV needs subject and peak_hz")
+    peaks_frame["subject"] = peaks_frame.subject.str.removeprefix("sub-")
+    if peaks_frame.subject.duplicated().any():
+        raise ValueError("Duplicate subject in peak CSV")
+    peaks = dict(zip(peaks_frame.subject,
+                     pd.to_numeric(peaks_frame.peak_hz, errors="coerce")))
+    for sub in subs:
+        if sub not in peaks or not np.isfinite(peaks[sub]) or not 8 <= peaks[sub] <= 12:
+            raise ValueError(f"Missing or invalid G02 alpha peak for sub-{sub}")
     ep = {s: load(root, s, a) for s in subs}
     g = {s: good(ep[s]) for s in subs}
     out = root / "derivatives" / "reports" / "group" / "EEG_all_channels_alpha_cluster"
@@ -419,8 +440,8 @@ def main():
         ch_st = []
         ch_no = []
         for sub in ch_subs:
-            xs, ct, _ = alpha(ep[sub]["stim"], [ch], a)
-            xn, ct2, _ = alpha(ep[sub]["no-stim"], [ch], a)
+            xs, ct, _ = alpha(ep[sub]["stim"], [ch], a, peaks[sub])
+            xn, ct2, _ = alpha(ep[sub]["no-stim"], [ch], a, peaks[sub])
             if not np.allclose(ct, ct2):
                 raise RuntimeError(f"Sensor time mismatch sub-{sub} {ch}")
             ch_st.append(xs[0])
@@ -513,8 +534,8 @@ def main():
         st = []
         no = []
         for sub in ch_subs:
-            xs, ct, _ = alpha(ep[sub]["stim"], [ch], a)
-            xn, _, _ = alpha(ep[sub]["no-stim"], [ch], a)
+            xs, ct, _ = alpha(ep[sub]["stim"], [ch], a, peaks[sub])
+            xn, _, _ = alpha(ep[sub]["no-stim"], [ch], a, peaks[sub])
             st.append(xs[0])
             no.append(xn[0])
         rows = [
@@ -554,8 +575,8 @@ def main():
         roi_st = []
         roi_no = []
         for sub in roi_subs:
-            st_sub, rt, rinfo = alpha(ep[sub]["stim"], list(requested), a)
-            no_sub, rt2, _ = alpha(ep[sub]["no-stim"], list(requested), a)
+            st_sub, rt, rinfo = alpha(ep[sub]["stim"], list(requested), a, peaks[sub])
+            no_sub, rt2, _ = alpha(ep[sub]["no-stim"], list(requested), a, peaks[sub])
             if not np.allclose(rt, rt2):
                 raise RuntimeError("ROI time mismatch " + sub)
             roi_st.append(st_sub.mean(0))
