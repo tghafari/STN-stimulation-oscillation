@@ -204,19 +204,21 @@ def effect(periods, labels, normalized=False):
     return (on - off) / denominator
 
 
-def run_permutation(data, iterations, seed, normalized=False):
+def run_permutation(data, iterations, seed, normalized=False, statistic="signed"):
     """Two-sided period-label permutation with equal subject weighting."""
     effects = np.asarray([effect(raw if normalized else percent, labels, normalized)
                           for percent, raw, labels in data])
-    observed = float(effects.mean())
+    aggregate = {"signed": np.mean, "squared": lambda x: np.mean(np.square(x)), "absolute": lambda x: np.mean(np.abs(x))}[statistic]
+    observed = float(aggregate(effects))
     rng = np.random.default_rng(seed)
     null = np.empty(iterations)
     for index in range(iterations):
-        null[index] = np.mean([
+        null[index] = aggregate(np.asarray([
             effect(raw if normalized else percent, rng.permutation(labels), normalized)
             for percent, raw, labels in data
-        ])
-    p = (1 + np.count_nonzero(np.abs(null) >= abs(observed))) / (iterations + 1)
+        ]))
+    extreme = (np.abs(null) >= abs(observed)) if statistic == "signed" else (null >= observed)
+    p = (1 + np.count_nonzero(extreme)) / (iterations + 1)
     return effects, observed, null, float(p)
 
 
@@ -240,15 +242,16 @@ def text_page(title, sections):
     return fig
 
 
-def distribution_page(null, observed, p, label):
+def distribution_page(null, observed, p, label, two_sided=True):
     """Plot two-sided null, observed statistic and critical thresholds."""
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.hist(null, bins=50, color="lightsteelblue")
     ax.axvline(observed, color="darkred", linewidth=2, label="Observed")
-    threshold = np.quantile(np.abs(null), 0.95)
-    ax.axvline(-threshold, color="gray", linestyle="--")
+    threshold = np.quantile(np.abs(null) if two_sided else null, 0.95)
+    if two_sided:
+        ax.axvline(-threshold, color="gray", linestyle="--")
     ax.axvline(threshold, color="gray", linestyle="--",
-               label="Two-sided 5% threshold")
+               label="Two-sided 5% threshold" if two_sided else "Upper-tail 5% threshold")
     ax.set(title=f"{label}: observed={observed:.4g}, p={p:.5g}",
            xlabel=label, ylabel="Permutations")
     ax.legend()
@@ -299,6 +302,8 @@ def main():
     effects, observed, null, p_perm = run_permutation(
         data, args.n_permutations, args.seed
     )
+    _, sq_obs, sq_null, sq_p = run_permutation(data, args.n_permutations, args.seed, statistic="squared")
+    _, abs_obs, abs_null, abs_p = run_permutation(data, args.n_permutations, args.seed, statistic="absolute")
     n_positive = int(np.count_nonzero(effects > 0))
     n_negative = int(np.count_nonzero(effects < 0))
     n_nonzero = n_positive + n_negative
@@ -318,7 +323,7 @@ def main():
         for index, subject in enumerate(included):
             remaining = data[:index] + data[index + 1:]
             _, statistic, _, p = run_permutation(
-                remaining, args.n_permutations, args.seed
+                remaining, args.n_permutations, args.seed, statistic="squared"
             )
             loo.append((subject, statistic, p))
     output = group / "absolute_alpha_block_permutation"
@@ -342,7 +347,9 @@ def main():
              "Both use peak +/-1 Hz and 0.3-0.8 s. B03 alpha_power is not reused."),
         ]),
         text_page("S02: tests and interpretation", [
-            ("Primary period-label permutation",
+            ("PRIMARY: squared participant change", f"Mean squared baseline-corrected ON-OFF={sq_obs:.6g} percentage-points squared; upper-tail period permutation p={sq_p:.6g}. Sensitive to effects of either direction."),
+            ("Sensitivity: absolute participant change", f"Mean absolute baseline-corrected ON-OFF={abs_obs:.6g} percentage points; upper-tail period permutation p={abs_p:.6g}."),
+            ("Secondary signed-mean permutation",
              f"Two-sided, {args.n_permutations:,} permutations, seed {args.seed}; "
              f"group mean ON-OFF = {observed:.5g} percentage points; p={p_perm:.6g}. "
              "Each subject contributes equally; trials stay attached to one "
@@ -373,13 +380,15 @@ def main():
              f"ON-OFF={diff:.4g} percentage points; peak={peak:g} Hz")
             for s, peak, _, on, off, diff in batch
         ]))
-    primary_fig = distribution_page(
-        null, observed, p_perm, "ON - OFF (percentage points)"
-    )
+    primary_fig = distribution_page(sq_null, sq_obs, sq_p, "Mean squared ON-OFF (pp squared)", two_sided=False)
+    absolute_fig = distribution_page(abs_null, abs_obs, abs_p, "Mean absolute ON-OFF (pp)", two_sided=False)
+    signed_fig = distribution_page(null, observed, p_perm, "Signed ON-OFF (pp)")
     normalized_fig = distribution_page(
         norm_null, norm_observed, norm_p, "Unbaselined (ON-OFF)/(ON+OFF)"
     )
-    for name, fig in (("baseline_percent_permutation", primary_fig),
+    for name, fig in (("baseline_percent_squared_primary", primary_fig),
+                      ("baseline_percent_absolute_sensitivity", absolute_fig),
+                      ("baseline_percent_signed_secondary", signed_fig),
                       ("normalized_sensitivity_permutation", normalized_fig)):
         for extension in ("svg", "tiff"):
             fig.savefig(figures / f"{name}.{extension}",
@@ -388,11 +397,11 @@ def main():
     for start in range(0, len(loo), 16):
         fig, ax = plt.subplots(figsize=(11, 8))
         ax.axis("off")
-        ax.set_title("Leave-one-out: baseline-corrected ON - OFF")
+        ax.set_title("Leave-one-out: squared baseline-corrected ON - OFF")
         table = ax.table(
             cellText=[[f"sub-{sub}", f"{stat:.5f}", f"{p:.5g}"]
                       for sub, stat, p in loo[start:start + 16]],
-            colLabels=["Omitted subject", "Mean difference (percentage points)",
+            colLabels=["Omitted subject", "Mean squared difference (pp squared)",
                        "Two-sided permutation p"],
             colWidths=[0.22, 0.48, 0.30],
             loc="center", cellLoc="center",
@@ -425,6 +434,10 @@ def main():
             plt.close(page)
         pdf.savefig(primary_fig)
         plt.close(primary_fig)
+        pdf.savefig(absolute_fig)
+        plt.close(absolute_fig)
+        pdf.savefig(signed_fig)
+        plt.close(signed_fig)
         pdf.savefig(normalized_fig)
         plt.close(normalized_fig)
         pdf.savefig(paired_fig)
@@ -435,7 +448,8 @@ def main():
         for page in pages[2:]:
             pdf.savefig(page)
             plt.close(page)
-    print(f"Permutation p={p_perm:.6g}; sign p={sign_p:.6g}; "
+    print(f"Squared primary p={sq_p:.6g}; absolute sensitivity p={abs_p:.6g}; "
+          f"Signed permutation p={p_perm:.6g}; sign p={sign_p:.6g}; "
           f"Wilcoxon signed-rank p={w_p:.6g}; sensitivity p={norm_p:.6g}")
     print(f"Report: {report_path}")
 
