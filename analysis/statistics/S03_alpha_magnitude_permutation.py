@@ -4,8 +4,9 @@
 This is a SEPARATE exploratory analysis from S01's signed temporal cluster
 test. It reuses S02's validated B03 mapping and trial-level alpha extraction.
 
-For each participant, pool retained trials from the two ON and two OFF
-periods and calculate the ON-minus-OFF effect in percentage points.
+For each participant, pool retained unbaselined alpha power trials from
+the two ON and two OFF periods. Compute (ON-OFF)/(ON+OFF) and take its
+absolute value. No baseline correction is used in either sensitivity test.
 The group statistic is mean(abs(participant effect)), which cannot be
 tested against zero using a conventional one-sample t-test.
 
@@ -178,15 +179,15 @@ def main():
     for subject in args.subjects:
         if subject not in peaks:
             raise ValueError(f"sub-{subject}: no individual alpha peak.")
-        percent_periods, _, labels, _, _ = validated_subject(
+        raw_periods, labels, _, _ = validated_subject(
             trials, subject, root, args, peaks[subject]
         )
-        data.append((percent_periods, percent_periods, labels))
+        data.append((raw_periods, labels))
         print(f"sub-{subject}: four validated stimulation periods")
 
     effects, observed, null, p_value = run_permutation(
         data, args.n_permutations, args.seed,
-        normalized=False, statistic="absolute",
+        normalized=True, statistic="absolute",
     )
     fixed_mean, fixed_times, fixed_observed, fixed_null, fixed_p = (
         fixed_frequency_analysis(root, args, trials)
@@ -211,7 +212,7 @@ def main():
                 f"Alpha effect magnitude, N={len(effects)}; "
                 f"permutation p={p_value:.4g}"
             ),
-            xlabel="Mean absolute participant ON - OFF (percentage points)",
+            xlabel="Mean |(ON-OFF)/(ON+OFF)|, individual peak +/-1 Hz",
             ylabel="Number of permutations",
         )
         ax.legend(frameon=False)
@@ -226,12 +227,12 @@ def main():
             "more than expected under whole-period label exchangeability?",
             "",
             "Alpha measure: participant-specific OFF peak +/-1 Hz,",
-            "attention interval 0.3-0.8 s, trial-level percent baseline",
-            "correction (-0.3 to -0.1 s) as in S02.",
+            "attention interval 0.3-0.8 s, unbaselined linear power.",
+            "No baseline correction is performed.",
             "",
             "Each participant has four periods: two OFF, one left ON,",
             "one right ON. Pool trial values within the assigned ON",
-            "and OFF conditions, calculate D_i = mean ON - mean OFF.",
+            "and OFF conditions, calculate D_i = (ON-OFF)/(ON+OFF).",
             "Observed statistic = mean across participants of abs(D_i).",
             "",
             "For every permutation, shuffle four WHOLE period labels",
@@ -243,7 +244,7 @@ def main():
             f"Participants: {', '.join(args.subjects)}",
             f"Number of permutations: {args.n_permutations:,}",
             f"Random seed: {args.seed}",
-            f"Observed mean absolute effect: {observed:.6g} pp",
+            f"Observed mean absolute effect: {observed:.6g}",
             f"Upper-tail randomisation p-value: {p_value:.6g}",
             "",
             "This is a group magnitude test, not a one-sided t-test.",
@@ -264,7 +265,7 @@ def main():
         ax.set(
             title="Signed participant effects (before taking magnitudes)",
             xlabel="Participant",
-            ylabel="ON - OFF (percentage points)",
+            ylabel="(ON-OFF)/(ON+OFF), individual peak +/-1 Hz",
         )
         ax.tick_params(axis="x", rotation=45)
         fig.tight_layout()
@@ -313,7 +314,7 @@ def main():
                 fontsize=10, wrap=True)
         pdf.savefig(fig)
         plt.close(fig)
-    print(f"Mean absolute effect: {observed:.6g} pp")
+    print(f"Mean absolute effect: {observed:.6g}")
     print(f"Upper-tail permutation p-value: {p_value:.6g}")
     print(f"Report: {pdf_path}")
 
