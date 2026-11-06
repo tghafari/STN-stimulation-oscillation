@@ -70,8 +70,8 @@ def arguments():
     return args
 
 
-def percent_alpha_trials(epochs, channels, peak, n_jobs):
-    """Return one percent-baseline alpha value per trial (percentage points).
+def alpha_trials(epochs, channels, peak, n_jobs):
+    """Return both unbaselined and percent-baseline alpha per trial.
 
     Trial-level TFR is baseline corrected per sensor/frequency first.
     The result is then averaged over retained sensors, peak +/-1 Hz
@@ -93,11 +93,14 @@ def percent_alpha_trials(epochs, channels, peak, n_jobs):
     baseline_power = tfr.data[..., base].mean(axis=-1)
     if np.any(baseline_power <= 0) or not np.isfinite(baseline_power).all():
         raise ValueError("Nonpositive or invalid baseline power")
+    raw_values = tfr.data[:, :, freq, :][:, :, :, times].mean(axis=(1, 2, 3))
     tfr.apply_baseline(BASELINE, mode="percent")
-    values = 100.0 * tfr.data[:, :, freq, :][:, :, :, times].mean(axis=(1, 2, 3))
-    if not np.isfinite(values).all():
-        raise ValueError("Nonfinite baseline-corrected alpha")
-    return values
+    percent_values = 100.0 * tfr.data[:, :, freq, :][:, :, :, times].mean(
+        axis=(1, 2, 3)
+    )
+    if not np.isfinite(raw_values).all() or not np.isfinite(percent_values).all():
+        raise ValueError("Nonfinite alpha power")
+    return percent_values, raw_values
 
 
 def validated_subject(frame, subject, root, args):
@@ -113,6 +116,7 @@ def validated_subject(frame, subject, root, args):
     if not np.isfinite(peak) or not 8 <= peak <= 12:
         raise ValueError(f"sub-{subject}: invalid OFF-derived peak")
     periods = [list() for _ in range(4)]
+    raw_periods = [list() for _ in range(4)]
     labels = np.zeros(4, dtype=bool)
     channels_used = None
     for condition in ("no-stim", "stim"):
@@ -152,7 +156,7 @@ def validated_subject(frame, subject, root, args):
         indices = condition_rows.trial_index_in_condition.to_numpy(dtype=int)
         if not np.array_equal(np.sort(indices), np.arange(len(epochs))):
             raise ValueError(f"sub-{subject}: incomplete trial-index mapping")
-        values = percent_alpha_trials(epochs, channels_used, peak, args.n_jobs)
+        values, raw_values = alpha_trials(epochs, channels_used, peak, args.n_jobs)
         for row in condition_rows.itertuples(index=False):
             idx = int(row.trial_index_in_condition)
             period = int(row.stimulation_period) - 1
@@ -165,6 +169,7 @@ def validated_subject(frame, subject, root, args):
             if is_on != (side != "off"):
                 raise ValueError(f"sub-{subject}: side/condition mismatch")
             periods[period].append(float(values[idx]))
+            raw_periods[period].append(float(raw_values[idx]))
     sides = []
     for period in range(4):
         p = rows.loc[rows.stimulation_period == period + 1]
@@ -176,7 +181,8 @@ def validated_subject(frame, subject, root, args):
         raise ValueError(f"sub-{subject}: invalid stimulation sequence")
     if any(not p for p in periods):
         raise ValueError(f"sub-{subject}: empty period")
-    return [np.asarray(p) for p in periods], labels, peak, channels_used
+    return ([np.asarray(p) for p in periods],
+            [np.asarray(p) for p in raw_periods], labels, peak, channels_used)
 
 
 def condition_means(periods, labels):
@@ -187,26 +193,30 @@ def condition_means(periods, labels):
 
 
 def effect(periods, labels, normalized=False):
-    """Calculate paired percent-point effect, or bounded sensitivity effect."""
+    """Difference of percent changes, or ratio of original absolute power.
+
+    The normalized ratio NEVER uses baseline-corrected power.
+    """
     on, off = condition_means(periods, labels)
-    difference = on - off
     if not normalized:
-        return difference
-    # Percent changes can be negative: ON+OFF is not a valid denominator.
-    denominator = abs(on) + abs(off)
-    return difference / denominator if denominator > 1e-12 else 0.0
+        return on - off
+    denominator = on + off
+    if denominator <= 0 or not np.isfinite(denominator):
+        raise ValueError("Unbaselined ON+OFF denominator must be positive")
+    return (on - off) / denominator
 
 
 def run_permutation(data, iterations, seed, normalized=False):
     """Two-sided period-label permutation with equal subject weighting."""
-    effects = np.asarray([effect(p, labels, normalized) for p, labels in data])
+    effects = np.asarray([effect(raw if normalized else percent, labels, normalized)
+                          for percent, raw, labels in data])
     observed = float(effects.mean())
     rng = np.random.default_rng(seed)
     null = np.empty(iterations)
     for index in range(iterations):
         null[index] = np.mean([
-            effect(periods, rng.permutation(labels), normalized)
-            for periods, labels in data
+            effect(raw if normalized else percent, rng.permutation(labels), normalized)
+            for percent, raw, labels in data
         ])
     p = (1 + np.count_nonzero(np.abs(null) >= abs(observed))) / (iterations + 1)
     return effects, observed, null, float(p)
@@ -268,10 +278,10 @@ def main():
     frame["subject"] = frame.subject.str.removeprefix("sub-")
     data, included, details = [], [], []
     for subject in args.subjects:
-        periods, labels, peak, channels = validated_subject(
+        periods, raw_periods, labels, peak, channels = validated_subject(
             frame, subject, root, args
         )
-        data.append((periods, labels))
+        data.append((periods, raw_periods, labels))
         included.append(subject)
         on, off = condition_means(periods, labels)
         details.append((subject, peak, channels, on, off, on - off))
@@ -315,10 +325,11 @@ def main():
              "; ".join(f"sub-{s}: {peak:g} Hz, {','.join(chs)}"
                        for s, peak, chs, _, _, _ in details)),
             ("Outcome and baseline",
-             "Each trial/sensor is percent-baseline corrected (-0.3 to -0.1 s) "
-             "before averaging peak +/-1 Hz and 0.3-0.8 s. "
-             "Effect is mean ON minus mean OFF in percentage points. "
-             "Original B03 alpha_power values are NOT reused."),
+             "ON and OFF are percent-baseline corrected (-0.3 to -0.1 s) "
+             "per trial/sensor. Their difference is in percentage points. "
+             "The normalized (ON-OFF)/(ON+OFF) sensitivity uses original "
+             "UNBASELINED TFR power, with no baseline correction. "
+             "Both use peak +/-1 Hz and 0.3-0.8 s. B03 alpha_power is not reused."),
         ]),
         text_page("S02: tests and interpretation", [
             ("Primary period-label permutation",
@@ -333,11 +344,11 @@ def main():
              f"W={w_stat:.6g}; two-sided p={w_p:.6g}. "
              "Signed-rank is used instead of rank-sum because ON and OFF "
              "measurements are paired within participant."),
-            ("Sensitivity: signed normalized effect",
-             f"Mean D/(abs(ON)+abs(OFF))={norm_observed:.5g}; "
+            ("Sensitivity: unbaselined normalized effect",
+             f"Mean (raw ON-raw OFF)/(raw ON+raw OFF)={norm_observed:.5g}; "
              f"two-sided period permutation p={norm_p:.6g}. "
-             "Absolute values in the denominator are required because "
-             "baseline-percent ON/OFF means can be negative."),
+             "Both numerator and denominator use ORIGINAL, UNBASELINED "
+             "absolute power. No percent-baseline values enter this ratio."),
             ("Interpretation",
              "These tests address participant-level cue-related alpha change. "
              "Permutation inference assumes stimulation-period exchangeability; "
@@ -356,7 +367,7 @@ def main():
         null, observed, p_perm, "ON - OFF (percentage points)"
     )
     normalized_fig = distribution_page(
-        norm_null, norm_observed, norm_p, "Signed normalized ON - OFF"
+        norm_null, norm_observed, norm_p, "Unbaselined (ON-OFF)/(ON+OFF)"
     )
     for name, fig in (("baseline_percent_permutation", primary_fig),
                       ("normalized_sensitivity_permutation", normalized_fig)):
