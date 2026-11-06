@@ -388,14 +388,41 @@ def main():
         for extension in ("svg", "tiff"):
             fig.savefig(figures / f"{name}.{extension}",
                         dpi=600, bbox_inches="tight")
-    if loo:
-        for start in range(0, len(loo), 14):
-            pages.append(text_page("Leave-one-out sensitivity", [
-                (f"Exclude sub-{s}",
-                 f"Group ON-OFF={stat:.5g} percentage points; "
-                 f"two-sided permutation p={p:.6g}")
-                for s, stat, p in loo[start:start + 14]
-            ]))
+    loo_figures = []
+    for start in range(0, len(loo), 16):
+        fig, ax = plt.subplots(figsize=(11, 8))
+        ax.axis("off")
+        ax.set_title("Leave-one-out: baseline-corrected ON - OFF")
+        table = ax.table(
+            cellText=[[f"sub-{sub}", f"{stat:.5f}", f"{p:.5g}"]
+                      for sub, stat, p in loo[start:start + 16]],
+            colLabels=["Omitted subject", "Mean difference (percentage points)",
+                       "Two-sided permutation p"],
+            colWidths=[0.22, 0.48, 0.30],
+            loc="center", cellLoc="center",
+        )
+        table.auto_set_font_size(False)
+        table.set_fontsize(10)
+        table.scale(1.0, 1.5)
+        loo_figures.append(fig)
+
+    paired_fig, axes = plt.subplots(1, 2, figsize=(12, 5),
+                                   constrained_layout=True)
+    axes[0].bar(["Negative", "Zero", "Positive"],
+                [n_negative, len(effects) - n_nonzero, n_positive])
+    axes[0].set(title=f"Sign test, two-sided p={sign_p:.5g}",
+                ylabel="Number of participants")
+    axes[1].axhline(0, color="black", linestyle="--")
+    order = np.argsort(np.abs(effects))
+    axes[1].scatter(np.arange(1, len(effects) + 1), effects[order])
+    axes[1].set(
+        title=f"Wilcoxon signed-rank, W={w_stat:g}, p={w_p:.5g}",
+        xlabel="Participants sorted by absolute effect",
+        ylabel="Baseline-corrected ON - OFF (percentage points)",
+    )
+    for ext in ("svg", "tiff"):
+        paired_fig.savefig(figures / f"paired_sign_wilcoxon.{ext}",
+                           dpi=600, bbox_inches="tight")
     with PdfPages(report_path) as pdf:
         for page in pages[:2]:
             pdf.savefig(page)
@@ -404,6 +431,11 @@ def main():
         plt.close(primary_fig)
         pdf.savefig(normalized_fig)
         plt.close(normalized_fig)
+        pdf.savefig(paired_fig)
+        plt.close(paired_fig)
+        for fig in loo_figures:
+            pdf.savefig(fig)
+            plt.close(fig)
         for page in pages[2:]:
             pdf.savefig(page)
             plt.close(page)
