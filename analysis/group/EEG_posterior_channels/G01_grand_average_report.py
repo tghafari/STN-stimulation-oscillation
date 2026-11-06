@@ -2,7 +2,10 @@
 # -*- coding: utf-8 -*-
 """G02_grand_average_report.py: group analysis overview
 
-Requires posterior subject-level outputs. Reads selected subjects, computes channel/ROI ERP and TFR grand averages with equal participant weighting, and compares stim/no-stim. Cue/grating ERP views and condition/contrast TFR figures are reported. Condition TFR displays use percent baseline -0.3..-0.1 s; ratio uses unbaselined power.
+Requires posterior subject-level outputs. Reads selected subjects, computes 
+channel/ROI ERP and TFR grand averages with equal participant weighting, and 
+compares stim/no-stim. Cue/grating ERP views and condition/contrast TFR figures are reported.
+Condition TFR displays use percent baseline -0.3..-0.1 s; ratio uses unbaselined power.
 
 Prepare subject inputs by running the posterior-channel subject pipeline first,
 then the all-channel pipeline when analysing the full montage.
