@@ -86,3 +86,18 @@ Optional `--sensor-fdr` applies FDR correction across single-sensor cluster resu
 Run `Q01` first to inspect individual-participant TFRs, followed by `Q02` for descriptive alpha-power QC. Run `run_grand_average.py` for the main group figures and `S01` for statistical inference.
 
 These scripts should not be deleted: they perform different, complementary analyses.
+## Individual-alpha-peak-aligned TFR report
+
+Running `run_grand_average.py` (or G01 directly) now produces a **second PDF** alongside the standard grand-average report. It reuses G01's subject-level TFRs; it does not recompute them.
+
+For each participant, the alpha peak is estimated from unbaselined no-stimulation power, averaged across available good ROI8 posterior channels and 0.3-0.8 s after cue onset. The largest value in 8-12 Hz is selected at the existing 0.5-Hz frequency resolution, matching `analysis/quality_controls/Q01_participant_eight_posterior_TFR_QC.py`.
+
+Each participant's frequency axis is shifted to `frequency - individual alpha peak`, interpolated to a common -6 to +6 Hz relative-frequency grid, and then averaged across participants. The y-axis is relative frequency: 0 Hz is the individual alpha peak, negative values are below it, and positive values are above it. Group sensor averages use only participants with that sensor good in both conditions. ROI figures average available ROI sensors within each participant before averaging participants equally.
+
+- Stim and no-stim: percent baseline corrected per participant/sensor (-0.3 to -0.1 s).
+- Difference: stim percent-baseline change minus no-stim percent-baseline change (percentage points).
+- Ratio: (stim - no-stim) / (stim + no-stim), calculated from original unbaselined power.
+
+The additional report is named `complete_grand_average_<subjects>_peak_aligned.pdf`. Its figures are saved in the report's `figures/peak_aligned/` folder and its peak estimates, interpolation grid, and channel membership are recorded in a companion JSON file under the all-channel group derivatives folder.
+
+This peak is an OFF-derived maximum-power estimate, not an aperiodic-corrected oscillatory peak. It is restricted to the 8-12 Hz range and should be interpreted as the operational individual alpha frequency used for alignment.

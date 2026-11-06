@@ -1,7 +1,10 @@
 #!/usr/bin/env python
 """G01_complete_grand_average_report.py: group analysis overview
 
-Read final cleaned all-channel cue epochs for every selected subject.
+Read final cleaned all-channel cue epochs for every selected subject. In addition
+to the standard frequency-axis grand averages, create a separate report that
+aligns each participant's TFR to their OFF-derived individual alpha peak.
+
 
 For each good EEG sensor, compute a subject-level ERP (30-Hz low-pass,
 baseline -0.1 to 0 s) and multitaper TFR (2-31.5 Hz, 0.5-Hz steps,
