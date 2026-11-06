@@ -1,104 +1,18 @@
-# Group-level EEG analysis
+# Group EEG analysis
 
-This folder contains the posterior and all-channel group analyses. Individual
-EEG preprocessing must be completed before group analyses.
+Group analyses use the final cleaned, cue-locked EEG epochs for stimulation ON (`stim`) and OFF (`no-stim`). Run commands from the repository root. The default platform is `mac`; use `--project-root PATH` to specify a different project directory.
 
-## Posterior workflow
+## Scripts and order
 
-1. Run `analysis/quality_controls/Q01_participant_eight_posterior_TFR_QC.py` to establish individual alpha peaks where needed.
-2. Run `B03_prepare_block_alpha.py` for all intended participants. G04 is the **only supported interactive interface** for confirming stimulation order. Confirmations are persisted in `analysis/subject/stimulation_sequence_confirmed.json`.
-3. Run `analysis/statistics/S02_absolute_alpha_block_permutation.py` for the primary two-sided whole-period permutation test.
-4. Run `analysis/statistics/S02_sensitivity_alpha.py` to regenerate the full PDF with symmetric normalised sensitivity and leave-one-out checks.
+| Step | Script | Purpose | Output (under `<PROJECT_ROOT>`) |
+|---|---|---|---|
+| 1 | [`EEG_posterior_channels/G02_peak_of_alpha_calculations_with_TFRs.py`](EEG_posterior_channels/README.md) | Individual posterior TFR QC and OFF-derived alpha peak per participant | `derivatives/reports/QC/posterior_TFR_all_subjects/`; `derivatives/reports/group/EEG_posterior_channels_alpha_changes_stimOn_stimOff/individual_alpha_peaks.csv` |
+| 2 (independent) | [`EEG_all_channels/run_grand_average.py`](EEG_all_channels/README.md) | Group ERP/TFR maps, ROI summaries, and individual-alpha-peak-aligned group TFR | `derivatives/reports/group/EEG_all_channels_complete_grand_average/` |
+| 3 | `analysis/subject/EEG_posterior_channels/block_preparation/B03_prepare_block_alpha.py` | Validates cue-trial/stimulation-period mapping and prepares absolute alpha-power trial table | `derivatives/reports/group/EEG_posterior_channels_block_mapping/` |
+| 4 | [`EEG_posterior_channels/stimulation_laterality/run_stim_laterality_tfr.py`](EEG_posterior_channels/stimulation_laterality/README.md) | Laterality-specific posterior TFR and alpha curves | `derivatives/reports/group/EEG_posterior_channels_stim_laterality/` |
+| 5 | `analysis/statistics/S02_absolute_alpha_block_permutation.py` | Whole-period permutation test using B03's trial table | `derivatives/reports/group/absolute_alpha_block_permutation/` |
+| 6 (optional) | `analysis/statistics/S02_sensitivity_alpha.py` | Normalized and leave-one-out sensitivity analysis | Same statistics report folder |
 
-## Output folders
+**Prerequisites:** Steps 1 and 2 require completed subject-level posterior/all-channel cleaning. Step 3 also requires verified stimulation-period assignments; follow the block-preparation instructions before running it. Step 4 requires both the alpha-peak CSV from step 1 and the validated `trial_alpha.csv` from step 3. Step 5 requires `trial_alpha.csv`; step 6 follows step 5. Steps 1 and 2 can run independently after preprocessing.
 
-### `derivatives/reports/group/EEG_posterior_channels_block_mapping/`
-
-- `trial_alpha.csv` is the **one required machine-readable intermediate dataset**.
-  Each row is one validated cleaned cue trial with absolute alpha power,
-  task-block and stimulation-period identity, stimulation labels, alpha
-  frequency peak and event-mapping information. S02 requires this dataset.
-  Removing it would require recomputing alpha power or changing S02's
-  input design; it cannot be replaced by a PDF.
-- `G04_block_mapping_QC.pdf` summarises processed participants,
-  sample counts, mapping coordinate systems, and failures.
-
-G04 replaces its output on each run; for partial tests use `--output-dir`
-so previous full-group data are protected.
-
-### `derivatives/reports/group/absolute_alpha_block_permutation/`
-
-- `absolute_alpha_block_permutation.pdf`: one combined report containing
-  complete methods, absolute-power permutation null and observed effect,
-  normalised sensitivity null and observed effect, the numerical leave-one-out
-  results table, and participant exclusions with reasons.
-- `figures/absolute_alpha_permutation.{svg,tiff}`:
-  publication-quality primary distribution and observed effect.
-- `figures/normalised_alpha_permutation.{svg,tiff}`:
-  symmetric normalised distribution and observed effect.
-- No separate null-distribution, participant-effect or leave-one-out CSVs
-  are written by the updated scripts.
-
-The figures mark the two-sided alpha 0.05 threshold computed from the
-95th percentile of the *absolute* permutation statistics (shown at
-plus/minus the threshold); the p-value is computed from the observed
-absolute statistic using the plus-one Monte Carlo correction.
-
-## Statistical definitions
-
-**Primary:** For each participant, average power across their retained
-ON trials, subtract the mean of their retained OFF trials, then take the
-arithmetic mean of the participant differences. Each participant has two
-ON and two OFF stimulation periods (each comprising two task blocks).
-For each of 10,000 randomisations, reassign the ON/OFF labels of *whole
-periods* within each participant, keeping two ON and two OFF. Trials never
-move or get independently relabelled. The two-sided p-value compares the
-observed absolute group difference with absolute null differences.
-
-**Normalised sensitivity:** calculate for each participant
-`(mean_ON - mean_OFF) / (mean_ON + mean_OFF)` and average across participants.
-For every permutation, recalculate both ON and OFF means, including the
-denominator. This reduces sensitivity to between-participant EEG power
-scale, but can be unstable when combined ON+OFF power is tiny.
-
-**Leave-one-out sensitivity:** Repeat the original absolute group-level
-permutation test omitting one participant at a time. The report gives the
-observed group difference and two-sided permutation p-value for each
-omission. This is an influence diagnostic, not an exclusion rule.
-No one-sided tests are performed.
-
-## Current exclusions for the 16-person STN analysis
-
-| Subject | Reason |
-| --- | --- |
-| 104 | VLM stimulation, not STN |
-| 109 | No available data |
-| 110 | VLM stimulation, not STN |
-| 111 | Incomplete, six rather than eight task blocks |
-| 117 | Substantial missing recording data |
-| 119 | First DBS ON period: all 80 epochs removed during final cleaning |
-| 122 | DBS ON cue-to-task-block mapping unresolved |
-
-Document any later changes to eligibility and rerun the group report.
-
-## Mapping and crop-time definitions
-
-`analysis/subject/stimulation_cropped_time.json` defines crop times.
-It is distinct from `stimulation_sequence_confirmed.json`.
-The shared `B01_review_bids_blocks.py` and
-`B02_validate_epoch_mapping.py` modules under
-`analysis/subject/EEG_posterior_channels/block_preparation/` perform block detection and
-timing validation; **they do not provide a second supported confirmation
-workflow**. `review_raw_stimulation_crops.py` is used only to inspect/change
-crop intervals, *not* stimulation labels.
-
-## Current participant QC and laterality entry points
-
-Run from the repository root after final cleaned cue epochs exist:
-
-```bash
-python analysis/quality_controls/Q01_participant_eight_posterior_TFR_QC.py --subjects 115 116 118 120 121 123 --platform mac
-python analysis/group/EEG_posterior_channels/stimulation_laterality/run_stim_laterality_tfr.py --subjects 115 116 118 120 121 123 --platform mac
-```
-
-Q01 replaces the former posterior G02 and exports the individual alpha peak CSV required for laterality. Laterality **also** requires the verified `trial_alpha.csv` from B03. The grand-average runner is documented in [all-channel README](EEG_all_channels/README.md).
+For runnable commands and file descriptions, see the [posterior-channel README](EEG_posterior_channels/README.md), [all-channel README](EEG_all_channels/README.md), and [laterality README](EEG_posterior_channels/stimulation_laterality/README.md).
