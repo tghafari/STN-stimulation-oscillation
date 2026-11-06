@@ -50,3 +50,18 @@ This runs G01 internally. Do not run both scripts separately unless specifically
 Run `Q01` first to inspect individual-participant TFRs, followed by `Q02` for descriptive alpha-power QC. Run `run_grand_average.py` for the main group figures and `S01` for statistical inference.
 
 These scripts should not be deleted: they perform different, complementary analyses.
+## Individual-alpha-peak-aligned TFR report (second PDF)
+
+**Required input:** First run `analysis/quality_controls/Q01_participant_eight_posterior_TFR_QC.py` with the same participants to create `derivatives/reports/group/EEG_posterior_channels_alpha_changes_stimOn_stimOff/individual_alpha_peaks.csv`. G01 reads the `peak_hz` column directly. It does **not** re-estimate peaks or round them to integers: 8.5 Hz remains 8.5 Hz. If a requested participant is missing, the script stops before expensive TFR computation.
+
+The standard G01 command also generates a second, peak-aligned PDF. Its relative-frequency y-axis is set by `RELATIVE_FREQS` (currently **-6 to +18 Hz**): 0 Hz corresponds to each participant's CSV alpha peak. Subject-level TFRs are interpolated onto this relative-frequency grid **before** group averaging. Per-sensor grand averages use the participants with that sensor present and good in both conditions. ROI3/ROI8 grand averages average available channels within participant first.
+
+In **both the normal-frequency and peak-aligned TFR reports**:
+
+- Stim ON and stim OFF: each participant/sensor is percent-baseline corrected over -0.3 to -0.1 s before group averaging.
+- Difference: baseline-correct ON and OFF **separately**, calculate ON minus OFF in percentage points for each participant/sensor, then grand-average.
+- Ratio: calculate `(ON - OFF)/(ON + OFF)` from **unbaselined** power, then grand-average.
+
+The additional **absolute-power QC** table reports unbaselined 8-12 Hz power and its raw difference only to check power values and condition labels. It is **not** the plotted baseline-corrected TFR difference.
+
+The peak-aligned report and its `figures/peak_aligned/` folder are saved beside the standard report under `derivatives/reports/group/EEG_all_channels_complete_grand_average/`. A companion analysis JSON records the CSV source, exact peaks, relative-frequency grid and per-channel participant membership.

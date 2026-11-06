@@ -22,6 +22,7 @@ See this group's README for prerequisites, commands and output locations.
 """
 
 import argparse
+import csv
 import json
 import sys
 from pathlib import Path
@@ -113,7 +114,7 @@ def make_evoked(ep, ch):
 
 def baseline_percent(x):
     mask = (x.times >= BASELINE[0]) & (x.times <= BASELINE[1])
-    base = x.data[0, :, mask].mean(-1, keepdims=True)
+    base = x.data[0][:, mask].mean(axis=1, keepdims=True)
     return (
         100 * (x.data[0] - base) / np.where(np.abs(base) < np.finfo(float).eps, 1, base)
     )
@@ -215,70 +216,73 @@ def roi_fig(a, t, title, v):
 
 
 # Individual-alpha-peak alignment
-# ---------------------------------------------------------------------
-# The peak definition matches analysis/quality_controls/
-# Q01_participant_eight_posterior_TFR_QC.py:
-#   - no-stimulation (DBS OFF) raw power;
-#   - average across available good ROI8 channels;
-#   - mean power from 0.3 to 0.8 s after cue onset;
-#   - maximum within 8-12 Hz.
-#
-# The relative-frequency axis is expressed as f - individual_alpha_peak.
-# Therefore zero is each participant's peak; negative values are below it
-# and positive values are above it. The common range is +/- 6 Hz, which
-# remains inside the available 2-31.5 Hz TFR range for peaks between
-# 8 and 12 Hz.
-# ---------------------------------------------------------------------
-
-ALPHA_PEAK_SEARCH = (8.0, 12.0)
-ALPHA_PEAK_TIME = (0.3, 0.8)
+# Peaks are loaded from the existing individual_alpha_peaks.csv produced by
+# analysis/quality_controls/Q01_participant_eight_posterior_TFR_QC.py.
+# The common axis is absolute frequency minus the participant's peak.
+# Do not recompute or round individual alpha peaks here.
 RELATIVE_FREQS = np.arange(-6.0, 18.0 + 0.25, 0.5)
 
 
-def estimate_individual_alpha_peak(subject_tfr):
-    """Estimate a participant's alpha peak from unbaselined no-stim power.
+def load_individual_alpha_peaks(project_root, subjects):
+    """Load exact OFF-derived individual alpha peaks from the Q01 CSV.
 
-    Power is averaged over the available good ROI8 channels and 0.3-0.8 s.
-    The maximum in the 8-12 Hz range is selected. This is the same peak
-    definition used by the participant-level posterior TFR QC script.
+    Require a unique, finite, valid 8-12 Hz peak for every requested subject.
+    Preserve the CSV frequency as a float (e.g., 8.5 Hz stays 8.5 Hz).
     """
-    available_channels = [
-        ch for ch in ROI8 if ch in subject_tfr["no-stim"]
-    ]
-    if not available_channels:
-        raise RuntimeError(
-            "No good ROI8 channels are available for individual "
-            "alpha-peak estimation."
-        )
-
-    example = subject_tfr["no-stim"][available_channels[0]]
-    time_mask = (
-        (example.times >= ALPHA_PEAK_TIME[0])
-        & (example.times <= ALPHA_PEAK_TIME[1])
+    csv_path = (
+        project_root
+        / "derivatives"
+        / "reports"
+        / "group"
+        / "EEG_posterior_channels_alpha_changes_stimOn_stimOff"
+        / "individual_alpha_peaks.csv"
     )
-    frequency_mask = (
-        (example.freqs >= ALPHA_PEAK_SEARCH[0])
-        & (example.freqs <= ALPHA_PEAK_SEARCH[1])
-    )
-    if not time_mask.any() or not frequency_mask.any():
-        raise RuntimeError(
-            "The alpha peak search frequency/time window is not present "
-            "in the computed TFR."
+    if not csv_path.is_file():
+        raise FileNotFoundError(
+            f"Missing individual alpha peaks: {csv_path}. "
+            "Run analysis/quality_controls/"
+            "Q01_participant_eight_posterior_TFR_QC.py first."
         )
 
-    channel_spectra = []
-    for channel in available_channels:
-        tfr = subject_tfr["no-stim"][channel]
-        channel_spectra.append(
-            tfr.data[0, :, time_mask].mean(axis=-1)
+    peaks = {}
+    with csv_path.open(newline="", encoding="utf-8-sig") as stream:
+        reader = csv.DictReader(stream)
+        if not {"subject", "peak_hz"}.issubset(reader.fieldnames or []):
+            raise ValueError(
+                f"Expected 'subject' and 'peak_hz' columns in {csv_path}."
+            )
+        for row in reader:
+            subject = row["subject"].strip().removeprefix("sub-")
+            if subject not in subjects:
+                continue
+            if subject in peaks:
+                raise ValueError(
+                    f"Duplicate alpha peak for sub-{subject} in {csv_path}."
+                )
+            if row.get("status", "ok").strip().lower() != "ok":
+                raise ValueError(
+                    f"Alpha peak for sub-{subject} is not marked 'ok'."
+                )
+            try:
+                peak = float(row["peak_hz"])
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"Invalid alpha peak for sub-{subject}: "
+                    f"{row['peak_hz']!r}"
+                ) from exc
+            if not np.isfinite(peak) or not 8.0 <= peak <= 12.0:
+                raise ValueError(
+                    f"Out-of-range alpha peak for sub-{subject}: {peak} Hz."
+                )
+            peaks[subject] = peak
+
+    missing = [subject for subject in subjects if subject not in peaks]
+    if missing:
+        raise ValueError(
+            "Missing individual alpha peaks in "
+            f"{csv_path}: {', '.join('sub-' + s for s in missing)}"
         )
-
-    mean_spectrum = np.mean(channel_spectra, axis=0)
-    candidates = np.flatnonzero(frequency_mask)
-    peak_index = candidates[np.argmax(mean_spectrum[candidates])]
-    peak_hz = float(example.freqs[peak_index])
-
-    return peak_hz, available_channels
+    return peaks, csv_path
 
 
 def align_tfr_to_individual_peak(data, frequencies, peak_hz):
@@ -468,6 +472,7 @@ def build_peak_aligned_report(
     subject_tfrs,
     times,
     montage_info,
+    project_root,
 ):
     """Create a separate grand-average report with participant-specific peaks.
 
@@ -482,14 +487,9 @@ def build_peak_aligned_report(
     peak_figure_dir = figure_dir / "peak_aligned"
     peak_figure_dir.mkdir(parents=True, exist_ok=True)
 
-    peaks = {}
-    peak_channels = {}
-    for subject in subjects:
-        peak_hz, channels = estimate_individual_alpha_peak(
-            subject_tfrs[subject]
-        )
-        peaks[subject] = peak_hz
-        peak_channels[subject] = channels
+    peaks, peak_csv_path = load_individual_alpha_peaks(
+        project_root, subjects
+    )
 
     peak_report.add_text(
         "Methods: individual-alpha-peak-aligned TFR grand averages",
@@ -508,14 +508,14 @@ def build_peak_aligned_report(
             f"decimation = {DECIM}; ITC not calculated. "
             "The TFRs are aligned to cue onset (time 0 s).\\n\\n"
             "INDIVIDUAL ALPHA PEAK\\n"
-            "Each participant's peak was selected independently from "
-            "original UNBASELINED stimulation-OFF power, averaged over "
-            "0.3-0.8 s after cue onset and available good sensors from "
-            "PO3, POz, PO4, O1, Oz, O2, PO7 and PO8. The maximum-power "
-            "frequency between 8 and 12 Hz was selected. The same peak "
-            "was used for both stimulation conditions and both contrasts. "
-            "This is a maximum-power estimate, not a 1/f-adjusted "
-            "oscillatory peak.\\n\\n"
+            "Peaks are READ from the existing Q01 "
+            "individual_alpha_peaks.csv in derivatives/reports/group, "
+            "NOT re-estimated by G01. The Q01 OFF-derived method "
+            "selects the maximum of unbaselined power over 8-12 Hz "
+            "after averaging available posterior sensors and 0.3-0.8 s. "
+            "CSV values such as 8.5 Hz are retained without rounding "
+            "to integer frequencies. The same individual peak is used "
+            "for ON, OFF, difference and ratio.\\n\\n"
             "FREQUENCY ALIGNMENT\\n"
             "For each participant, relative frequency was defined as "
             "absolute frequency minus that participant's alpha peak. "
@@ -549,15 +549,13 @@ def build_peak_aligned_report(
         "Peak-aligned TFR methods",
     )
 
-    peak_lines = []
-    for subject in subjects:
-        peak_lines.append(
-            f"sub-{subject}: peak={peaks[subject]:.1f} Hz; "
-            f"peak channels={', '.join(peak_channels[subject])}"
-        )
     peak_report.add_text(
-        "Participant alpha peaks",
-        "\n".join(peak_lines),
+        "Individual alpha peaks (read from CSV)",
+        "Source: " + str(peak_csv_path) + "\\n"
+        + "\\n".join(
+            f"sub-{subject}: {peaks[subject]:g} Hz"
+            for subject in subjects
+        ),
         "Peak-aligned TFR",
     )
 
@@ -764,10 +762,9 @@ def build_peak_aligned_report(
 
     peak_summary = {
         "subjects": subjects,
-        "alpha_peak_method": (
-            "Unbaselined no-stimulation power; average available good ROI8 "
-            "channels and 0.3-0.8 s; maximum 8-12 Hz; 0.5-Hz bins."
-        ),
+        "alpha_peak_csv": str(peak_csv_path),
+        "alpha_peak_source": str(peak_csv_path),
+        "alpha_peak_method": "Read exact peak_hz values from Q01 CSV; no G01 re-estimation.",
         "relative_frequency_hz": RELATIVE_FREQS.tolist(),
         "condition_baseline": {
             "window_seconds": BASELINE,
@@ -781,7 +778,6 @@ def build_peak_aligned_report(
             "(stim - no-stim) / (stim + no-stim) from unbaselined power"
         ),
         "participant_alpha_peaks_hz": peaks,
-        "channels_used_for_peak": peak_channels,
         "channel_subject_membership": membership,
     }
     summary_path = derivative_dir / (
@@ -821,6 +817,8 @@ def main():
         / "EEG_all_channels_complete_grand_average"
     )
     deriv.mkdir(parents=True, exist_ok=True)
+    # Check the peak CSV before running the computationally expensive TFRs.
+    load_individual_alpha_peaks(root, subs)
     rid = "complete_grand_average_" + "_".join(subs)
     report = ParticipantPDF(str(out), rid)
     ep = {s: load_epochs(root, s, a) for s in subs}
@@ -840,14 +838,18 @@ def main():
         "\n".join(f"{ch} (n={len(by[ch])}): {', '.join(by[ch])}" for ch in chs),
         "Overview",
     )
-    logic = "Power is computed separately for Stim and No-stim for every participant/sensor. " \
-    "Difference and Ratio are then computed for that participant/sensor from ORIGINAL " \
-    "UNBASELINED power. Participants are averaged independently per sensor. For ROI TFRs, " \
-    "average good sensors within each participant before averaging participants equally. " \
-    "Plotted difference: Stim percent-baseline power minus No-stim percent-baseline power " \
-    "(percentage points), each normalized to -0.3 to -0.1 s at participant/sensor level. " \
-    "Absolute difference QC and normalized ratio retain ORIGINAL UNBASELINED power. " \
-    "Ratio baseline: NONE."
+    logic = (
+        "TFR power is computed separately for stimulation ON and OFF "
+        "at each participant/sensor. ON and OFF are percent-baseline "
+        "corrected over -0.3 to -0.1 s before averaging. The plotted "
+        "difference is ON percent change minus OFF percent change "
+        "(percentage points), calculated per participant/sensor before "
+        "group averaging. The normalized ratio is the ONLY plotted "
+        "TFR measure using unbaselined power: (ON-OFF)/(ON+OFF). "
+        "Absolute-power QC is an additional unbaselined diagnostic, "
+        "not the plotted difference. Individual alpha peaks for the "
+        "second report are loaded from individual_alpha_peaks.csv."
+    )
     report.add_text("Final analysis logic", logic, "Overview")
     # ERP ROI summaries retained; ERP baseline is independent of TFR contrasts.
     erp = {c: {} for c in CONDITIONS}
@@ -942,10 +944,14 @@ def main():
             "per_subject": per_subject,
         }
     report.add_text(
-        "Absolute alpha power: stimulation vs no stimulation",
-        "Unbaselined multitaper power; 8-12 Hz, 0.3-0.8 s after cue. "
-        "Each channel uses eligible participants with equal weight. "
-        "Difference = stimulation - no stimulation.\\n\\n"
+        "QC only: absolute alpha power (not the TFR difference plot)",
+        "These diagnostic numbers are UNBASELINED absolute power "
+        "(8-12 Hz, 0.3-0.8 s after cue). They are included to check "
+        "raw power and condition labels, NOT as the group TFR "
+        "difference. All displayed TFR differences subtract "
+        "separately percent-baseline-corrected stimulation ON and OFF "
+        "power before participant averaging. The raw diagnostic "
+        "difference below is stim - no-stim.\\n\\n"
         + "\\n".join(
             f"{ch} (n={v['n_subjects']}): stim={v['stim']:.6e}, "
             f"no-stim={v['no_stim']:.6e}, diff={v['difference']:.6e}"
@@ -1049,9 +1055,31 @@ def main():
         subject_tfrs=tfr,
         times=times,
         montage_info=info,
+        project_root=root,
     )
 
-    manuscript = f"Cue-locked TFR power was estimated separately for each participant and retained EEG sensor in stimulation and no-stimulation conditions. For each participant and sensor, the absolute difference P_stim-P_no-stim and normalized difference (P_stim-P_no-stim)/(P_stim+P_no-stim) were calculated directly from original unbaselined power. Participant-level sensor contrasts were then averaged across eligible participants independently for each sensor. Posterior ROI TFR summaries first average available good sensors within each participant, then average the participant ROI results equally, across PO3, POz and PO4 (ROI3) or PO3, POz, PO4, O1, Oz, O2, PO7 and PO8 (ROI8). Individual-sensor scalp TFRs continue to average participants independently per sensor. For display, Stim and No-stim power were separately percent-baseline corrected over -0.3 to -0.1 s at participant/sensor level, and the displayed difference was Stim percent change minus No-stim percent change (percentage points). The normalized ratio and absolute-power QC remained unbaselined."
+    manuscript = (
+        "Cue-locked multitaper TFR power was computed for each participant "
+        "and retained EEG sensor separately in stimulation ON and OFF. "
+        "For all descriptive condition TFRs, each participant/sensor was "
+        "percent-baseline corrected using -0.3 to -0.1 s before group "
+        "averaging. The plotted stimulation difference was calculated "
+        "WITH BASELINE CORRECTION: first baseline-correct ON and OFF "
+        "separately, then subtract ON minus OFF (percentage points), "
+        "then average participant-level contrasts for each sensor. "
+        "For posterior ROI3/ROI8 summaries, available good sensors "
+        "were averaged within each participant before participants "
+        "were averaged equally. The normalized ratio "
+        "(P_stim-P_no-stim)/(P_stim+P_no-stim) was the ONLY plotted "
+        "TFR contrast calculated from UNBASELINED power. A separate "
+        "absolute-power QC table uses unbaselined power solely to "
+        "verify raw condition differences and is not the plotted "
+        "baseline-corrected TFR difference. A second report aligns "
+        "each participant's TFRs to the individual alpha peak loaded "
+        "from individual_alpha_peaks.csv without rounding; its ON, "
+        "OFF and difference maps use the same baseline logic, and "
+        "its ratio remains unbaselined."
+    )
     report.add_text("Analysis report - manuscript style", manuscript, "Analysis")
     (deriv / f"{rid}_analysis.json").write_text(
         json.dumps(
