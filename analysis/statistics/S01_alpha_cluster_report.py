@@ -537,7 +537,7 @@ def main():
         ("8-channel posterior/occipital ROI", ROI8),
         ("3-channel posterior ROI", ROI3),
     ):
-        roi_subs = [sub for sub in subs if all(ch in g[sub] for ch in requested)]
+        roi_subs = [sub for sub in subs if any(ch in g[sub] for ch in requested)]
         excluded_subs = [sub for sub in subs if sub not in roi_subs]
         if len(roi_subs) < 2:
             report.add_text(
@@ -555,8 +555,9 @@ def main():
         roi_st = []
         roi_no = []
         for sub in roi_subs:
-            st_sub, rt, rinfo = alpha(ep[sub]["stim"], list(requested), a, peaks[sub])
-            no_sub, rt2, _ = alpha(ep[sub]["no-stim"], list(requested), a, peaks[sub])
+            available = [ch for ch in requested if ch in g[sub]]
+            st_sub, rt, rinfo = alpha(ep[sub]["stim"], available, a, peaks[sub])
+            no_sub, rt2, _ = alpha(ep[sub]["no-stim"], available, a, peaks[sub])
             if not np.allclose(rt, rt2):
                 raise RuntimeError("ROI time mismatch " + sub)
             roi_st.append(st_sub.mean(0))
@@ -564,6 +565,9 @@ def main():
         st = np.asarray(roi_st)
         no = np.asarray(roi_no)
         roi_diff = st - no
+        window_means = roi_diff.mean(axis=1)
+        test = stats.ttest_1samp(window_means, popmean=0.0)
+        window_t, window_p = float(test.statistic), float(test.pvalue)
         roi_thresh = cluster_threshold(len(roi_subs))
         Tr, cr, pr, _ = permutation_cluster_1samp_test(
             roi_diff,
@@ -584,6 +588,8 @@ def main():
             "n_subjects": len(roi_subs),
             "rows": rows,
             "all_clusters": all_roi,
+            "whole_window_mean_t": window_t,
+            "whole_window_mean_p": window_p,
         }
         top_roi = sorted(all_roi, key=lambda r: r["p"])[:10]
         text = (
@@ -597,6 +603,7 @@ def main():
                 )
             )
         )
+        text += f"\n0.3-0.8 s participant mean vs zero: t={window_t:.5g}; two-sided p={window_p:.5g}."
         text += (
             f"\nActual ROI cluster-forming threshold: +/-{roi_thresh:.4f} (df={len(roi_subs)-1}; two-sided alpha={CLUSTER_FORMING_ALPHA:.2f}, 0.05 each tail).\nStrongest observed clusters, including non-significant:\n"
             + (
