@@ -1,32 +1,52 @@
 # All-channel EEG group analysis
 
-Final cleaned stimulation ON/OFF cue epochs are required. The two Python files in this folder are the implementation and its plotting runner; use the runner for the complete output.
+## Overview
 
-| File | Purpose |
+This folder contains the group-level ERP, TFR, alpha-power quality-control, and cluster-permutation analyses for the STN stimulation study.
+
+All scripts use the final cleaned EEG epochs from each participant, separately for stimulation ON and OFF. Attention-left and attention-right cue epochs are combined.
+
+## Scripts
+
+| Script | Description |
 |---|---|
-| `G01_complete_grand_average_report.py` | Calculates participant-level ERP/TFR power, group sensor averages, three-/eight-channel posterior ROI TFRs, absolute alpha QC, and a second group TFR report aligned to each participant's OFF-derived alpha peak. |
-| `run_grand_average.py` | Recommended entry point: calls G01 and adds detailed all-sensor and eight-posterior-sensor figures. |
+| `G01_complete_grand_average_report.py` | Main group-analysis implementation. Calculates grand-average ERP and TFR, sensor-level stimulation contrasts, and posterior ROI summaries. The plotted stimulation-minus-no-stimulation TFR is the difference of condition-wise baseline-percent changes; the normalized ratio remains unbaselined. |
+| `run_grand_average.py` | Recommended entry point for G01. Adds detailed scalp and posterior figures to the group PDF. |
 
-## Run
+## Running the analyses
 
-From the repository root, after subject-level EEG cleaning:
+Open a terminal in the repository root.
+
+
+### 1. Grand-average ERP and TFR
 
 ```bash
-python analysis/group/EEG_all_channels/run_grand_average.py --subjects 115 116 118 120 121 123 --platform mac
+python analysis/group/EEG_all_channels/run_grand_average.py --subjects 101 102 103 104 105 106 107 108 110 111 112 113 114 115 116 118 119 120 121 122 123 --platform mac
 ```
 
-Options include `--project-root PATH`, `--session`, `--task`, `--run`, and `--n-jobs`. G01 can be run directly for debugging, but do not run both entry points to generate the same report.
+This runs G01 internally. Do not run both scripts separately unless specifically debugging G01.
+
+## Analysis conventions
+
+- ERP baseline: −0.1 to 0 seconds.
+- Descriptive TFR baseline: −0.3 to −0.1 seconds, percent change within each condition.
+- Displayed TFR difference: stimulation percent change minus no-stimulation percent change, each baseline-corrected over −0.3 to −0.1 seconds per participant and sensor (percentage-point difference). This avoids dividing a near-zero raw difference by its own baseline.
+- Normalized TFR difference `(stim - no-stim) / (stim + no-stim)`: original unbaselined power, **no baseline correction**.
+- Absolute alpha-power QC difference: original unbaselined power (not the plotted baseline-corrected TFR difference).
+- Three-channel ROI: PO3, POz, PO4.
+- Eight-channel ROI: PO3, POz, PO4, O1, Oz, O2, PO7, PO8.
+- Bad or missing channels are not interpolated for group analysis.
+- TFR scalp maps: average participants independently for each sensor (excluding participants missing that sensor).
+- TFR ROI plots: average available good ROI sensors **within each participant first**, then average participant-level ROI arrays equally. Participants with no usable ROI sensors are excluded from that ROI. ROI channel membership can differ across participants and is documented in the report.
+- ERP ROI plots and separate Q01/Q02/S01 analyses are unchanged by this G01 TFR-only update.
+- The subject is the unit of statistical inference.
 
 ## Outputs
 
-Under `<PROJECT_ROOT>/derivatives/reports/group/EEG_all_channels_complete_grand_average/`:
-- Standard group ERP/TFR PDF and `figures/` images.
-- Individual-alpha-peak-aligned group TFR PDF (`*_peak_aligned_analysis_report.pdf`) and `figures/peak_aligned/` images.
+- Main group PDF: `derivatives/reports/group/EEG_all_channels_complete_grand_average/`
 
-Companion analysis JSON files are written under `<PROJECT_ROOT>/data/BIDS/derivatives/group/EEG_all_channels_complete_grand_average/`.
+## Recommended order
 
-## Analysis notes
+Run `Q01` first to inspect individual-participant TFRs, followed by `Q02` for descriptive alpha-power QC. Run `run_grand_average.py` for the main group figures and `S01` for statistical inference.
 
-ERP baseline: −0.1 to 0 s. TFR ON and OFF: percent baseline −0.3 to −0.1 s for each participant/sensor. The plotted ON−OFF TFR subtracts the condition-wise percent changes (percentage points); the normalized ratio `(ON-OFF)/(ON+OFF)` uses unbaselined power. Sensor maps average participants per sensor. ROI TFRs average usable channels **within each participant first**, then participants equally. Peak-aligned plots estimate each participant's alpha peak from unbaselined OFF power at 8–12 Hz, 0.3–0.8 s, shift frequency to that peak, and interpolate onto a common relative-frequency axis. This is a maximum-power estimate, not an aperiodic-corrected peak.
-
-See [group workflow](../README.md) for other analyses.
+These scripts should not be deleted: they perform different, complementary analyses.
