@@ -23,7 +23,7 @@ from scipy import stats
 from mne.stats import permutation_cluster_1samp_test, combine_adjacency, fdr_correction
 
 HERE = Path(__file__).resolve().parent
-ANALYSIS_DIR = HERE.parents[1]
+ANALYSIS_DIR = HERE.parent
 for p in (ANALYSIS_DIR / "subject" / "EEG_all_channels", ANALYSIS_DIR / "utils"):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
