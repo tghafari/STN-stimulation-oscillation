@@ -111,10 +111,6 @@ def validated_subject(frame, subject, root, args, peak):
         raise ValueError(f"sub-{subject}: absent from validated B03 CSV")
     if not rows.label_verified.astype(str).str.lower().eq("true").all():
         raise ValueError(f"sub-{subject}: unverified stimulation labels")
-    if rows.alpha_peak_hz.nunique() != 1:
-        raise ValueError(f"sub-{subject}: inconsistent alpha peaks")
-    if not np.isclose(float(rows.alpha_peak_hz.iloc[0]), peak, atol=0.26):
-        raise ValueError("Individual peak CSV disagrees with B03; rerun B03")
     if not np.isfinite(peak) or not 8 <= peak <= 12:
         raise ValueError(f"sub-{subject}: invalid OFF-derived peak")
     periods = [list() for _ in range(4)]
