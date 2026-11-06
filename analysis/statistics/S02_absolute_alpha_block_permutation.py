@@ -53,6 +53,7 @@ def arguments():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--subjects", nargs="+", required=True)
     parser.add_argument("--input-csv", type=Path, default=None)
+    parser.add_argument("--peaks-csv", type=Path, default=None)
     parser.add_argument("--platform", choices=("mac", "bluebear"), default="mac")
     parser.add_argument("--project-root", default=None)
     parser.add_argument("--session", default="01")
@@ -103,7 +104,7 @@ def alpha_trials(epochs, channels, peak, n_jobs):
     return percent_values, raw_values
 
 
-def validated_subject(frame, subject, root, args):
+def validated_subject(frame, subject, root, args, peak):
     """Match each CSV trial to the corresponding cleaned epoch index."""
     rows = frame.loc[frame.subject == subject].copy()
     if rows.empty:
@@ -112,7 +113,8 @@ def validated_subject(frame, subject, root, args):
         raise ValueError(f"sub-{subject}: unverified stimulation labels")
     if rows.alpha_peak_hz.nunique() != 1:
         raise ValueError(f"sub-{subject}: inconsistent alpha peaks")
-    peak = float(rows.alpha_peak_hz.iloc[0])
+    if not np.isclose(float(rows.alpha_peak_hz.iloc[0]), peak, atol=0.26):
+        raise ValueError("Individual peak CSV disagrees with B03; rerun B03")
     if not np.isfinite(peak) or not 8 <= peak <= 12:
         raise ValueError(f"sub-{subject}: invalid OFF-derived peak")
     periods = [list() for _ in range(4)]
@@ -276,10 +278,21 @@ def main():
     if missing:
         raise ValueError(f"B03 CSV missing columns: {sorted(missing)}")
     frame["subject"] = frame.subject.str.removeprefix("sub-")
+    peaks_path = args.peaks_csv or group / "individual_alpha_peaks.csv"
+    peaks_frame = pd.read_csv(peaks_path, dtype={"subject": str})
+    if not {"subject", "peak_hz"}.issubset(peaks_frame.columns):
+        raise ValueError("Peak CSV requires subject and peak_hz")
+    peaks_frame["subject"] = peaks_frame.subject.str.removeprefix("sub-")
+    if peaks_frame.subject.duplicated().any():
+        raise ValueError("Duplicate individual peak IDs")
+    peaks = dict(zip(peaks_frame.subject, pd.to_numeric(peaks_frame.peak_hz, errors="coerce")))
+    for subject in args.subjects:
+        if subject not in peaks or not np.isfinite(peaks[subject]):
+            raise ValueError(f"Missing peak for sub-{subject}")
     data, included, details = [], [], []
     for subject in args.subjects:
         periods, raw_periods, labels, peak, channels = validated_subject(
-            frame, subject, root, args
+            frame, subject, root, args, float(peaks[subject])
         )
         data.append((periods, raw_periods, labels))
         included.append(subject)
@@ -321,6 +334,7 @@ def main():
             ("Included subjects (n=" + str(len(included)) + ")",
              ", ".join("sub-" + s for s in included)),
             ("Input", str(csv_path)),
+            ("Individual peaks CSV", str(peaks_path)),
             ("Participant-specific alpha peaks and retained sensors",
              "; ".join(f"sub-{s}: {peak:g} Hz, {','.join(chs)}"
                        for s, peak, chs, _, _, _ in details)),
