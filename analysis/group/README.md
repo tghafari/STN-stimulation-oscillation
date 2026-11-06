@@ -5,7 +5,7 @@ EEG preprocessing must be completed before group analyses.
 
 ## Posterior workflow
 
-1. Run `analysis/group/EEG_posterior_channels/G03_individual_stimOn_stimOff_alpha_report.py` to establish individual alpha peaks where needed.
+1. Run `analysis/quality_controls/Q01_participant_eight_posterior_TFR_QC.py` to establish individual alpha peaks where needed.
 2. Run `B03_prepare_block_alpha.py` for all intended participants. G04 is the **only supported interactive interface** for confirming stimulation order. Confirmations are persisted in `analysis/subject/stimulation_sequence_confirmed.json`.
 3. Run `analysis/statistics/S02_absolute_alpha_block_permutation.py` for the primary two-sided whole-period permutation test.
 4. Run `analysis/statistics/S02_sensitivity_alpha.py` to regenerate the full PDF with symmetric normalised sensitivity and leave-one-out checks.
@@ -91,3 +91,14 @@ The shared `B01_review_bids_blocks.py` and
 timing validation; **they do not provide a second supported confirmation
 workflow**. `review_raw_stimulation_crops.py` is used only to inspect/change
 crop intervals, *not* stimulation labels.
+
+## Current participant QC and laterality entry points
+
+Run from the repository root after final cleaned cue epochs exist:
+
+```bash
+python analysis/quality_controls/Q01_participant_eight_posterior_TFR_QC.py --subjects 115 116 118 120 121 123 --platform mac
+python analysis/group/EEG_posterior_channels/stimulation_laterality/run_stim_laterality_tfr.py --subjects 115 116 118 120 121 123 --platform mac
+```
+
+Q01 replaces the former posterior G02 and exports the individual alpha peak CSV required for laterality. Laterality **also** requires the verified `trial_alpha.csv` from B03. The grand-average runner is documented in [all-channel README](EEG_all_channels/README.md).

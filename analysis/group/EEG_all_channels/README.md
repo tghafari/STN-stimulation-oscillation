@@ -12,7 +12,7 @@ All scripts use the final cleaned EEG epochs from each participant, separately f
 |---|---|
 | `G01_complete_grand_average_report.py` | Main group-analysis implementation. Calculates grand-average ERP and TFR, sensor-level stimulation contrasts, and posterior ROI summaries. The plotted stimulation-minus-no-stimulation TFR is the difference of condition-wise baseline-percent changes; the normalized ratio remains unbaselined. |
 | `run_grand_average.py` | Recommended entry point for G01. Adds detailed scalp and posterior figures to the group PDF. |
-| `Q01_participant_eight_posterior_TFR_QC.py` | Displays individual-participant TFRs in 4 × 4 grids for three and eight posterior channels, separately for stimulation ON, OFF, difference, and normalized difference. |
+| `Q01_participant_eight_posterior_TFR_QC.py` | Located in `analysis/quality_controls/`. Participant posterior TFR grids, 10–12 Hz trial-level alpha QC, and OFF-derived individual alpha peak plots/CSV (former posterior G02). |
 | `Q02_alpha_sensor_scalp_QC.py` | Descriptive alpha-power time courses across EEG sensors. Displays group mean ± SEM, using the participants retaining each sensor. |
 | `S01_alpha_cluster_report.py` | Paired cluster-permutation statistics for alpha-power stimulation effects, including individual sensors and posterior ROIs. |
 
@@ -35,7 +35,7 @@ This runs G01 internally. Do not run both scripts separately unless specifically
 python analysis/group/EEG_all_channels/Q01_participant_eight_posterior_TFR_QC.py --subjects 101 102 103 104 105 106 107 108 110 111 112 113 114 115 116 118 119 120 121 122 123 --platform mac
 ```
 
-Creates participant grids for three posterior channels (PO3, POz, PO4) and eight posterior channels (PO3, POz, PO4, O1, Oz, O2, PO7, PO8). No averaging across participants.
+Also exports `derivatives/reports/group/EEG_posterior_channels_alpha_changes_stimOn_stimOff/individual_alpha_peaks.csv`, required for laterality. Creates participant grids for three posterior channels (PO3, POz, PO4) and eight posterior channels (PO3, POz, PO4, O1, Oz, O2, PO7, PO8). No averaging across participants.
 
 ### 3. Q02 — Alpha-power scalp QC
 

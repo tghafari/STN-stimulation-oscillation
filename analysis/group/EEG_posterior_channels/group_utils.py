@@ -5,13 +5,9 @@ Group analysis utilities
 
 Shared helper functions for the group-level EEG analyses:
 
-    G01_concatenated_epochs_report.py
-        Concatenates cleaned epochs across subjects before
-        calculating group ERP and TFR.
-
-    G02_grand_average_report.py
-        Calculates subject-level averages first and then
-        combines subjects using mne.grand_average().
+    Legacy group helpers for derivative loading, channel selection,
+    evoked/TFR plotting and PDF report sections.
+    Not imported by the current G01, Q01, or laterality runners.
 
 This module provides functions to:
     - load and save the group subject list
@@ -30,8 +26,8 @@ stored under:
 Group analyses currently focus on posterior channels PO3, PO4, and POz.
 A channel may be absent if it was rejected during subject-level cleaning.
 
-This module contains shared utilities only; the actual group analyses
-are performed by G01 and G02.
+This module is retained for compatibility with older workflows; it is
+not an entry point. See this folder's README for supported commands.
 
 written by Tara Ghafari
 tara.ghafari@gmail.com
