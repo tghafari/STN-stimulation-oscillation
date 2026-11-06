@@ -2,7 +2,7 @@
 
 `S02_absolute_alpha_block_permutation.py` is the single entry point for primary and sensitivity analyses.
 
-**Prerequisites:** final cleaned cue epochs for ON and OFF, verified B03 `trial_alpha.csv` containing `trial_index_in_condition` and stimulation-period labels, and a participant-specific OFF-derived alpha peak from `<PROJECT_ROOT>/derivatives/reports/group/individual_alpha_peaks.csv`. The peak must match B03's value. The CSV's absolute `alpha_power` column is **not** the statistical input: the script recomputes trial-level multitaper TFRs, applies percent baseline (−0.3 to −0.1 s) independently to every trial/sensor, then averages individual alpha peak ±1 Hz over 0.3–0.8 s.
+**Prerequisites:** final cleaned cue epochs for ON and OFF, verified B03 `trial_alpha.csv` containing `trial_index_in_condition` and stimulation-period labels, and a participant-specific OFF-derived alpha peak from `<PROJECT_ROOT>/derivatives/reports/group/individual_alpha_peaks.csv`. The individual peak CSV is authoritative for frequency selection; B03 supplies verified trial-period mapping. The CSV's absolute `alpha_power` column is **not** the statistical input: the script recomputes trial-level multitaper TFRs, applies percent baseline (−0.3 to −0.1 s) independently to every trial/sensor, then averages individual alpha peak ±1 Hz over 0.3–0.8 s.
 
 Run from repository root:
 
