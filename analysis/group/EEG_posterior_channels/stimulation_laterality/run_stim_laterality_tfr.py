@@ -73,7 +73,7 @@ ALPHA_HALF_WIDTH_HZ = 1.0
 ALPHA_BASELINE = (-0.3, -0.1)
 STIM_LABELS = {"right": "stim_right", "left": "stim_left"}
 POWER_SCALE = 1e12  # V squared to microvolt squared.
-PEAK_RELATIVE_FREQS = np.arange(-5.0, 5.0 + 0.25, 0.5)
+PEAK_RELATIVE_FREQS = np.arange(-6.0, 18.0 + 0.25, 0.5)
 GRAND_TIMES = np.arange(-0.5, 1.5 + 0.005, 0.01)
 
 
