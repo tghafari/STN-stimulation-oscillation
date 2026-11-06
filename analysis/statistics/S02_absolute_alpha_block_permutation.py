@@ -204,19 +204,21 @@ def effect(periods, labels, normalized=False):
     return (on - off) / denominator
 
 
-def run_permutation(data, iterations, seed, normalized=False):
+def run_permutation(data, iterations, seed, normalized=False, statistic="signed"):
     """Two-sided period-label permutation with equal subject weighting."""
     effects = np.asarray([effect(raw if normalized else percent, labels, normalized)
                           for percent, raw, labels in data])
-    observed = float(effects.mean())
+    aggregate = {"signed": np.mean, "squared": lambda x: np.mean(np.square(x)), "absolute": lambda x: np.mean(np.abs(x))}[statistic]
+    observed = float(aggregate(effects))
     rng = np.random.default_rng(seed)
     null = np.empty(iterations)
     for index in range(iterations):
-        null[index] = np.mean([
+        null[index] = aggregate(np.asarray([
             effect(raw if normalized else percent, rng.permutation(labels), normalized)
             for percent, raw, labels in data
-        ])
-    p = (1 + np.count_nonzero(np.abs(null) >= abs(observed))) / (iterations + 1)
+        ]))
+    extreme = (np.abs(null) >= abs(observed)) if statistic == "signed" else (null >= observed)
+    p = (1 + np.count_nonzero(extreme)) / (iterations + 1)
     return effects, observed, null, float(p)
 
 
@@ -299,6 +301,8 @@ def main():
     effects, observed, null, p_perm = run_permutation(
         data, args.n_permutations, args.seed
     )
+    _, sq_obs, sq_null, sq_p = run_permutation(data, args.n_permutations, args.seed, statistic="squared")
+    _, abs_obs, abs_null, abs_p = run_permutation(data, args.n_permutations, args.seed, statistic="absolute")
     n_positive = int(np.count_nonzero(effects > 0))
     n_negative = int(np.count_nonzero(effects < 0))
     n_nonzero = n_positive + n_negative
@@ -318,7 +322,7 @@ def main():
         for index, subject in enumerate(included):
             remaining = data[:index] + data[index + 1:]
             _, statistic, _, p = run_permutation(
-                remaining, args.n_permutations, args.seed
+                remaining, args.n_permutations, args.seed, statistic="squared"
             )
             loo.append((subject, statistic, p))
     output = group / "absolute_alpha_block_permutation"
