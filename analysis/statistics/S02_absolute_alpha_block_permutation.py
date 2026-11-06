@@ -72,12 +72,7 @@ def arguments():
 
 
 def alpha_trials(epochs, channels, peak, n_jobs):
-    """Return both unbaselined and percent-baseline alpha per trial.
-
-    Trial-level TFR is baseline corrected per sensor/frequency first.
-    The result is then averaged over retained sensors, peak +/-1 Hz
-    frequencies, and the attention interval. Trial order is unchanged.
-    """
+    """Return unbaselined alpha power per trial in original power units."""
     tfr = epochs.copy().pick(channels).compute_tfr(
         method="multitaper", freqs=FREQS, n_cycles=FREQS / 2,
         time_bandwidth=2.0, use_fft=True, zero_mean=True,
@@ -88,20 +83,12 @@ def alpha_trials(epochs, channels, peak, n_jobs):
         tfr.freqs <= peak + HALF_WIDTH + 1e-9
     )
     times = (tfr.times >= ATTENTION[0]) & (tfr.times <= ATTENTION[1])
-    base = (tfr.times >= BASELINE[0]) & (tfr.times <= BASELINE[1])
-    if not freq.any() or not times.any() or not base.any():
-        raise ValueError("Required baseline/alpha/attention TFR bins absent")
-    baseline_power = tfr.data[..., base].mean(axis=-1)
-    if np.any(baseline_power <= 0) or not np.isfinite(baseline_power).all():
-        raise ValueError("Nonpositive or invalid baseline power")
+    if not freq.any() or not times.any():
+        raise ValueError("Required alpha/attention TFR bins absent")
     raw_values = tfr.data[:, :, freq, :][:, :, :, times].mean(axis=(1, 2, 3))
-    tfr.apply_baseline(BASELINE, mode="percent")
-    percent_values = 100.0 * tfr.data[:, :, freq, :][:, :, :, times].mean(
-        axis=(1, 2, 3)
-    )
-    if not np.isfinite(raw_values).all() or not np.isfinite(percent_values).all():
-        raise ValueError("Nonfinite alpha power")
-    return percent_values, raw_values
+    if not np.isfinite(raw_values).all() or np.any(raw_values < 0):
+        raise ValueError("Invalid absolute alpha power")
+    return raw_values
 
 
 def validated_subject(frame, subject, root, args, peak):
@@ -154,7 +141,7 @@ def validated_subject(frame, subject, root, args, peak):
         indices = condition_rows.trial_index_in_condition.to_numpy(dtype=int)
         if not np.array_equal(np.sort(indices), np.arange(len(epochs))):
             raise ValueError(f"sub-{subject}: incomplete trial-index mapping")
-        values, raw_values = alpha_trials(epochs, channels_used, peak, args.n_jobs)
+        raw_values = alpha_trials(epochs, channels_used, peak, args.n_jobs)
         for row in condition_rows.itertuples(index=False):
             idx = int(row.trial_index_in_condition)
             period = int(row.stimulation_period) - 1
@@ -166,7 +153,7 @@ def validated_subject(frame, subject, root, args, peak):
             side = str(row.stimulation_side).strip().lower()
             if is_on != (side != "off"):
                 raise ValueError(f"sub-{subject}: side/condition mismatch")
-            periods[period].append(float(values[idx]))
+            periods[period].append(float(raw_values[idx]))
             raw_periods[period].append(float(raw_values[idx]))
     sides = []
     for period in range(4):
@@ -300,10 +287,10 @@ def main():
         )
         data.append((periods, raw_periods, labels))
         included.append(subject)
-        on, off = condition_means(periods, labels)
-        details.append((subject, peak, channels, on, off, on - off))
-        print(f"sub-{subject}: ON={on:.4g}%, OFF={off:.4g}%, "
-              f"ON-OFF={on-off:.4g} percentage points")
+        on, off = condition_means(raw_periods, labels)
+        ratio = (on - off) / (on + off)
+        details.append((subject, peak, channels, on, off, ratio))
+        print(f"sub-{subject}: unbaselined ON={on:.4g}, OFF={off:.4g}, ratio={ratio:.4g}")
     effects, observed, null, p_perm = run_permutation(
         data, args.n_permutations, args.seed
     )
@@ -367,8 +354,8 @@ def main():
     for start in range(0, len(details), 14):
         batch = details[start:start + 14]
         pages.append(text_page("Participant effects", [
-            (f"sub-{s}", f"OFF={off:.4g}%, ON={on:.4g}%, "
-             f"ON-OFF={diff:.4g} percentage points; peak={peak:g} Hz")
+            (f"sub-{s}", f"Raw OFF={off:.4g}, raw ON={on:.4g}, "
+             f"(ON-OFF)/(ON+OFF)={diff:.4g}; peak={peak:g} Hz")
             for s, peak, _, on, off, diff in batch
         ]))
     primary_fig = distribution_page(
