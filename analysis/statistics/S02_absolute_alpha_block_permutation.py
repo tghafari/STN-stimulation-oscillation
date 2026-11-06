@@ -1,26 +1,22 @@
 #!/usr/bin/env python3
-"""S02: baseline-relative posterior alpha stimulation effects.
+"""S02: unbaselined normalized posterior alpha stimulation effects.
 
-Read B03's verified trial-to-period mapping, then recompute trial-level
-multitaper alpha from the final cleaned cue epochs. Percent baseline
-(-0.3 to -0.1 s) is applied to EACH trial and sensor before averaging
-the participant-specific OFF-derived alpha band (peak +/-1 Hz) and the
-attention interval (0.3 to 0.8 s). This avoids attempting to baseline
-correct the already time-averaged absolute alpha_power in trial_alpha.csv.
+Read B03 verified trial-to-stimulation-period mapping and cleaned cue epochs.
+For each participant, calculate unbaselined multitaper alpha power within
+their OFF-derived individual peak +/-1 Hz and 0.3-0.8 s. The participant
+effect is (mean ON - mean OFF)/(mean ON + mean OFF), with raw positive
+absolute power in both numerator and denominator. NO baseline correction
+is applied anywhere in S02.
 
-Each participant contributes one mean(ON) - mean(OFF) in percentage points.
-The primary two-sided permutation test shuffles labels of WHOLE verified
-stimulation periods, maintaining two ON and two OFF periods per participant.
-Additional paired sign and Wilcoxon signed-rank tests, normalized-effect
-sensitivity and leave-one-participant-out permutation tests are reported.
+Primary: upper-tail whole-period permutation of mean squared ratios.
+Sensitivity: upper-tail permutation of mean absolute ratios, and leave-
+one-participant-out primary permutations. Secondary: two-sided permutation
+of signed mean ratios and paired Wilcoxon signed-rank test of ratios
+against zero. No sign test. Permutations preserve the four whole periods
+and two ON/two OFF labels per participant; valid inference requires
+exchangeable stimulation-period labels.
 
-Run from the repository root:
-    python analysis/statistics/S02_absolute_alpha_block_permutation.py \\
-        --subjects 101 102 103 --platform mac
-
-Output: <PROJECT_ROOT>/derivatives/reports/group/
-        absolute_alpha_block_permutation/absolute_alpha_block_permutation.pdf
-and publication-quality permutation figures in figures/.
+Output: derivatives/reports/group/absolute_alpha_block_permutation/
 """
 from __future__ import annotations
 
@@ -42,7 +38,6 @@ sys.path.insert(0, str(SUBJECT_DIR))
 from pipeline_config import resolve_project_root, stage_path
 
 FREQS = np.arange(2.0, 32.0, 0.5)
-BASELINE = (-0.3, -0.1)
 ATTENTION = (0.3, 0.8)
 HALF_WIDTH = 1.0
 ROI8 = ("PO3", "POz", "PO4", "O1", "Oz", "O2", "PO7", "PO8")
@@ -101,7 +96,6 @@ def validated_subject(frame, subject, root, args, peak):
     if not np.isfinite(peak) or not 8 <= peak <= 12:
         raise ValueError(f"sub-{subject}: invalid OFF-derived peak")
     periods = [list() for _ in range(4)]
-    raw_periods = [list() for _ in range(4)]
     labels = np.zeros(4, dtype=bool)
     channels_used = None
     for condition in ("no-stim", "stim"):
@@ -154,7 +148,7 @@ def validated_subject(frame, subject, root, args, peak):
             if is_on != (side != "off"):
                 raise ValueError(f"sub-{subject}: side/condition mismatch")
             periods[period].append(float(raw_values[idx]))
-            raw_periods[period].append(float(raw_values[idx]))
+
     sides = []
     for period in range(4):
         p = rows.loc[rows.stimulation_period == period + 1]
@@ -166,8 +160,7 @@ def validated_subject(frame, subject, root, args, peak):
         raise ValueError(f"sub-{subject}: invalid stimulation sequence")
     if any(not p for p in periods):
         raise ValueError(f"sub-{subject}: empty period")
-    return ([np.asarray(p) for p in periods],
-            [np.asarray(p) for p in raw_periods], labels, peak, channels_used)
+    return [np.asarray(p) for p in periods], labels, peak, channels_used
 
 
 def condition_means(periods, labels):
@@ -194,7 +187,7 @@ def effect(periods, labels, normalized=False):
 def run_permutation(data, iterations, seed, normalized=False, statistic="signed"):
     """Two-sided period-label permutation with equal subject weighting."""
     effects = np.asarray([effect(raw, labels, normalized=True)
-                          for _, raw, labels in data])
+                          for raw, labels in data])
     aggregate = {"signed": np.mean, "squared": lambda x: np.mean(np.square(x)), "absolute": lambda x: np.mean(np.abs(x))}[statistic]
     observed = float(aggregate(effects))
     rng = np.random.default_rng(seed)
@@ -202,7 +195,7 @@ def run_permutation(data, iterations, seed, normalized=False, statistic="signed"
     for index in range(iterations):
         null[index] = aggregate(np.asarray([
             effect(raw, rng.permutation(labels), normalized=True)
-            for _, raw, labels in data
+            for raw, labels in data
         ]))
     extreme = (np.abs(null) >= abs(observed)) if statistic == "signed" else (null >= observed)
     p = (1 + np.count_nonzero(extreme)) / (iterations + 1)
@@ -282,10 +275,10 @@ def main():
             raise ValueError(f"Missing peak for sub-{subject}")
     data, included, details = [], [], []
     for subject in args.subjects:
-        periods, raw_periods, labels, peak, channels = validated_subject(
+        raw_periods, labels, peak, channels = validated_subject(
             frame, subject, root, args, float(peaks[subject])
         )
-        data.append((periods, raw_periods, labels))
+        data.append((raw_periods, labels))
         included.append(subject)
         on, off = condition_means(raw_periods, labels)
         ratio = (on - off) / (on + off)
