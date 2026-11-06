@@ -194,7 +194,7 @@ def sensor_plot(st, no, t, ch, rows):
         t,
         rows,
         f"{ch}: alpha power, stimulation vs no stimulation",
-        "Alpha power",
+        "Baseline-corrected alpha power (% change)",
     )
 
 
@@ -208,7 +208,7 @@ def participant_difference_traces(diff, t, subjects, title):
     ax.fill_between(t, mean - sem, mean + sem, color="k", alpha=0.12)
     ax.axhline(0, color="k", linewidth=0.8, linestyle=":")
     ax.set_xlabel("Time (s)")
-    ax.set_ylabel("Stim - no-stim alpha power")
+    ax.set_ylabel("Stim - no-stim alpha (percentage points)")
     ax.set_title(title)
     ax.legend(ncol=4, fontsize=7)
     return fig
@@ -226,7 +226,7 @@ def participant_window_effects(diff, subjects, title):
     )
     ax.set_xticks(x)
     ax.set_xticklabels([f"sub-{z}" for z in subjects], rotation=60, ha="right")
-    ax.set_ylabel(f"Mean stim - no-stim alpha, {WINDOW[0]:g}-{WINDOW[1]:g} s")
+    ax.set_ylabel(f"ON - OFF alpha (percentage points), {WINDOW[0]:g}-{WINDOW[1]:g} s")
     ax.set_title(title)
     ax.legend()
     return fig, values
@@ -519,7 +519,7 @@ def main():
             f"Sensor-specific N={len(ch_subs)}. Gray vertical bands mark significant within-sensor cluster-permutation intervals and are labelled with cluster p-value and time range. Across-sensor FDR is not implied.",
             section,
         )
-    # ROI analyses use ROI-specific complete-case subject samples.
+    # ROI analyses use ROI-specific samples with at least one good ROI channel.
     # A participant contributes only when EVERY channel in that ROI is good in BOTH conditions.
     roi_results = {}
     for label, requested in (
@@ -531,7 +531,7 @@ def main():
         if len(roi_subs) < 2:
             report.add_text(
                 label + " results",
-                f"Insufficient complete-case participants. Required channels: {', '.join(requested)}. Included: {', '.join('sub-'+x for x in roi_subs) if roi_subs else 'None'}. Excluded because no ROI channel was usable: {', '.join('sub-'+x for x in excluded_subs) if excluded_subs else 'None'}.",
+                f"Insufficient participants with available ROI channels. Required channels: {', '.join(requested)}. Included: {', '.join('sub-'+x for x in roi_subs) if roi_subs else 'None'}. Excluded because no ROI channel was usable: {', '.join('sub-'+x for x in excluded_subs) if excluded_subs else 'None'}.",
                 section,
             )
             roi_results[label] = {
@@ -582,9 +582,9 @@ def main():
         }
         top_roi = sorted(all_roi, key=lambda r: r["p"])[:10]
         text = (
-            f"Required channels: {', '.join(requested)}. N={len(roi_subs)} complete-case participants. Included: {', '.join('sub-'+x for x in roi_subs)}. Excluded because at least one required ROI channel was bad/missing: {', '.join('sub-'+x for x in excluded_subs) if excluded_subs else 'None'}. "
+            f"Required channels: {', '.join(requested)}. N={len(roi_subs)} participants with available ROI channels. Included: {', '.join('sub-'+x for x in roi_subs)}. Excluded because no ROI sensor was usable: {', '.join('sub-'+x for x in excluded_subs) if excluded_subs else 'None'}. "
             + (
-                "No significant temporal clusters."
+                "No significant time clusters at corrected p <= 0.05."
                 if not rows
                 else " ".join(
                     f"Cluster {r['cluster']}: p={r['p']:.4f}, {r['t_start']:.3f}-{r['t_end']:.3f} s."
