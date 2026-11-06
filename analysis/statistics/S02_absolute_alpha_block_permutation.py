@@ -1,26 +1,22 @@
 #!/usr/bin/env python3
-"""S02: baseline-relative posterior alpha stimulation effects.
+"""S02: unbaselined normalized posterior alpha stimulation effects.
 
-Read B03's verified trial-to-period mapping, then recompute trial-level
-multitaper alpha from the final cleaned cue epochs. Percent baseline
-(-0.3 to -0.1 s) is applied to EACH trial and sensor before averaging
-the participant-specific OFF-derived alpha band (peak +/-1 Hz) and the
-attention interval (0.3 to 0.8 s). This avoids attempting to baseline
-correct the already time-averaged absolute alpha_power in trial_alpha.csv.
+Read B03 verified trial-to-stimulation-period mapping and cleaned cue epochs.
+For each participant, calculate unbaselined multitaper alpha power within
+their OFF-derived individual peak +/-1 Hz and 0.3-0.8 s. The participant
+effect is (mean ON - mean OFF)/(mean ON + mean OFF), with raw positive
+absolute power in both numerator and denominator. NO baseline correction
+is applied anywhere in S02.
 
-Each participant contributes one mean(ON) - mean(OFF) in percentage points.
-The primary two-sided permutation test shuffles labels of WHOLE verified
-stimulation periods, maintaining two ON and two OFF periods per participant.
-Additional paired sign and Wilcoxon signed-rank tests, normalized-effect
-sensitivity and leave-one-participant-out permutation tests are reported.
+Primary: upper-tail whole-period permutation of mean squared ratios.
+Sensitivity: upper-tail permutation of mean absolute ratios, and leave-
+one-participant-out primary permutations. Secondary: two-sided permutation
+of signed mean ratios and paired Wilcoxon signed-rank test of ratios
+against zero. No sign test. Permutations preserve the four whole periods
+and two ON/two OFF labels per participant; valid inference requires
+exchangeable stimulation-period labels.
 
-Run from the repository root:
-    python analysis/statistics/S02_absolute_alpha_block_permutation.py \\
-        --subjects 101 102 103 --platform mac
-
-Output: <PROJECT_ROOT>/derivatives/reports/group/
-        absolute_alpha_block_permutation/absolute_alpha_block_permutation.pdf
-and publication-quality permutation figures in figures/.
+Output: derivatives/reports/group/absolute_alpha_block_permutation/
 """
 from __future__ import annotations
 
@@ -34,7 +30,7 @@ import mne
 import numpy as np
 import pandas as pd
 from matplotlib.backends.backend_pdf import PdfPages
-from scipy.stats import binomtest, wilcoxon
+from scipy.stats import wilcoxon
 
 HERE = Path(__file__).resolve().parent
 SUBJECT_DIR = HERE.parent / "subject" / "EEG_all_channels"
@@ -42,7 +38,6 @@ sys.path.insert(0, str(SUBJECT_DIR))
 from pipeline_config import resolve_project_root, stage_path
 
 FREQS = np.arange(2.0, 32.0, 0.5)
-BASELINE = (-0.3, -0.1)
 ATTENTION = (0.3, 0.8)
 HALF_WIDTH = 1.0
 ROI8 = ("PO3", "POz", "PO4", "O1", "Oz", "O2", "PO7", "PO8")
@@ -72,12 +67,7 @@ def arguments():
 
 
 def alpha_trials(epochs, channels, peak, n_jobs):
-    """Return both unbaselined and percent-baseline alpha per trial.
-
-    Trial-level TFR is baseline corrected per sensor/frequency first.
-    The result is then averaged over retained sensors, peak +/-1 Hz
-    frequencies, and the attention interval. Trial order is unchanged.
-    """
+    """Return unbaselined alpha power per trial in original power units."""
     tfr = epochs.copy().pick(channels).compute_tfr(
         method="multitaper", freqs=FREQS, n_cycles=FREQS / 2,
         time_bandwidth=2.0, use_fft=True, zero_mean=True,
@@ -88,20 +78,12 @@ def alpha_trials(epochs, channels, peak, n_jobs):
         tfr.freqs <= peak + HALF_WIDTH + 1e-9
     )
     times = (tfr.times >= ATTENTION[0]) & (tfr.times <= ATTENTION[1])
-    base = (tfr.times >= BASELINE[0]) & (tfr.times <= BASELINE[1])
-    if not freq.any() or not times.any() or not base.any():
-        raise ValueError("Required baseline/alpha/attention TFR bins absent")
-    baseline_power = tfr.data[..., base].mean(axis=-1)
-    if np.any(baseline_power <= 0) or not np.isfinite(baseline_power).all():
-        raise ValueError("Nonpositive or invalid baseline power")
+    if not freq.any() or not times.any():
+        raise ValueError("Required alpha/attention TFR bins absent")
     raw_values = tfr.data[:, :, freq, :][:, :, :, times].mean(axis=(1, 2, 3))
-    tfr.apply_baseline(BASELINE, mode="percent")
-    percent_values = 100.0 * tfr.data[:, :, freq, :][:, :, :, times].mean(
-        axis=(1, 2, 3)
-    )
-    if not np.isfinite(raw_values).all() or not np.isfinite(percent_values).all():
-        raise ValueError("Nonfinite alpha power")
-    return percent_values, raw_values
+    if not np.isfinite(raw_values).all() or np.any(raw_values < 0):
+        raise ValueError("Invalid absolute alpha power")
+    return raw_values
 
 
 def validated_subject(frame, subject, root, args, peak):
@@ -114,7 +96,6 @@ def validated_subject(frame, subject, root, args, peak):
     if not np.isfinite(peak) or not 8 <= peak <= 12:
         raise ValueError(f"sub-{subject}: invalid OFF-derived peak")
     periods = [list() for _ in range(4)]
-    raw_periods = [list() for _ in range(4)]
     labels = np.zeros(4, dtype=bool)
     channels_used = None
     for condition in ("no-stim", "stim"):
@@ -154,7 +135,7 @@ def validated_subject(frame, subject, root, args, peak):
         indices = condition_rows.trial_index_in_condition.to_numpy(dtype=int)
         if not np.array_equal(np.sort(indices), np.arange(len(epochs))):
             raise ValueError(f"sub-{subject}: incomplete trial-index mapping")
-        values, raw_values = alpha_trials(epochs, channels_used, peak, args.n_jobs)
+        raw_values = alpha_trials(epochs, channels_used, peak, args.n_jobs)
         for row in condition_rows.itertuples(index=False):
             idx = int(row.trial_index_in_condition)
             period = int(row.stimulation_period) - 1
@@ -166,8 +147,8 @@ def validated_subject(frame, subject, root, args, peak):
             side = str(row.stimulation_side).strip().lower()
             if is_on != (side != "off"):
                 raise ValueError(f"sub-{subject}: side/condition mismatch")
-            periods[period].append(float(values[idx]))
-            raw_periods[period].append(float(raw_values[idx]))
+            periods[period].append(float(raw_values[idx]))
+
     sides = []
     for period in range(4):
         p = rows.loc[rows.stimulation_period == period + 1]
@@ -179,8 +160,7 @@ def validated_subject(frame, subject, root, args, peak):
         raise ValueError(f"sub-{subject}: invalid stimulation sequence")
     if any(not p for p in periods):
         raise ValueError(f"sub-{subject}: empty period")
-    return ([np.asarray(p) for p in periods],
-            [np.asarray(p) for p in raw_periods], labels, peak, channels_used)
+    return [np.asarray(p) for p in periods], labels, peak, channels_used
 
 
 def condition_means(periods, labels):
@@ -206,16 +186,16 @@ def effect(periods, labels, normalized=False):
 
 def run_permutation(data, iterations, seed, normalized=False, statistic="signed"):
     """Two-sided period-label permutation with equal subject weighting."""
-    effects = np.asarray([effect(raw if normalized else percent, labels, normalized)
-                          for percent, raw, labels in data])
+    effects = np.asarray([effect(raw, labels, normalized=True)
+                          for raw, labels in data])
     aggregate = {"signed": np.mean, "squared": lambda x: np.mean(np.square(x)), "absolute": lambda x: np.mean(np.abs(x))}[statistic]
     observed = float(aggregate(effects))
     rng = np.random.default_rng(seed)
     null = np.empty(iterations)
     for index in range(iterations):
         null[index] = aggregate(np.asarray([
-            effect(raw if normalized else percent, rng.permutation(labels), normalized)
-            for percent, raw, labels in data
+            effect(raw, rng.permutation(labels), normalized=True)
+            for raw, labels in data
         ]))
     extreme = (np.abs(null) >= abs(observed)) if statistic == "signed" else (null >= observed)
     p = (1 + np.count_nonzero(extreme)) / (iterations + 1)
@@ -295,34 +275,28 @@ def main():
             raise ValueError(f"Missing peak for sub-{subject}")
     data, included, details = [], [], []
     for subject in args.subjects:
-        periods, raw_periods, labels, peak, channels = validated_subject(
+        raw_periods, labels, peak, channels = validated_subject(
             frame, subject, root, args, float(peaks[subject])
         )
-        data.append((periods, raw_periods, labels))
+        data.append((raw_periods, labels))
         included.append(subject)
-        on, off = condition_means(periods, labels)
-        details.append((subject, peak, channels, on, off, on - off))
-        print(f"sub-{subject}: ON={on:.4g}%, OFF={off:.4g}%, "
-              f"ON-OFF={on-off:.4g} percentage points")
+        on, off = condition_means(raw_periods, labels)
+        ratio = (on - off) / (on + off)
+        details.append((subject, peak, channels, on, off, ratio))
+        print(f"sub-{subject}: unbaselined ON={on:.4g}, OFF={off:.4g}, ratio={ratio:.4g}")
     effects, observed, null, p_perm = run_permutation(
         data, args.n_permutations, args.seed
     )
     _, sq_obs, sq_null, sq_p = run_permutation(data, args.n_permutations, args.seed, statistic="squared")
     _, abs_obs, abs_null, abs_p = run_permutation(data, args.n_permutations, args.seed, statistic="absolute")
-    n_positive = int(np.count_nonzero(effects > 0))
-    n_negative = int(np.count_nonzero(effects < 0))
-    n_nonzero = n_positive + n_negative
-    sign_p = (float(binomtest(n_positive, n_nonzero, 0.5).pvalue)
-              if n_nonzero else 1.0)
+    n_nonzero = int(np.count_nonzero(effects))
     if n_nonzero:
         wilcox = wilcoxon(effects, zero_method="wilcox",
                          alternative="two-sided", method="auto")
         w_stat, w_p = float(wilcox.statistic), float(wilcox.pvalue)
     else:
         w_stat, w_p = 0.0, 1.0
-    norm_effects, norm_observed, norm_null, norm_p = run_permutation(
-        data, args.n_permutations, args.seed, normalized=True
-    )
+
     loo = []
     if len(data) > 1:
         for index, subject in enumerate(included):
@@ -336,81 +310,85 @@ def main():
     figures.mkdir(parents=True, exist_ok=True)
     report_path = output / "absolute_alpha_block_permutation.pdf"
     pages = [
-        text_page("S02: subjects and analysis details", [
-            ("Included subjects (n=" + str(len(included)) + ")",
-             ", ".join("sub-" + s for s in included)),
-            ("Input", str(csv_path)),
-            ("Individual peaks CSV", str(peaks_path)),
-            ("Participant-specific alpha peaks and retained sensors",
-             "; ".join(f"sub-{s}: {peak:g} Hz, {','.join(chs)}"
-                       for s, peak, chs, _, _, _ in details)),
-            ("Outcome and baseline",
-             "ON and OFF are percent-baseline corrected (-0.3 to -0.1 s) "
-             "per trial/sensor. Their difference is in percentage points. "
-             "The normalized (ON-OFF)/(ON+OFF) sensitivity uses original "
-             "UNBASELINED TFR power, with no baseline correction. "
-             "Both use peak +/-1 Hz and 0.3-0.8 s. B03 alpha_power is not reused."),
+        text_page("S02: participants and data", [
+            ("Included participants", ", ".join("sub-" + x for x in included)),
+            ("Trial mapping", str(csv_path)),
+            ("Individual peak frequencies", str(peaks_path)),
+            ("Analysis outcome",
+             "Each participant: R=(mean raw ON power - mean raw OFF power) / "
+             "(mean raw ON power + mean raw OFF power). Power is unbaselined, "
+             "averaged over usable posterior sensors, individual OFF-derived "
+             "alpha peak +/-1 Hz, and 0.3-0.8 s. Trial mapping uses B03; "
+             "no baseline correction is used for any statistical test."),
         ]),
-        text_page("S02: tests and interpretation", [
-            ("PRIMARY: squared participant change", f"Mean squared baseline-corrected ON-OFF={sq_obs:.6g} percentage-points squared; upper-tail period permutation p={sq_p:.6g}. Sensitive to effects of either direction."),
-            ("Sensitivity: absolute participant change", f"Mean absolute baseline-corrected ON-OFF={abs_obs:.6g} percentage points; upper-tail period permutation p={abs_p:.6g}."),
-            ("Secondary signed-mean permutation",
-             f"Two-sided, {args.n_permutations:,} permutations, seed {args.seed}; "
-             f"group mean ON-OFF = {observed:.5g} percentage points; p={p_perm:.6g}. "
-             "Each subject contributes equally; trials stay attached to one "
-             "of four verified stimulation periods; exactly two are ON."),
-            ("Exact sign test",
-             f"Positive={n_positive}, negative={n_negative}, ties="
-             f"{len(effects)-n_nonzero}; two-sided binomial p={sign_p:.6g}."),
-            ("Paired Wilcoxon signed-rank test",
+        text_page("S02: statistics", [
+            ("PRIMARY: squared normalized ratio",
+             f"Mean R squared={sq_obs:.6g}; upper-tail whole-period "
+             f"permutation p={sq_p:.6g}."),
+            ("Sensitivity: absolute normalized ratio",
+             f"Mean absolute R={abs_obs:.6g}; upper-tail permutation "
+             f"p={abs_p:.6g}."),
+            ("Secondary: signed normalized ratio",
+             f"Mean R={observed:.6g}; two-sided whole-period permutation "
+             f"p={p_perm:.6g}."),
+            ("Paired Wilcoxon signed-rank on participant ratios",
              f"W={w_stat:.6g}; two-sided p={w_p:.6g}. "
-             "Signed-rank is used instead of rank-sum because ON and OFF "
-             "measurements are paired within participant."),
-            ("Sensitivity: unbaselined normalized effect",
-             f"Mean (raw ON-raw OFF)/(raw ON+raw OFF)={norm_observed:.5g}; "
-             f"two-sided period permutation p={norm_p:.6g}. "
-             "Both numerator and denominator use ORIGINAL, UNBASELINED "
-             "absolute power. No percent-baseline values enter this ratio."),
-            ("Interpretation",
-             "These tests address participant-level cue-related alpha change. "
-             "Permutation inference assumes stimulation-period exchangeability; "
-             "order and carryover are not modelled. Sign and signed-rank "
-             "tests are complementary paired analyses, not independent replications."),
+             "The signed-rank test detects a common signed shift, "
+             "not heterogeneous magnitude."),
+            ("Leave-one-out",
+             "Repeat the PRIMARY squared-ratio permutation after omitting "
+             "each participant. Results are tabulated below."),
+            ("Assumptions",
+             "Four stimulation periods per participant, two ON and two OFF. "
+             "Whole-period label permutations assume exchangeability and "
+             "do not model carryover or order effects."),
         ]),
     ]
     for start in range(0, len(details), 14):
         batch = details[start:start + 14]
         pages.append(text_page("Participant effects", [
-            (f"sub-{s}", f"OFF={off:.4g}%, ON={on:.4g}%, "
-             f"ON-OFF={diff:.4g} percentage points; peak={peak:g} Hz")
+            (f"sub-{s}", f"Raw OFF={off:.4g}, raw ON={on:.4g}, "
+             f"(ON-OFF)/(ON+OFF)={diff:.4g}; peak={peak:g} Hz")
             for s, peak, _, on, off, diff in batch
         ]))
-    primary_fig = distribution_page(sq_null, sq_obs, sq_p, "Mean squared ON-OFF (pp squared)", two_sided=False,
-        explanation="PRIMARY TEST: Each participant contributes squared baseline-corrected ON-OFF. Increases and decreases cannot cancel. Blue bars are whole-period permutations, red is the observed statistic, and the dashed line is the upper 5% null cutoff. A red line beyond it indicates an unusually large effect under the null. Squaring emphasizes large individual effects.")
-    absolute_fig = distribution_page(abs_null, abs_obs, abs_p, "Mean absolute ON-OFF (pp)", two_sided=False,
-        explanation="SENSITIVITY TEST: Absolute baseline-corrected ON-OFF differences detect either direction, but weight extreme participants less than the squared statistic. Blue bars show the whole-period permutation null, red is the observed value, and dashed is the upper 5% cutoff. Compare with the primary squared-effect p-value.")
-    signed_fig = distribution_page(null, observed, p_perm, "Signed ON-OFF (pp)",
-        explanation="SECONDARY TEST: Signed participant differences are averaged, so increases and decreases may cancel. Blue bars show whole-period permutation statistics, red is the observed signed mean, and dashed lines indicate the two-sided 5% null cutoff.")
-    normalized_fig = distribution_page(
-        norm_null, norm_observed, norm_p, "Unbaselined (ON-OFF)/(ON+OFF)",
-        explanation="SEPARATE RATIO SENSITIVITY: Both ON and OFF are original unbaselined alpha power. The ratio is never baseline corrected. Blue bars show the period-permutation null, red is observed, and dashed lines mark the two-sided 5% cutoff."
+    primary_fig = distribution_page(
+        sq_null, sq_obs, sq_p, "Mean squared normalized ratio",
+        two_sided=False,
+        explanation="PRIMARY: Participant ratios use only unbaselined "
+        "ON and OFF power. Squaring captures effects of either sign. "
+        "Blue: period-label permutation null; red: observed statistic; "
+        "dashed: upper 5% null threshold.",
     )
-    for name, fig in (("baseline_percent_squared_primary", primary_fig),
-                      ("baseline_percent_absolute_sensitivity", absolute_fig),
-                      ("baseline_percent_signed_secondary", signed_fig),
-                      ("normalized_sensitivity_permutation", normalized_fig)):
-        for extension in ("svg", "tiff"):
-            fig.savefig(figures / f"{name}.{extension}",
+    absolute_fig = distribution_page(
+        abs_null, abs_obs, abs_p, "Mean absolute normalized ratio",
+        two_sided=False,
+        explanation="SENSITIVITY: Absolute participant ratios retain "
+        "either-direction effects, with less emphasis on outliers than "
+        "squaring. Blue: null; red: observed; dashed: upper 5% threshold.",
+    )
+    signed_fig = distribution_page(
+        null, observed, p_perm, "Mean signed normalized ratio",
+        explanation="SECONDARY: Participant ratios retain their signs, "
+        "so opposite directions may cancel. Blue: permutation null; "
+        "red: observed; dashed: two-sided 5% null thresholds.",
+    )
+    for name, fig in (
+        ("unbaselined_ratio_squared_primary", primary_fig),
+        ("unbaselined_ratio_absolute_sensitivity", absolute_fig),
+        ("unbaselined_ratio_signed_secondary", signed_fig),
+    ):
+        for ext in ("svg", "tiff"):
+            fig.savefig(figures / f"{name}.{ext}",
                         dpi=600, bbox_inches="tight")
     loo_figures = []
     for start in range(0, len(loo), 16):
         fig, ax = plt.subplots(figsize=(11, 8))
         ax.axis("off")
-        ax.set_title("Leave-one-out: squared baseline-corrected ON - OFF")
+        ax.set_title("Leave-one-out: squared unbaselined normalized ratio")
         table = ax.table(
             cellText=[[f"sub-{sub}", f"{stat:.5f}", f"{p:.5g}"]
                       for sub, stat, p in loo[start:start + 16]],
-            colLabels=["Omitted subject", "Mean squared difference (pp squared)",
+            colLabels=["Omitted subject", "Mean squared ratio",
                        "Two-sided permutation p"],
             colWidths=[0.22, 0.48, 0.30],
             loc="center", cellLoc="center",
@@ -422,17 +400,16 @@ def main():
 
     paired_fig, axes = plt.subplots(1, 2, figsize=(12, 5),
                                    constrained_layout=True)
-    axes[0].bar(["Negative", "Zero", "Positive"],
-                [n_negative, len(effects) - n_nonzero, n_positive])
-    axes[0].set(title=f"Sign test, two-sided p={sign_p:.5g}",
-                ylabel="Number of participants")
+    axes[0].hist(effects, bins=min(12, max(3, len(effects))))
+    axes[0].axvline(0, color="black", linestyle="--")
+    axes[0].set(title="Individual normalized ON-OFF ratios", ylabel="Participants")
     axes[1].axhline(0, color="black", linestyle="--")
     order = np.argsort(np.abs(effects))
     axes[1].scatter(np.arange(1, len(effects) + 1), effects[order])
     axes[1].set(
-        title=f"Wilcoxon signed-rank, W={w_stat:g}, p={w_p:.5g}",
+        title=f"Wilcoxon signed-rank on ratios, W={w_stat:g}, p={w_p:.5g}",
         xlabel="Participants sorted by absolute effect",
-        ylabel="Baseline-corrected ON - OFF (percentage points)",
+        ylabel="Unbaselined (ON - OFF)/(ON + OFF)",
     )
     for ext in ("svg", "tiff"):
         paired_fig.savefig(figures / f"paired_sign_wilcoxon.{ext}",
@@ -447,8 +424,7 @@ def main():
         plt.close(absolute_fig)
         pdf.savefig(signed_fig)
         plt.close(signed_fig)
-        pdf.savefig(normalized_fig)
-        plt.close(normalized_fig)
+
         pdf.savefig(paired_fig)
         plt.close(paired_fig)
         for fig in loo_figures:
@@ -457,8 +433,8 @@ def main():
         for page in pages[2:]:
             pdf.savefig(page)
             plt.close(page)
-    print(f"Squared primary p={sq_p:.6g}; absolute sensitivity p={abs_p:.6g}; "
-          f"Signed permutation p={p_perm:.6g}; sign p={sign_p:.6g}; "
+    print(f"Squared ratio primary p={sq_p:.6g}; absolute ratio sensitivity p={abs_p:.6g}; "
+          f"Signed permutation p={p_perm:.6g}; "
           f"Wilcoxon signed-rank p={w_p:.6g}; sensitivity p={norm_p:.6g}")
     print(f"Report: {report_path}")
 
