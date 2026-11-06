@@ -3,6 +3,9 @@
 
 Import the G01 grand-average pipeline and add compact scalp-layout
 and posterior-channel plots without changing numerical contrasts.
+The plotted stimulation-minus-no-stimulation TFR is a difference in
+condition-wise baseline-percent power (percentage points); the normalized
+ratio and absolute-power QC remain unbaselined.
 Use --subjects and --platform. Each participant must have completed
 posterior-channel and all-channel preprocessing.
 

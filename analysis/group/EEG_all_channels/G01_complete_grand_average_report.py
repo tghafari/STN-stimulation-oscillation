@@ -6,8 +6,10 @@ Read final cleaned all-channel cue epochs for every selected subject.
 For each good EEG sensor, compute a subject-level ERP (30-Hz low-pass,
 baseline -0.1 to 0 s) and multitaper TFR (2-31.5 Hz, 0.5-Hz steps,
 n_cycles=f/2, time-bandwidth=2, decim=2). Display stim/no-stim TFR
-with percent baseline (-0.3 to -0.1 s). Calculate stimulation minus
-no-stimulation difference and normalized ratio from unbaselined power.
+with percent baseline (-0.3 to -0.1 s). Calculate stimulation minus no-stimulation absolute power difference and
+normalized ratio from unbaselined power. Display the difference of the
+condition-wise percent-baseline-corrected powers (percentage points), while
+keeping the normalized ratio unbaselined.
 Grand-average subjects independently per sensor, excluding missing/bad
 channels, and save PDF figures, channel counts and analysis JSON.
 
@@ -248,7 +250,7 @@ def main():
         "\n".join(f"{ch} (n={len(by[ch])}): {', '.join(by[ch])}" for ch in chs),
         "Overview",
     )
-    logic = "Power is computed separately for Stim and No-stim for every participant/sensor. Difference and Ratio are then computed for that participant/sensor from ORIGINAL UNBASELINED power. Participants are averaged independently per sensor. Only as the final step are sensor-level group contrasts averaged over ROI3 or ROI8. Difference baseline: NONE. Ratio baseline: NONE. Percent baseline -0.3 to -0.1 s applies ONLY to descriptive Stim and No-stim plots."
+    logic = "Power is computed separately for Stim and No-stim for every participant/sensor. Difference and Ratio are then computed for that participant/sensor from ORIGINAL UNBASELINED power. Participants are averaged independently per sensor. For ROI TFRs, average good sensors within each participant before averaging participants equally. Plotted difference: Stim percent-baseline power minus No-stim percent-baseline power (percentage points), each normalized to -0.3 to -0.1 s at participant/sensor level. Absolute difference QC and normalized ratio retain ORIGINAL UNBASELINED power. Ratio baseline: NONE."
     report.add_text("Final analysis logic", logic, "Overview")
     # ERP ROI summaries retained; ERP baseline is independent of TFR contrasts.
     erp = {c: {} for c in CONDITIONS}
@@ -308,7 +310,14 @@ def main():
             ratio(tfr[sub]["stim"][ch].data[0], tfr[sub]["no-stim"][ch].data[0])
             for sub in eligible
         ]
-        diff[ch] = (np.mean(d, 0), eligible)
+        # Difference of condition-wise baseline-normalized powers. Do not
+        # normalize the raw difference by its own potentially near-zero baseline.
+        baseline_d = [
+            baseline_percent(tfr[sub]["stim"][ch])
+            - baseline_percent(tfr[sub]["no-stim"][ch])
+            for sub in eligible
+        ]
+        diff[ch] = (np.mean(baseline_d, 0), eligible)
         rat[ch] = (np.mean(r, 0), eligible)
         per_subject = {}
         for sub, di, ra in zip(eligible, d, r):
@@ -350,7 +359,7 @@ def main():
     results = [
         ("no-stim", "No stimulation", display["no-stim"], True),
         ("stim", "Stimulation", display["stim"], True),
-        ("difference", "Stimulation - no stimulation", diff, False),
+        ("difference", "Stimulation - no stimulation", diff, True),
         (
             "ratio",
             "(Stimulation - no stimulation)/(Stimulation + no stimulation)",
@@ -358,13 +367,49 @@ def main():
             False,
         ),
     ]
+    # ROI TFRs: first average available good sensors within each participant,
+    # then average participant-level ROI values with equal participant weight.
+    # Scalp plots retain their independent per-sensor group averages.
+    def participant_roi(key, channels):
+        participant_values = []
+        participants = []
+        channel_membership = {}
+        for sub in subs:
+            available = [ch for ch in channels if ch in good[sub]]
+            if not available:
+                continue
+            if key == "stim" or key == "no-stim":
+                arrays = [baseline_percent(tfr[sub][key][ch]) for ch in available]
+            elif key == "difference":
+                arrays = [
+                    baseline_percent(tfr[sub]["stim"][ch])
+                    - baseline_percent(tfr[sub]["no-stim"][ch])
+                    for ch in available
+                ]
+            else:
+                arrays = [
+                    ratio(tfr[sub]["stim"][ch].data[0],
+                          tfr[sub]["no-stim"][ch].data[0])
+                    for ch in available
+                ]
+            participant_values.append(np.mean(arrays, axis=0))
+            participants.append(sub)
+            channel_membership["sub-" + sub] = available
+        if not participant_values:
+            return None, participants, channel_membership
+        return np.mean(participant_values, axis=0), participants, channel_membership
+
     for key, title, d, bl in results:
         data = {c: (x[0], times) for c, x in d.items()}
         v = scale([x[0] for x in d.values()])
         detail = (
-            "Percent baseline -0.3 to -0.1 s; descriptive condition only."
+            ("Percent baseline -0.3 to -0.1 s; condition-wise percent power change. "
+             "Difference is Stim percent change minus No-stim percent change "
+             "(percentage points), calculated per participant/sensor."
+             if key == "difference" else
+             "Percent baseline -0.3 to -0.1 s; descriptive condition only.")
             if bl
-            else "NO BASELINE CORRECTION. Contrast formed from raw participant/sensor power before participant averaging."
+            else "NO BASELINE CORRECTION. Normalized ratio formed from raw participant/sensor power before participant averaging."
         )
         report.add_text("Analysis details", detail, "TFR - " + title)
         report.add_figure(
@@ -376,28 +421,37 @@ def main():
             "TFR - " + title,
         )
         for R, name, n in ((ROI3, "PO3/POz/PO4", 3), (ROI8, "8 posterior channels", 8)):
-            x, av = roi(d, R)
+            x, participants, membership = participant_roi(key, R)
             if x is not None:
                 report.add_figure(
                     roi_fig(x, times, title + " mean " + name, scale([x])),
                     str(figs / f"TFR_{key}_mean{n}.png"),
                     title + " mean " + name,
-                    "LAST STEP: mean of channel-level group results across "
-                    + ", ".join(av)
-                    + ". "
+                    "First average available good ROI sensors within each "
+                    "participant, then average participants equally "
+                    f"(n={len(participants)}). "
                     + detail,
                     "TFR - " + title,
                 )
-    manuscript = f"Cue-locked TFR power was estimated separately for each participant and retained EEG sensor in stimulation and no-stimulation conditions. For each participant and sensor, the absolute difference P_stim-P_no-stim and normalized difference (P_stim-P_no-stim)/(P_stim+P_no-stim) were calculated directly from original unbaselined power. Participant-level sensor contrasts were then averaged across eligible participants independently for each sensor. Posterior ROI summaries were calculated only after sensor-level group averaging, across PO3, POz and PO4 (ROI3) or PO3, POz, PO4, O1, Oz, O2, PO7 and PO8 (ROI8). No baseline correction was applied to either difference or ratio. Percent baseline correction from -0.3 to -0.1 s was used only for descriptive Stim and No-stim plots."
+                report.add_text(
+                    "ROI participant/channel inclusion: " + title + " " + name,
+                    "\\n".join(
+                        f"sub-{sub}: {', '.join(membership['sub-' + sub])}"
+                        for sub in participants
+                    ),
+                    "TFR - " + title,
+                )
+    manuscript = f"Cue-locked TFR power was estimated separately for each participant and retained EEG sensor in stimulation and no-stimulation conditions. For each participant and sensor, the absolute difference P_stim-P_no-stim and normalized difference (P_stim-P_no-stim)/(P_stim+P_no-stim) were calculated directly from original unbaselined power. Participant-level sensor contrasts were then averaged across eligible participants independently for each sensor. Posterior ROI TFR summaries first average available good sensors within each participant, then average the participant ROI results equally, across PO3, POz and PO4 (ROI3) or PO3, POz, PO4, O1, Oz, O2, PO7 and PO8 (ROI8). Individual-sensor scalp TFRs continue to average participants independently per sensor. For display, Stim and No-stim power were separately percent-baseline corrected over -0.3 to -0.1 s at participant/sensor level, and the displayed difference was Stim percent change minus No-stim percent change (percentage points). The normalized ratio and absolute-power QC remained unbaselined."
     report.add_text("Analysis report - manuscript style", manuscript, "Analysis")
     (deriv / f"{rid}_analysis.json").write_text(
         json.dumps(
             {
                 "subjects": subs,
                 "subjects_by_channel": by,
-                "contrast_order": "raw power participant/sensor -> contrast participant/sensor -> mean participants/sensor -> mean sensors",
-                "difference_baseline": "none",
+                "contrast_order": "TFR scalp: participant/sensor baseline or contrast -> mean participants per sensor; TFR ROI: participant/sensor baseline or contrast -> mean available sensors per participant -> mean participants equally",
+                "difference_baseline": "stim percent change minus no-stim percent change, each relative to -0.3 to -0.1 s (percentage points)",
                 "ratio_baseline": "none",
+                "absolute_difference_qc_baseline": "none",
                 "stim_nostim_baseline": "percent -0.3 to -0.1 s",
                 "absolute_alpha_power_checks": absolute_checks,
             },
