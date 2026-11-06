@@ -548,14 +548,23 @@ def build_peak_aligned_report(
         "Peak-aligned TFR methods",
     )
 
+    # Record each participant's exact CSV peak prominently in the PDF.
+    # Use actual newline characters, not literal backslash-n sequences.
+    peak_lines = [
+        f"sub-{subject}: {peaks[subject]:g} Hz"
+        for subject in subjects
+    ]
     peak_report.add_text(
-        "Individual alpha peaks (read from CSV)",
-        "Source: " + str(peak_csv_path) + "\\n"
-        + "\\n".join(
-            f"sub-{subject}: {peaks[subject]:g} Hz"
-            for subject in subjects
+        "Individual alpha peaks used for frequency alignment",
+        (
+            "The following frequencies were read from the Q01 CSV "
+            "without rounding. Each participant's listed peak is "
+            "aligned to 0 Hz on the relative-frequency axis.\n\n"
+            + "\n".join(peak_lines)
+            + "\n\nCSV source: "
+            + str(peak_csv_path)
         ),
-        "Peak-aligned TFR",
+        "Peak-aligned TFR methods",
     )
 
     aligned = {
