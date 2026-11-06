@@ -98,6 +98,6 @@ Each participant's frequency axis is shifted to `frequency - individual alpha pe
 - Difference: stim percent-baseline change minus no-stim percent-baseline change (percentage points).
 - Ratio: (stim - no-stim) / (stim + no-stim), calculated from original unbaselined power.
 
-The additional report is named `complete_grand_average_<subjects>_peak_aligned.pdf`. Its figures are saved in the report's `figures/peak_aligned/` folder and its peak estimates, interpolation grid, and channel membership are recorded in a companion JSON file under the all-channel group derivatives folder.
+The additional report is named `sub-complete_grand_average_<subjects>_peak_aligned_analysis_report.pdf`. Its figures are saved in the report's `figures/peak_aligned/` folder and its peak estimates, interpolation grid, and channel membership are recorded in a companion JSON file under the all-channel group derivatives folder.
 
 This peak is an OFF-derived maximum-power estimate, not an aperiodic-corrected oscillatory peak. It is restricted to the 8-12 Hz range and should be interpreted as the operational individual alpha frequency used for alignment.
