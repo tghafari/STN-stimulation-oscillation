@@ -1,11 +1,11 @@
 #!/usr/bin/env python
-"""Individual-alpha-peak-based ON-minus-OFF cluster statistics.
+"""Individual-alpha-peak-based normalised alpha cluster statistics.
 
-Recompute G02-style trial-averaged TFRs from cleaned cue epochs, selecting
-each participant's OFF-derived alpha peak +/- 1 Hz from the individual peak
-CSV. Percent-baseline correct ON and OFF separately (-0.3 to -0.1 s).
-Test their paired difference against ZERO over 0.3-0.8 s with two-sided
-temporal cluster permutation tests for sensors, ROI3 and ROI8.
+Recompute unbaselined trial-averaged TFRs from cleaned cue epochs and
+select each participant's OFF-derived alpha peak +/- 1 Hz. For each
+participant, sensor or ROI, compute (ON - OFF) / (ON + OFF) using
+unbaselined linear alpha power. Test the normalised difference against
+zero over 0.3-0.8 s using two-sided temporal cluster permutations.
 
 Also perform a whole 0.3-0.8 s mean one-sample t-test against zero for
 each ROI. Results are descriptive/inferential at the participant level;
@@ -93,28 +93,51 @@ def good(x):
 
 
 def alpha(ep, chs, a, peak):
-    t = (
-        ep.copy()
-        .pick(chs)
-        .compute_tfr(
-            method="multitaper",
-            freqs=FREQS,
-            n_cycles=N_CYCLES,
-            time_bandwidth=TIME_BANDWIDTH,
-            use_fft=True,
-            zero_mean=True,
-            return_itc=False,
-            average=True,
-            decim=DECIM,
-            n_jobs=a.n_jobs,
-            verbose=False,
-        )
+    """Return trial-averaged, unbaselined alpha power in linear units.
+
+    Average the selected frequencies within each participant's OFF-derived
+    alpha peak +/- the configured half-width. The returned array has
+    dimensions sensors x time, restricted to the attention interval.
+    """
+    tfr = ep.copy().pick(chs).compute_tfr(
+        method="multitaper",
+        freqs=FREQS,
+        n_cycles=N_CYCLES,
+        time_bandwidth=TIME_BANDWIDTH,
+        use_fft=True,
+        zero_mean=True,
+        return_itc=False,
+        average=True,
+        decim=DECIM,
+        n_jobs=a.n_jobs,
+        verbose=False,
     )
-    lo, hi = (peak - a.peak_half_width, peak + a.peak_half_width)
-    fi = (t.freqs >= lo - 1e-9) & (t.freqs <= hi + 1e-9)
-    ti = (t.times >= WINDOW[0]) & (t.times <= WINDOW[1])
-    t.apply_baseline(BASELINE, mode='percent')
-    return 100.0 * t.data[:, fi][:, :, ti].mean(1), t.times[ti], t.info
+    selected = (
+        (tfr.freqs >= peak - a.peak_half_width - 1e-9)
+        & (tfr.freqs <= peak + a.peak_half_width + 1e-9)
+    )
+    window = (
+        (tfr.times >= WINDOW[0]) & (tfr.times <= WINDOW[1])
+    )
+    if not selected.any() or not window.any():
+        raise ValueError("Missing alpha-frequency or attention time bins.")
+    return (
+        tfr.data[:, selected, :][:, :, window].mean(axis=1),
+        tfr.times[window],
+        tfr.info,
+    )
+
+
+def normalised_difference(on, off):
+    """Compute (ON - OFF) / (ON + OFF) from unbaselined power.
+
+    The denominator is recalculated for every participant, sensor and
+    time sample. Invalid or non-positive sums are rejected, not clipped.
+    """
+    denominator = on + off
+    if not np.isfinite(denominator).all() or np.any(denominator <= 0):
+        raise ValueError("Invalid ON + OFF alpha power denominator.")
+    return (on - off) / denominator
 
 
 def one_d(X, seed):
@@ -214,7 +237,7 @@ def sensor_plot(st, no, t, ch, rows):
         t,
         rows,
         f"{ch}: alpha power, stimulation vs no stimulation",
-        "Baseline-corrected alpha power (% change)",
+        "Unbaselined alpha power (V squared)",
     )
 
 
@@ -228,7 +251,7 @@ def participant_difference_traces(diff, t, subjects, title):
     ax.fill_between(t, mean - sem, mean + sem, color="k", alpha=0.12)
     ax.axhline(0, color="k", linewidth=0.8, linestyle=":")
     ax.set_xlabel("Time (s)")
-    ax.set_ylabel("Stim - no-stim alpha (percentage points)")
+    ax.set_ylabel("Normalised (ON - OFF) / (ON + OFF)")
     ax.set_title(title)
     ax.legend(ncol=4, fontsize=7)
     return fig
@@ -246,7 +269,9 @@ def participant_window_effects(diff, subjects, title, t_stat, p_value):
     )
     ax.set_xticks(x)
     ax.set_xticklabels([f"sub-{z}" for z in subjects], rotation=60, ha="right")
-    ax.set_ylabel(f"ON - OFF alpha (percentage points), {WINDOW[0]:g}-{WINDOW[1]:g} s")
+    ax.set_ylabel(
+        f"Normalised ON - OFF, {WINDOW[0]:g}-{WINDOW[1]:g} s"
+    )
     ax.set_title(f'{title} | t={t_stat:.3f}, p={p_value:.4g}')
     ax.legend()
     return fig, values
@@ -257,12 +282,12 @@ def roi_difference_plot(diff, times, significant, title):
     fig, ax = plt.subplots(figsize=(10, 5), constrained_layout=True)
     mean = diff.mean(axis=0)
     sem = diff.std(axis=0, ddof=1) / np.sqrt(len(diff))
-    ax.plot(times, mean, label="Mean ON - OFF", color="tab:purple")
+    ax.plot(times, mean, label="Mean normalised ON - OFF", color="tab:purple")
     ax.fill_between(times, mean - sem, mean + sem,
                     color="tab:purple", alpha=0.2, label="SEM")
     ax.axhline(0, color="black", linestyle="--", linewidth=0.8)
     ax.set(xlim=WINDOW, xlabel="Time from cue (s)",
-           ylabel="ON - OFF (percentage points)", title=title)
+           ylabel="Normalised (ON - OFF) / (ON + OFF)", title=title)
     mark_significant_clusters(ax, significant, times)
     ax.legend()
     return fig
@@ -403,9 +428,12 @@ def main():
         f"Peak file: {peaks_path}. Peak +/-{a.peak_half_width:g} Hz per subject. "
         "G02-compatible multitaper TFR: 2-31.5 Hz in 0.5-Hz steps, "
         "cycles=f/2, bandwidth=2, decimation=2, trial-averaged power. "
-        "For EACH participant/sensor/frequency, Stim ON and OFF power are "
-        "separately percent-baseline corrected (-0.3 to -0.1 s). "
-        "ON-percent minus OFF-percent (percentage points) is then tested "
+        "For each participant and sensor, ON and OFF linear power "
+        "is averaged within the individual alpha band without "
+        "baseline correction. Calculate (ON - OFF) / (ON + OFF) "
+        "at each time point. For ROIs, average sensors within each "
+        "participant and condition BEFORE calculating the ratio. "
+        "The resulting dimensionless time course is tested "
         "against zero during 0.3-0.8 s. Two-sided temporal cluster "
         "permutation alpha=0.05 with forming alpha=0.10. "
         "ROI means average sensors within participants first."
@@ -443,10 +471,11 @@ def main():
         f"sub-{sub}: {peaks[sub]:.2f} Hz" for sub in subs), section)
     methods = (
         "Alpha power was measured using participant-specific OFF-derived "
-        "peak frequencies +/-1 Hz. Each cleaned participant-condition TFR "
-        "was separately baseline-corrected in percent mode over "
-        "-0.3 to -0.1 seconds. Differences in percentage points "
-        "(ON minus OFF) were tested against zero during 0.3-0.8 seconds "
+        "peak frequencies +/-1 Hz. Unbaselined linear power was "
+        "averaged over alpha frequencies and, for ROI analyses, "
+        "over good sensors within participant and condition. "
+        "The dimensionless ratio (ON - OFF) / (ON + OFF) "
+        "was tested against zero during 0.3-0.8 seconds "
         "with two-sided one-sample temporal cluster permutations. "
         "Posterior ROI sensors were averaged within participants before "
         "testing; a whole-window one-sample t-test additionally tested "
@@ -485,7 +514,7 @@ def main():
         ch_no = np.asarray(ch_no)
         ch_thresh = cluster_threshold(len(ch_subs))
         Ts, cs, ps, _ = permutation_cluster_1samp_test(
-            ch_st - ch_no,
+            normalised_difference(ch_st, ch_no),
             n_permutations="all",
             threshold=ch_thresh,
             tail=0,
@@ -604,10 +633,13 @@ def main():
             f"{ch}: significant cluster details", details, section
         )
         report.add_figure(
-            sensor_plot(np.asarray(st), np.asarray(no), ct, ch, rows),
+            roi_difference_plot(
+                normalised_difference(np.asarray(st), np.asarray(no)),
+                ct, rows, f"{ch}: normalised ON - OFF",
+            ),
             str(figs / f"sensor_{ch}_significant_clusters.png"),
             f"{ch}: single-sensor alpha cluster(s)",
-            f"Sensor-specific N={len(ch_subs)}. Thick black bars at the bottom mark significant cluster samples; a single-point bar does not imply a sustained interval. Across-sensor FDR is not implied.",
+            f"Sensor-specific N={len(ch_subs)}. Plot shows the dimensionless normalised ON-minus-OFF effect. Black bars mark significant cluster samples. Across-sensor FDR is not implied.",
             section,
         )
     # ROI analyses use ROI-specific samples with at least one good ROI channel.
@@ -644,7 +676,7 @@ def main():
             roi_no.append(no_sub.mean(0))
         st = np.asarray(roi_st)
         no = np.asarray(roi_no)
-        roi_diff = st - no
+        roi_diff = normalised_difference(st, no)
         window_means = roi_diff.mean(axis=1)
         test = stats.ttest_1samp(window_means, popmean=0.0)
         window_t, window_p = float(test.statistic), float(test.pvalue)
@@ -701,7 +733,7 @@ def main():
         report.add_text(label + " results", text, section)
         tag = "ROI8" if requested == ROI8 else "ROI3"
         report.add_figure(
-            roi_plot(st, no, rt, rows, label, "Power change from baseline (%)"),
+            roi_plot(st, no, rt, rows, label, "Unbaselined alpha power (V squared)"),
             str(figs / f"{tag}_alpha_clusters.png"),
             label + ": stimulation vs no stimulation",
             f"ROI sample N={len(roi_subs)}. Available good ROI channels are averaged within each participant. Lines are group means; ribbons are SEM. Thick black bars at the bottom mark significant cluster samples.",
@@ -713,9 +745,8 @@ def main():
             ),
             str(figs / f"{tag}_ON_minus_OFF_cluster_timecourse.png"),
             label + ": ON - OFF difference and significant clusters",
-            "Mean and SEM of participant-level differences. Shading marks "
-            "significant cluster-corrected intervals; no shading indicates "
-            "no significant cluster.",
+            "Mean and SEM of participant-level normalised differences. "
+            "Thick black bars mark significant cluster samples.",
             section,
         )
         report.add_figure(
@@ -755,8 +786,8 @@ def main():
         "peak_half_width_hz": a.peak_half_width,
         "window_s": WINDOW,
         "minimum_reported_cluster_duration_ms": a.min_cluster_ms,
-        "baseline_s": BASELINE,
-        "contrast_power": "stim percent minus no-stim percent, percentage points",
+        "baseline_s": None,
+        "contrast_power": "(stim - no-stim) / (stim + no-stim), unbaselined linear power, dimensionless",
         "cluster_forming_alpha_two_sided": CLUSTER_FORMING_ALPHA,
         "cluster_forming_alpha_each_tail": CLUSTER_FORMING_ALPHA / 2,
         "cluster_level_significance": PTHRESH,
