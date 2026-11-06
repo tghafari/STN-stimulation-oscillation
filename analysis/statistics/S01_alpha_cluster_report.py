@@ -230,6 +230,22 @@ def participant_window_effects(diff, subjects, title, t_stat, p_value):
     return fig, values
 
 
+def roi_difference_plot(diff, times, significant, title):
+    """Group difference with SEM and significant temporal clusters."""
+    fig, ax = plt.subplots(figsize=(10, 5), constrained_layout=True)
+    mean = diff.mean(axis=0)
+    sem = diff.std(axis=0, ddof=1) / np.sqrt(len(diff))
+    ax.plot(times, mean, label="Mean ON - OFF", color="tab:purple")
+    ax.fill_between(times, mean - sem, mean + sem,
+                    color="tab:purple", alpha=0.2, label="SEM")
+    ax.axhline(0, color="black", linestyle="--", linewidth=0.8)
+    ax.set(xlim=WINDOW, xlabel="Time from cue (s)",
+           ylabel="ON - OFF (percentage points)", title=title)
+    shade(ax, significant)
+    ax.legend()
+    return fig
+
+
 def cluster_threshold(n):
     return float(stats.t.ppf(1 - CLUSTER_FORMING_ALPHA / 2, n - 1))
 
@@ -623,10 +639,21 @@ def main():
         report.add_text(label + " results", text, section)
         tag = "ROI8" if requested == ROI8 else "ROI3"
         report.add_figure(
-            roi_plot(st, no, rt, rows, label, "Alpha power"),
+            roi_plot(st, no, rt, rows, label, "Power change from baseline (%)"),
             str(figs / f"{tag}_alpha_clusters.png"),
             label + ": stimulation vs no stimulation",
             f"ROI sample N={len(roi_subs)}. Available good ROI channels are averaged within each participant. Lines are group means; ribbons are SEM. Gray vertical bands mark significant cluster-permutation intervals and are labelled with cluster p-value and time range.",
+            section,
+        )
+        report.add_figure(
+            roi_difference_plot(
+                roi_diff, rt, rows, label + ": ON - OFF time course"
+            ),
+            str(figs / f"{tag}_ON_minus_OFF_cluster_timecourse.png"),
+            label + ": ON - OFF difference and significant clusters",
+            "Mean and SEM of participant-level differences. Shading marks "
+            "significant cluster-corrected intervals; no shading indicates "
+            "no significant cluster.",
             section,
         )
         report.add_figure(
