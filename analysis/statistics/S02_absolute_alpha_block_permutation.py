@@ -34,7 +34,7 @@ import mne
 import numpy as np
 import pandas as pd
 from matplotlib.backends.backend_pdf import PdfPages
-from scipy.stats import binomtest, wilcoxon
+from scipy.stats import wilcoxon
 
 HERE = Path(__file__).resolve().parent
 SUBJECT_DIR = HERE.parent / "subject" / "EEG_all_channels"
@@ -206,16 +206,16 @@ def effect(periods, labels, normalized=False):
 
 def run_permutation(data, iterations, seed, normalized=False, statistic="signed"):
     """Two-sided period-label permutation with equal subject weighting."""
-    effects = np.asarray([effect(raw if normalized else percent, labels, normalized)
-                          for percent, raw, labels in data])
+    effects = np.asarray([effect(raw, labels, normalized=True)
+                          for _, raw, labels in data])
     aggregate = {"signed": np.mean, "squared": lambda x: np.mean(np.square(x)), "absolute": lambda x: np.mean(np.abs(x))}[statistic]
     observed = float(aggregate(effects))
     rng = np.random.default_rng(seed)
     null = np.empty(iterations)
     for index in range(iterations):
         null[index] = aggregate(np.asarray([
-            effect(raw if normalized else percent, rng.permutation(labels), normalized)
-            for percent, raw, labels in data
+            effect(raw, rng.permutation(labels), normalized=True)
+            for _, raw, labels in data
         ]))
     extreme = (np.abs(null) >= abs(observed)) if statistic == "signed" else (null >= observed)
     p = (1 + np.count_nonzero(extreme)) / (iterations + 1)
@@ -309,20 +309,14 @@ def main():
     )
     _, sq_obs, sq_null, sq_p = run_permutation(data, args.n_permutations, args.seed, statistic="squared")
     _, abs_obs, abs_null, abs_p = run_permutation(data, args.n_permutations, args.seed, statistic="absolute")
-    n_positive = int(np.count_nonzero(effects > 0))
-    n_negative = int(np.count_nonzero(effects < 0))
-    n_nonzero = n_positive + n_negative
-    sign_p = (float(binomtest(n_positive, n_nonzero, 0.5).pvalue)
-              if n_nonzero else 1.0)
+    n_nonzero = int(np.count_nonzero(effects))
     if n_nonzero:
         wilcox = wilcoxon(effects, zero_method="wilcox",
                          alternative="two-sided", method="auto")
         w_stat, w_p = float(wilcox.statistic), float(wilcox.pvalue)
     else:
         w_stat, w_p = 0.0, 1.0
-    norm_effects, norm_observed, norm_null, norm_p = run_permutation(
-        data, args.n_permutations, args.seed, normalized=True
-    )
+
     loo = []
     if len(data) > 1:
         for index, subject in enumerate(included):
@@ -359,9 +353,7 @@ def main():
              f"group mean ON-OFF = {observed:.5g} percentage points; p={p_perm:.6g}. "
              "Each subject contributes equally; trials stay attached to one "
              "of four verified stimulation periods; exactly two are ON."),
-            ("Exact sign test",
-             f"Positive={n_positive}, negative={n_negative}, ties="
-             f"{len(effects)-n_nonzero}; two-sided binomial p={sign_p:.6g}."),
+
             ("Paired Wilcoxon signed-rank test",
              f"W={w_stat:.6g}; two-sided p={w_p:.6g}. "
              "Signed-rank is used instead of rank-sum because ON and OFF "
@@ -422,10 +414,9 @@ def main():
 
     paired_fig, axes = plt.subplots(1, 2, figsize=(12, 5),
                                    constrained_layout=True)
-    axes[0].bar(["Negative", "Zero", "Positive"],
-                [n_negative, len(effects) - n_nonzero, n_positive])
-    axes[0].set(title=f"Sign test, two-sided p={sign_p:.5g}",
-                ylabel="Number of participants")
+    axes[0].hist(effects, bins=min(12, max(3, len(effects))))
+    axes[0].axvline(0, color="black", linestyle="--")
+    axes[0].set(title="Individual normalized ON-OFF ratios", ylabel="Participants")
     axes[1].axhline(0, color="black", linestyle="--")
     order = np.argsort(np.abs(effects))
     axes[1].scatter(np.arange(1, len(effects) + 1), effects[order])
@@ -458,7 +449,7 @@ def main():
             pdf.savefig(page)
             plt.close(page)
     print(f"Squared primary p={sq_p:.6g}; absolute sensitivity p={abs_p:.6g}; "
-          f"Signed permutation p={p_perm:.6g}; sign p={sign_p:.6g}; "
+          f"Signed permutation p={p_perm:.6g}; "
           f"Wilcoxon signed-rank p={w_p:.6g}; sensitivity p={norm_p:.6g}")
     print(f"Report: {report_path}")
 
