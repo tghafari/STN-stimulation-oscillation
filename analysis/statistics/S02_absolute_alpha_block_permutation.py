@@ -1,32 +1,30 @@
 #!/usr/bin/env python3
+"""S02: baseline-relative posterior alpha stimulation effects.
+
+Read B03's verified trial-to-period mapping, then recompute trial-level
+multitaper alpha from the final cleaned cue epochs. Percent baseline
+(-0.3 to -0.1 s) is applied to EACH trial and sensor before averaging
+the participant-specific OFF-derived alpha band (peak +/-1 Hz) and the
+attention interval (0.3 to 0.8 s). This avoids attempting to baseline
+correct the already time-averaged absolute alpha_power in trial_alpha.csv.
+
+Each participant contributes one mean(ON) - mean(OFF) in percentage points.
+The primary two-sided permutation test shuffles labels of WHOLE verified
+stimulation periods, maintaining two ON and two OFF periods per participant.
+Additional paired sign and Wilcoxon signed-rank tests, normalized-effect
+sensitivity and leave-one-participant-out permutation tests are reported.
+
+Run from the repository root:
+    python analysis/statistics/S02_absolute_alpha_block_permutation.py \\
+        --subjects 101 102 103 --platform mac
+
+Output: <PROJECT_ROOT>/derivatives/reports/group/
+        absolute_alpha_block_permutation/absolute_alpha_block_permutation.pdf
+and publication-quality permutation figures in figures/.
 """
-==================================================================
-Block-label permutation test of absolute posterior alpha power.
-
-Each participant contributes one ON-minus-OFF difference, calculated from
-trial-level absolute multitaper power in ATTENTION_WINDOW. Stimulation labels
-are shuffled across the four CONFIRMED stimulation periods (two OFF and two
-ON); each period comprises two consecutive task blocks. All retained trials
-within a period move together. The number of ON/OFF periods is preserved.
-
-Requires cleaned cue epochs, original BIDS events, the preprocessing crop-time
-JSON, a confirmed block CSV, and the existing individual-alpha-peaks CSV.
-Never reconstruct block identities by guessing from epoch sample positions:
-the existing validated BIDS-to-cleaned-epochs mapping is used.
-
-Run from repository root:
-python analysis/statistics/S02_absolute_alpha_block_permutation.py \\
-    --subjects 101 102 103 
-
-The output includes a PDF with methods, observed statistic, null histogram,
-participant effects, and a CSV with per-participant results.
-==================================================================
-"""
-
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 import textwrap
 from pathlib import Path
@@ -36,533 +34,368 @@ import mne
 import numpy as np
 import pandas as pd
 from matplotlib.backends.backend_pdf import PdfPages
+from scipy.stats import binomtest, wilcoxon
 
 HERE = Path(__file__).resolve().parent
-ANALYSIS = HERE.parent
-SUBJECT_DIR = ANALYSIS / "subject"
-for folder in (SUBJECT_DIR / "EEG_all_channels", SUBJECT_DIR / "EEG_posterior_channels" / "block_preparation"):
-    if str(folder) not in sys.path:
-        sys.path.insert(0, str(folder))
-
+SUBJECT_DIR = HERE.parent / "subject" / "EEG_all_channels"
+sys.path.insert(0, str(SUBJECT_DIR))
 from pipeline_config import resolve_project_root, stage_path
-from B01_review_bids_blocks import events_path
-from B02_validate_epoch_mapping import map_condition_epochs
 
-# Edit these values to change the analysis without changing functions.
-ATTENTION_WINDOW = (0.3, 0.8)
-ALPHA_PEAK_RANGE = 1.0  # Hz on each side of each participant's CSV peak
 FREQS = np.arange(2.0, 32.0, 0.5)
-POSTERIOR = ("PO3", "POz", "PO4", "O1", "Oz", "O2", "PO7", "PO8")
-N_PERMUTATIONS = 10000
-RANDOM_SEED = 42
+BASELINE = (-0.3, -0.1)
+ATTENTION = (0.3, 0.8)
+HALF_WIDTH = 1.0
+ROI8 = ("PO3", "POz", "PO4", "O1", "Oz", "O2", "PO7", "PO8")
 
 
 def arguments():
-    """Parse paths, participant identifiers and reproducibility settings."""
+    """Read input, subject and reproducibility options."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--subjects", nargs="+", required=True)
-    parser.add_argument("--input-csv", type=Path, default=None, help="Validated trial-level alpha CSV produced by G04.")
-    parser.add_argument("--peaks-csv", type=Path, default=None)
+    parser.add_argument("--input-csv", type=Path, default=None)
     parser.add_argument("--platform", choices=("mac", "bluebear"), default="mac")
     parser.add_argument("--project-root", default=None)
     parser.add_argument("--session", default="01")
     parser.add_argument("--task", default="SpAtt")
     parser.add_argument("--run", default="01")
     parser.add_argument("--n-jobs", type=int, default=4)
-    parser.add_argument("--n-permutations", type=int, default=N_PERMUTATIONS)
-    parser.add_argument("--seed", type=int, default=RANDOM_SEED)
+    parser.add_argument("--n-permutations", type=int, default=10000)
+    parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
     if args.n_permutations < 1:
         parser.error("--n-permutations must be positive")
-    if ATTENTION_WINDOW[0] >= ATTENTION_WINDOW[1]:
-        parser.error("ATTENTION_WINDOW must have increasing bounds")
+    args.subjects = [s.removeprefix("sub-") for s in args.subjects]
+    if len(args.subjects) != len(set(args.subjects)):
+        parser.error("Duplicate participant IDs")
     return args
 
 
-def read_peaks(path):
-    """Read G03 peak CSV; reject missing/duplicate/invalid participants."""
-    frame = pd.read_csv(path, dtype={"subject": str})
-    required = {"subject", "peak_hz"}
-    if not required.issubset(frame.columns):
-        raise ValueError(f"Peak CSV requires columns: {sorted(required)}")
-    frame["subject"] = frame["subject"].str.removeprefix("sub-")
-    frame["peak_hz"] = pd.to_numeric(frame["peak_hz"], errors="coerce")
-    if frame["subject"].duplicated().any():
-        raise ValueError("Duplicate participant in peak CSV")
-    return frame.set_index("subject")["peak_hz"].to_dict()
+def alpha_trials(epochs, channels, peak, n_jobs):
+    """Return both unbaselined and percent-baseline alpha per trial.
 
-
-def crop_intervals(values):
-    """Convert preprocessing crop boundaries into interval pairs."""
-    values = [float(value) for value in values]
-    if len(values) not in (2, 4):
-        raise ValueError(f"Expected two or four crop boundaries: {values}")
-    return list(zip(values[::2], values[1::2]))
-
-
-def cleaned_epochs(root, subject, condition, args):
-    """Load cleaned epochs and retain only left/right cue events."""
-    path = stage_path(
-        root, subject, args.session, args.task, args.run,
-        condition, "clean", "epo"
-    )
-    if not path.exists():
-        raise FileNotFoundError(path)
-    epochs = mne.read_epochs(path, preload=True, verbose=False)
-    cues = [
-        name for name in ("cue_onset_left", "cue_onset_right")
-        if name in epochs.event_id
-    ]
-    if not cues:
-        raise ValueError(f"Missing cue events: {path}")
-    return epochs[cues]
-
-
-def confirmed_periods(review, subject):
-    """Extract four verified periods, each containing two task blocks."""
-    rows = review.loc[
-        (review["subject"].str.removeprefix("sub-") == subject)
-        & review["confirmed"].str.lower().isin(("yes", "y", "true", "1"))
-    ].sort_values("block_index_chronological")
-    if len(rows) != 4:
-        raise ValueError(f"sub-{subject}: expected four confirmed periods")
-    labels = rows["confirmed_condition"].str.strip().str.lower().tolist()
-    if labels.count("off") != 2 or labels.count("stim_left") != 1 or labels.count("stim_right") != 1:
-        raise ValueError(f"sub-{subject}: unexpected verified conditions {labels}")
-    task_blocks = []
-    for _, row in rows.iterrows():
-        task_blocks.append((
-            float(row["first_task_block_onset_s"]),
-            float(row["first_task_block_offset_s"])
-        ))
-        task_blocks.append((
-            float(row["second_task_block_onset_s"]),
-            float(row["second_task_block_offset_s"])
-        ))
-    return np.asarray([label != "off" for label in labels]), task_blocks
-
-
-def trial_alpha(epochs, channels, peak, args):
-    """Return one absolute linear alpha-power value per retained trial.
-
-    No baseline correction, logarithm or trial-wise normalization occurs.
-    Average selected channels, peak +/- ALPHA_PEAK_RANGE frequency bins,
-    and ATTENTION_WINDOW time points independently for each trial.
+    Trial-level TFR is baseline corrected per sensor/frequency first.
+    The result is then averaged over retained sensors, peak +/-1 Hz
+    frequencies, and the attention interval. Trial order is unchanged.
     """
     tfr = epochs.copy().pick(channels).compute_tfr(
         method="multitaper", freqs=FREQS, n_cycles=FREQS / 2,
         time_bandwidth=2.0, use_fft=True, zero_mean=True,
         return_itc=False, average=False, decim=2,
-        n_jobs=args.n_jobs, verbose=False
+        n_jobs=n_jobs, verbose=False,
     )
-    freq_mask = (
-        (tfr.freqs >= peak - ALPHA_PEAK_RANGE - 1e-9)
-        & (tfr.freqs <= peak + ALPHA_PEAK_RANGE + 1e-9)
+    freq = (tfr.freqs >= peak - HALF_WIDTH - 1e-9) & (
+        tfr.freqs <= peak + HALF_WIDTH + 1e-9
     )
-    time_mask = (
-        (tfr.times >= ATTENTION_WINDOW[0])
-        & (tfr.times <= ATTENTION_WINDOW[1])
+    times = (tfr.times >= ATTENTION[0]) & (tfr.times <= ATTENTION[1])
+    base = (tfr.times >= BASELINE[0]) & (tfr.times <= BASELINE[1])
+    if not freq.any() or not times.any() or not base.any():
+        raise ValueError("Required baseline/alpha/attention TFR bins absent")
+    baseline_power = tfr.data[..., base].mean(axis=-1)
+    if np.any(baseline_power <= 0) or not np.isfinite(baseline_power).all():
+        raise ValueError("Nonpositive or invalid baseline power")
+    raw_values = tfr.data[:, :, freq, :][:, :, :, times].mean(axis=(1, 2, 3))
+    tfr.apply_baseline(BASELINE, mode="percent")
+    percent_values = 100.0 * tfr.data[:, :, freq, :][:, :, :, times].mean(
+        axis=(1, 2, 3)
     )
-    if not freq_mask.any() or not time_mask.any():
-        raise ValueError("No TFR bins in chosen alpha/attention window")
-    return tfr.data[:, :, freq_mask, :][:, :, :, time_mask].mean(axis=(1, 2, 3))
+    if not np.isfinite(raw_values).all() or not np.isfinite(percent_values).all():
+        raise ValueError("Nonfinite alpha power")
+    return percent_values, raw_values
 
 
-def participant_data(root, subject, peak, review, crops, args):
-    """Validate all trial-to-block mappings, then return four period arrays."""
-    labels, task_blocks = confirmed_periods(review, subject)
-    off = cleaned_epochs(root, subject, "no-stim", args)
-    on = cleaned_epochs(root, subject, "stim", args)
-    channels = [
-        channel for channel in POSTERIOR
-        if channel in off.ch_names and channel in on.ch_names
-        and channel not in off.info["bads"] and channel not in on.info["bads"]
-    ]
-    if not channels:
-        raise ValueError(f"sub-{subject}: no common good posterior channels")
-    bids = pd.read_csv(
-        events_path(root, subject, args.session, args.task, args.run), sep="\t"
-    )
-    key = f"sub-{subject}"
-    if key not in crops:
-        raise ValueError(f"Missing crop intervals for {key}")
-    periods = [None] * 4
-    for condition, epochs in (("no-stim", off), ("stim", on)):
-        mapping = map_condition_epochs(
-            epochs, bids, crop_intervals(crops[key][condition]),
-            task_blocks, condition
+def validated_subject(frame, subject, root, args):
+    """Match each CSV trial to the corresponding cleaned epoch index."""
+    rows = frame.loc[frame.subject == subject].copy()
+    if rows.empty:
+        raise ValueError(f"sub-{subject}: absent from validated B03 CSV")
+    if not rows.label_verified.astype(str).str.lower().eq("true").all():
+        raise ValueError(f"sub-{subject}: unverified stimulation labels")
+    if rows.alpha_peak_hz.nunique() != 1:
+        raise ValueError(f"sub-{subject}: inconsistent alpha peaks")
+    peak = float(rows.alpha_peak_hz.iloc[0])
+    if not np.isfinite(peak) or not 8 <= peak <= 12:
+        raise ValueError(f"sub-{subject}: invalid OFF-derived peak")
+    periods = [list() for _ in range(4)]
+    raw_periods = [list() for _ in range(4)]
+    labels = np.zeros(4, dtype=bool)
+    channels_used = None
+    for condition in ("no-stim", "stim"):
+        path = stage_path(
+            root, subject, args.session, args.task, args.run,
+            condition, "clean", "epo",
         )
-        block_indices = np.asarray(mapping["matched_task_block_indices"])
-        values = trial_alpha(epochs, channels, peak, args)
-        period_indices = block_indices // 2
-        expected = 0 if condition == "no-stim" else 1
-        if np.any(labels[period_indices] != expected):
-            raise ValueError(f"sub-{subject}: epoch/condition block mismatch")
-        for period in range(4):
-            selected = values[period_indices == period]
-            if selected.size:
-                if periods[period] is not None:
-                    raise ValueError("Duplicate assignment to a stimulation period")
-                periods[period] = selected
-    if any(value is None or len(value) == 0 for value in periods):
-        raise ValueError(f"sub-{subject}: empty/unmapped stimulation period")
-    return periods, labels, len(channels)
+        epochs = mne.read_epochs(path, preload=True, verbose=False)
+        cues = [c for c in ("cue_onset_right", "cue_onset_left")
+                if c in epochs.event_id]
+        if not cues:
+            raise ValueError(f"sub-{subject}: missing cue epochs")
+        epochs = epochs[cues]
+        if channels_used is None:
+            channels_used = [
+                ch for ch in ROI8 if ch in epochs.ch_names
+                and ch not in epochs.info["bads"]
+            ]
+        else:
+            channels_used = [
+                ch for ch in channels_used if ch in epochs.ch_names
+                and ch not in epochs.info["bads"]
+            ]
+        # Defer computation until the common channel set is known.
+        if condition == "no-stim":
+            off_epochs = epochs
+        else:
+            on_epochs = epochs
+    if not channels_used:
+        raise ValueError(f"sub-{subject}: no shared good posterior sensors")
+    for condition, epochs in (("no-stim", off_epochs), ("stim", on_epochs)):
+        condition_rows = rows.loc[rows.source_condition == condition].copy()
+        if len(condition_rows) != len(epochs):
+            raise ValueError(f"sub-{subject}: CSV/epoch count mismatch for {condition}")
+        if condition_rows.trial_index_in_condition.duplicated().any():
+            raise ValueError(f"sub-{subject}: duplicate trial indices")
+        indices = condition_rows.trial_index_in_condition.to_numpy(dtype=int)
+        if not np.array_equal(np.sort(indices), np.arange(len(epochs))):
+            raise ValueError(f"sub-{subject}: incomplete trial-index mapping")
+        values, raw_values = alpha_trials(epochs, channels_used, peak, args.n_jobs)
+        for row in condition_rows.itertuples(index=False):
+            idx = int(row.trial_index_in_condition)
+            period = int(row.stimulation_period) - 1
+            if period not in range(4):
+                raise ValueError(f"sub-{subject}: invalid period")
+            is_on = str(row.dbs_on).lower() == "true"
+            if is_on != (condition == "stim"):
+                raise ValueError(f"sub-{subject}: ON/OFF condition mismatch")
+            side = str(row.stimulation_side).strip().lower()
+            if is_on != (side != "off"):
+                raise ValueError(f"sub-{subject}: side/condition mismatch")
+            periods[period].append(float(values[idx]))
+            raw_periods[period].append(float(raw_values[idx]))
+    sides = []
+    for period in range(4):
+        p = rows.loc[rows.stimulation_period == period + 1]
+        if p.empty or p.dbs_on.nunique() != 1 or p.stimulation_side.nunique() != 1:
+            raise ValueError(f"sub-{subject}: invalid stimulation period {period + 1}")
+        labels[period] = str(p.dbs_on.iloc[0]).lower() == "true"
+        sides.append(str(p.stimulation_side.iloc[0]).strip().lower())
+    if sorted(sides) != ["off", "off", "stim_left", "stim_right"]:
+        raise ValueError(f"sub-{subject}: invalid stimulation sequence")
+    if any(not p for p in periods):
+        raise ValueError(f"sub-{subject}: empty period")
+    return ([np.asarray(p) for p in periods],
+            [np.asarray(p) for p in raw_periods], labels, peak, channels_used)
 
 
-def effect(periods, labels):
-    """Calculate trial-weighted ON minus OFF means within a participant."""
-    on = np.concatenate([
-        values for values, is_on in zip(periods, labels) if is_on
-    ])
-    off = np.concatenate([
-        values for values, is_on in zip(periods, labels) if not is_on
-    ])
-    return float(on.mean() - off.mean())
+def condition_means(periods, labels):
+    """Pool all trials within each assigned condition (trial-weighted)."""
+    on = np.concatenate([p for p, flag in zip(periods, labels) if flag])
+    off = np.concatenate([p for p, flag in zip(periods, labels) if not flag])
+    return float(on.mean()), float(off.mean())
 
 
-def permutation_distribution(data, iterations, seed):
-    """Shuffle four whole-period labels independently within each subject."""
+def effect(periods, labels, normalized=False):
+    """Difference of percent changes, or ratio of original absolute power.
+
+    The normalized ratio NEVER uses baseline-corrected power.
+    """
+    on, off = condition_means(periods, labels)
+    if not normalized:
+        return on - off
+    denominator = on + off
+    if denominator <= 0 or not np.isfinite(denominator):
+        raise ValueError("Unbaselined ON+OFF denominator must be positive")
+    return (on - off) / denominator
+
+
+def run_permutation(data, iterations, seed, normalized=False):
+    """Two-sided period-label permutation with equal subject weighting."""
+    effects = np.asarray([effect(raw if normalized else percent, labels, normalized)
+                          for percent, raw, labels in data])
+    observed = float(effects.mean())
     rng = np.random.default_rng(seed)
-    null = np.empty(iterations, dtype=float)
-    for iteration in range(iterations):
-        differences = []
-        for periods, labels in data:
-            permuted = rng.permutation(labels)
-            differences.append(effect(periods, permuted))
-        null[iteration] = np.mean(differences)
-    return null
+    null = np.empty(iterations)
+    for index in range(iterations):
+        null[index] = np.mean([
+            effect(raw if normalized else percent, rng.permutation(labels), normalized)
+            for percent, raw, labels in data
+        ])
+    p = (1 + np.count_nonzero(np.abs(null) >= abs(observed))) / (iterations + 1)
+    return effects, observed, null, float(p)
 
 
-def methods_page(n_subjects, n_perm):
-    """Write a readable PDF methods page including analysis steps 4, 5, 6."""
+def text_page(title, sections):
+    """Render readable, wrapped report text to a PDF page."""
     fig, ax = plt.subplots(figsize=(11.7, 8.3))
     ax.axis("off")
-    sections = [
-        ("Data and alpha extraction",
-         f"{n_subjects} participants. Absolute multitaper power is computed "
-         "for every cleaned cue trial using the retained common posterior "
-         "channels. The individual alpha peak is read from the prior G03 "
-         "CSV (selected from original DBS OFF), and peak +/- "
-         f"{ALPHA_PEAK_RANGE:g} Hz is used for both conditions. "
-         f"Attention interval: {ATTENTION_WINDOW[0]:g}-"
-         f"{ATTENTION_WINDOW[1]:g} s. No baseline correction."),
-        ("4. Observed stimulation effect",
-         "Within each participant, concatenate all trials assigned ON and "
-         "all trials assigned OFF. Average absolute alpha power across trials "
-         "in each condition; calculate D_i = mean(ON) - mean(OFF). "
-         "The group statistic T_observed is the mean of participant D_i, "
-         "so each participant contributes equally."),
-        ("5. Block-label permutations",
-         "Four stimulation periods per participant were obtained from "
-         "the validated G04 trial-level dataset. The original block assignments "
-         "and confirmed stimulation labels were preserved. Whole stimulation-period "
-         "labels were permuted within participants, maintaining two ON and two OFF periods. " 
-         "All trials stay with "
-         "their original period. Recalculate D_i and their group mean. "
-         f"Repeat {n_perm:,} times using the recorded random seed."),
-        ("6. Permutation significance",
-         "Use a two-sided statistic: p = (1 + number of permutations "
-         "with abs(T_perm) >= abs(T_observed)) / (N_perm + 1). "
-         "A negative observed statistic indicates reduced absolute "
-         "alpha power during stimulation. The null histogram and "
-         "observed statistic are plotted on the following page."),
-        ("Interpretation and limitations",
-         "Inference is conditional on the OFF-defined alpha peaks, "
-         "which are held fixed across permutations. Validity of "
-         "block-label randomization requires exchangeability under "
-         "the actual experimental randomization; carryover or "
-         "time-order effects are not modelled. This test is not "
-         "a trial-level label shuffle."),
-    ]
-    y = 0.94
-    for heading, body in sections:
-        ax.text(0.04, y, heading, fontsize=12, fontweight="bold",
+    ax.text(0.045, 0.95, title, fontsize=16, weight="bold",
+            va="top", transform=ax.transAxes)
+    y = 0.88
+    for heading, content in sections:
+        ax.text(0.045, y, heading, fontsize=11.5, weight="bold",
                 va="top", transform=ax.transAxes)
-        y -= 0.042
-        wrapped = textwrap.fill(body, width=100)
-        ax.text(0.04, y, wrapped, fontsize=9.5, va="top",
-                linespacing=1.35, transform=ax.transAxes)
-        y -= 0.029 * (wrapped.count("\n") + 1) + 0.048
-    fig.tight_layout()
+        y -= 0.045
+        lines = textwrap.wrap(str(content), width=98)
+        for line in lines:
+            ax.text(0.045, y, line, fontsize=9.3,
+                    va="top", transform=ax.transAxes)
+            y -= 0.024
+        y -= 0.045
     return fig
 
 
-def results_page(observed, null, pvalue, subjects, differences):
-    """Plot permutation distribution and participant-specific differences."""
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(11.7, 8.3))
-    ax1.hist(null, bins=55, color="lightsteelblue", edgecolor="white")
-    ax1.axvline(observed, color="darkred", lw=2, label="Observed")
-    ax1.axvline(-abs(observed), color="gray", ls="--", lw=1)
-    ax1.axvline(abs(observed), color="gray", ls="--", lw=1)
-    ax1.set(
-        title=f"Block permutation | observed={observed:.4g}, two-sided p={pvalue:.5f}",
-        xlabel="Group mean (DBS ON - DBS OFF), absolute alpha power",
-        ylabel="Permutations"
-    )
-    ax1.legend()
-    ax2.axhline(0, color="gray", lw=0.8)
-    ax2.scatter(range(len(subjects)), differences, color="steelblue", s=28)
-    ax2.set(
-        title="Participant-level ON - OFF effects",
-        xlabel="Participant", ylabel="Absolute alpha-power difference"
-    )
-    ax2.set_xticks(range(len(subjects)), subjects, rotation=65)
+def distribution_page(null, observed, p, label):
+    """Plot two-sided null, observed statistic and critical thresholds."""
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.hist(null, bins=50, color="lightsteelblue")
+    ax.axvline(observed, color="darkred", linewidth=2, label="Observed")
+    threshold = np.quantile(np.abs(null), 0.95)
+    ax.axvline(-threshold, color="gray", linestyle="--")
+    ax.axvline(threshold, color="gray", linestyle="--",
+               label="Two-sided 5% threshold")
+    ax.set(title=f"{label}: observed={observed:.4g}, p={p:.5g}",
+           xlabel=label, ylabel="Permutations")
+    ax.legend()
     fig.tight_layout()
     return fig
+
 
 def main():
-    """Run block-label permutations using validated G04 trial data.
-
-    Each participant contributes one DBS ON-minus-OFF difference.
-    The permutation test shuffles entire stimulation periods, not
-    individual trials. Each participant has four stimulation periods:
-    two OFF, one left STN ON, and one right STN ON.
-
-    Alpha power has already been calculated by G04 without baseline
-    correction, using the participant's individual alpha peak.
-    """
+    """Produce primary, paired, and sensitivity results in one PDF."""
     args = arguments()
     root = resolve_project_root(args.platform, args.project_root)
-
-    input_csv = args.input_csv or (
-        root
-        / "derivatives"
-        / "reports"
-        / "group"
-        / "EEG_posterior_channels_block_mapping"
-        / "trial_alpha.csv"
+    group = root / "derivatives" / "reports" / "group"
+    csv_path = args.input_csv or (
+        group / "EEG_posterior_channels_block_mapping" / "trial_alpha.csv"
     )
-
-    # Load validated trial-level absolute alpha power from G04.
-    data_frame = pd.read_csv(
-        input_csv,
-        dtype={"subject": str},
-    )
-
-    required_columns = {
-        "subject",
-        "stimulation_period",
-        "stimulation_side",
-        "dbs_on",
-        "alpha_power",
-        "alpha_peak_hz",
-        "label_verified",
+    frame = pd.read_csv(csv_path, dtype={"subject": str})
+    required = {
+        "subject", "source_condition", "trial_index_in_condition",
+        "stimulation_period", "stimulation_side", "dbs_on",
+        "alpha_peak_hz", "label_verified",
     }
-
-    missing_columns = required_columns - set(data_frame.columns)
-
-    if missing_columns:
-        raise ValueError(
-            f"Missing required columns: {sorted(missing_columns)}"
+    missing = required - set(frame.columns)
+    if missing:
+        raise ValueError(f"B03 CSV missing columns: {sorted(missing)}")
+    frame["subject"] = frame.subject.str.removeprefix("sub-")
+    data, included, details = [], [], []
+    for subject in args.subjects:
+        periods, raw_periods, labels, peak, channels = validated_subject(
+            frame, subject, root, args
         )
-
-    data_frame["subject"] = (
-        data_frame["subject"].str.removeprefix("sub-")
+        data.append((periods, raw_periods, labels))
+        included.append(subject)
+        on, off = condition_means(periods, labels)
+        details.append((subject, peak, channels, on, off, on - off))
+        print(f"sub-{subject}: ON={on:.4g}%, OFF={off:.4g}%, "
+              f"ON-OFF={on-off:.4g} percentage points")
+    effects, observed, null, p_perm = run_permutation(
+        data, args.n_permutations, args.seed
     )
-
-    subjects = [
-        subject.removeprefix("sub-")
-        for subject in args.subjects
+    n_positive = int(np.count_nonzero(effects > 0))
+    n_negative = int(np.count_nonzero(effects < 0))
+    n_nonzero = n_positive + n_negative
+    sign_p = (float(binomtest(n_positive, n_nonzero, 0.5).pvalue)
+              if n_nonzero else 1.0)
+    if n_nonzero:
+        wilcox = wilcoxon(effects, zero_method="wilcox",
+                         alternative="two-sided", method="auto")
+        w_stat, w_p = float(wilcox.statistic), float(wilcox.pvalue)
+    else:
+        w_stat, w_p = 0.0, 1.0
+    norm_effects, norm_observed, norm_null, norm_p = run_permutation(
+        data, args.n_permutations, args.seed, normalized=True
+    )
+    loo = []
+    if len(data) > 1:
+        for index, subject in enumerate(included):
+            remaining = data[:index] + data[index + 1:]
+            _, statistic, _, p = run_permutation(
+                remaining, args.n_permutations, args.seed
+            )
+            loo.append((subject, statistic, p))
+    output = group / "absolute_alpha_block_permutation"
+    figures = output / "figures"
+    figures.mkdir(parents=True, exist_ok=True)
+    report_path = output / "absolute_alpha_block_permutation.pdf"
+    pages = [
+        text_page("S02: subjects and analysis details", [
+            ("Included subjects (n=" + str(len(included)) + ")",
+             ", ".join("sub-" + s for s in included)),
+            ("Input", str(csv_path)),
+            ("Participant-specific alpha peaks and retained sensors",
+             "; ".join(f"sub-{s}: {peak:g} Hz, {','.join(chs)}"
+                       for s, peak, chs, _, _, _ in details)),
+            ("Outcome and baseline",
+             "ON and OFF are percent-baseline corrected (-0.3 to -0.1 s) "
+             "per trial/sensor. Their difference is in percentage points. "
+             "The normalized (ON-OFF)/(ON+OFF) sensitivity uses original "
+             "UNBASELINED TFR power, with no baseline correction. "
+             "Both use peak +/-1 Hz and 0.3-0.8 s. B03 alpha_power is not reused."),
+        ]),
+        text_page("S02: tests and interpretation", [
+            ("Primary period-label permutation",
+             f"Two-sided, {args.n_permutations:,} permutations, seed {args.seed}; "
+             f"group mean ON-OFF = {observed:.5g} percentage points; p={p_perm:.6g}. "
+             "Each subject contributes equally; trials stay attached to one "
+             "of four verified stimulation periods; exactly two are ON."),
+            ("Exact sign test",
+             f"Positive={n_positive}, negative={n_negative}, ties="
+             f"{len(effects)-n_nonzero}; two-sided binomial p={sign_p:.6g}."),
+            ("Paired Wilcoxon signed-rank test",
+             f"W={w_stat:.6g}; two-sided p={w_p:.6g}. "
+             "Signed-rank is used instead of rank-sum because ON and OFF "
+             "measurements are paired within participant."),
+            ("Sensitivity: unbaselined normalized effect",
+             f"Mean (raw ON-raw OFF)/(raw ON+raw OFF)={norm_observed:.5g}; "
+             f"two-sided period permutation p={norm_p:.6g}. "
+             "Both numerator and denominator use ORIGINAL, UNBASELINED "
+             "absolute power. No percent-baseline values enter this ratio."),
+            ("Interpretation",
+             "These tests address participant-level cue-related alpha change. "
+             "Permutation inference assumes stimulation-period exchangeability; "
+             "order and carryover are not modelled. Sign and signed-rank "
+             "tests are complementary paired analyses, not independent replications."),
+        ]),
     ]
-
-    if len(subjects) != len(set(subjects)):
-        raise ValueError("Duplicate participant IDs supplied.")
-
-    participant_data = []
-    results = []
-
-    # Calculate one observed ON-minus-OFF effect per participant.
-    for subject in subjects:
-        subject_data = data_frame.loc[
-            data_frame["subject"] == subject
-        ]
-
-        if subject_data.empty:
-            raise ValueError(
-                f"Participant {subject} is missing from G04 data."
-            )
-
-        verified = (
-            subject_data["label_verified"]
-            .astype(str)
-            .str.lower()
-            .eq("true")
-        )
-
-        if not verified.all():
-            raise ValueError(
-                f"Participant {subject} has unverified labels."
-            )
-
-        if subject_data["alpha_peak_hz"].nunique() != 1:
-            raise ValueError(
-                f"Participant {subject} has inconsistent alpha peaks."
-            )
-
-        periods = []
-        labels = []
-
-        for period_number in range(1, 5):
-            period_data = subject_data.loc[
-                subject_data["stimulation_period"]
-                == period_number
-            ]
-
-            if period_data.empty:
-                raise ValueError(
-                    f"Participant {subject}: "
-                    f"period {period_number} is empty."
-                )
-
-            if period_data["dbs_on"].nunique() != 1:
-                raise ValueError(
-                    f"Participant {subject}: "
-                    f"mixed stimulation labels in period "
-                    f"{period_number}."
-                )
-
-            if period_data["stimulation_side"].nunique() != 1:
-                raise ValueError(
-                    f"Participant {subject}: "
-                    f"mixed stimulation sides in period "
-                    f"{period_number}."
-                )
-
-            alpha_values = period_data[
-                "alpha_power"
-            ].to_numpy(dtype=float)
-
-            if not np.isfinite(alpha_values).all():
-                raise ValueError(
-                    f"Participant {subject}: "
-                    "non-finite alpha power."
-                )
-
-            stimulation_side = str(
-                period_data["stimulation_side"].iloc[0]
-            ).strip().lower()
-
-            is_on = (
-                str(period_data["dbs_on"].iloc[0])
-                .strip()
-                .lower()
-                == "true"
-            )
-
-            if is_on != (stimulation_side != "off"):
-                raise ValueError(
-                    f"Participant {subject}: inconsistent "
-                    "stimulation condition."
-                )
-
-            periods.append(alpha_values)
-            labels.append(is_on)
-
-        labels = np.asarray(labels, dtype=bool)
-
-        if labels.sum() != 2:
-            raise ValueError(
-                f"Participant {subject}: expected "
-                "two ON and two OFF periods."
-            )
-
-        # effect() calculates trial-weighted ON minus OFF power.
-        observed_difference = effect(periods, labels)
-
-        n_on = sum(
-            len(values)
-            for values, is_on in zip(periods, labels)
-            if is_on
-        )
-
-        n_off = sum(
-            len(values)
-            for values, is_on in zip(periods, labels)
-            if not is_on
-        )
-
-        results.append({
-            "subject": subject,
-            "peak_hz": float(
-                subject_data["alpha_peak_hz"].iloc[0]
-            ),
-            "n_on": n_on,
-            "n_off": n_off,
-            "on_minus_off": observed_difference,
-        })
-
-        participant_data.append((periods, labels))
-
-        print(
-            f"sub-{subject}: "
-            f"ON - OFF = {observed_difference:.6g}"
-        )
-
-    # Average participant-level differences equally.
-    differences = np.asarray([
-        result["on_minus_off"]
-        for result in results
-    ])
-
-    observed_statistic = float(differences.mean())
-
-    # Randomly permute whole stimulation-period labels
-    # independently within each participant.
-    null_distribution = permutation_distribution(
-        participant_data,
-        args.n_permutations,
-        args.seed,
+    for start in range(0, len(details), 14):
+        batch = details[start:start + 14]
+        pages.append(text_page("Participant effects", [
+            (f"sub-{s}", f"OFF={off:.4g}%, ON={on:.4g}%, "
+             f"ON-OFF={diff:.4g} percentage points; peak={peak:g} Hz")
+            for s, peak, _, on, off, diff in batch
+        ]))
+    primary_fig = distribution_page(
+        null, observed, p_perm, "ON - OFF (percentage points)"
     )
-
-    # Two-sided Monte Carlo permutation p-value.
-    p_value = (
-        1
-        + np.count_nonzero(
-            np.abs(null_distribution)
-            >= abs(observed_statistic)
-        )
-    ) / (args.n_permutations + 1)
-
-    # Save statistical results and PDF report.
-    output_dir = (
-        root
-        / "derivatives"
-        / "reports"
-        / "group"
-        / "absolute_alpha_block_permutation"
+    normalized_fig = distribution_page(
+        norm_null, norm_observed, norm_p, "Unbaselined (ON-OFF)/(ON+OFF)"
     )
-
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    report_path = (
-        output_dir / "absolute_alpha_block_permutation.pdf"
-    )
-
+    for name, fig in (("baseline_percent_permutation", primary_fig),
+                      ("normalized_sensitivity_permutation", normalized_fig)):
+        for extension in ("svg", "tiff"):
+            fig.savefig(figures / f"{name}.{extension}",
+                        dpi=600, bbox_inches="tight")
+    if loo:
+        for start in range(0, len(loo), 14):
+            pages.append(text_page("Leave-one-out sensitivity", [
+                (f"Exclude sub-{s}",
+                 f"Group ON-OFF={stat:.5g} percentage points; "
+                 f"two-sided permutation p={p:.6g}")
+                for s, stat, p in loo[start:start + 14]
+            ]))
     with PdfPages(report_path) as pdf:
-        figures = [
-            methods_page(
-                len(subjects),
-                args.n_permutations,
-            ),
-            results_page(
-                observed_statistic,
-                null_distribution,
-                p_value,
-                subjects,
-                differences,
-            ),
-        ]
-
-        for figure in figures:
-            pdf.savefig(figure)
-            plt.close(figure)
-
-    print("\nPermutation analysis complete.")
-    print(f"Participants: {len(subjects)}")
-    print(f"Observed ON - OFF: {observed_statistic:.6g}")
-    print(f"Two-sided p-value: {p_value:.6g}")
+        for page in pages[:2]:
+            pdf.savefig(page)
+            plt.close(page)
+        pdf.savefig(primary_fig)
+        plt.close(primary_fig)
+        pdf.savefig(normalized_fig)
+        plt.close(normalized_fig)
+        for page in pages[2:]:
+            pdf.savefig(page)
+            plt.close(page)
+    print(f"Permutation p={p_perm:.6g}; sign p={sign_p:.6g}; "
+          f"Wilcoxon signed-rank p={w_p:.6g}; sensitivity p={norm_p:.6g}")
     print(f"Report: {report_path}")
-
 
 
 if __name__ == "__main__":
