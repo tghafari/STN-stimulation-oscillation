@@ -1,59 +1,20 @@
 #!/usr/bin/env python
-"""Alpha cluster-permutation analysis with a self-contained PDF report.
+"""Individual-alpha-peak-based ON-minus-OFF cluster statistics.
 
-Tests stimulation minus no-stimulation alpha power (8-12 Hz)
-from 0.2 to 1.2 s.
-Default power is condition-wise percent baseline (-0.3 to -0.1 s), matching the
-subject-level descriptive TFR analysis.
+Recompute G02-style trial-averaged TFRs from cleaned cue epochs, selecting
+each participant's OFF-derived alpha peak +/- 1 Hz from the individual peak
+CSV. Percent-baseline correct ON and OFF separately (-0.3 to -0.1 s).
+Test their paired difference against ZERO over 0.3-0.8 s with two-sided
+temporal cluster permutation tests for sensors, ROI3 and ROI8.
 
-Report includes:
-- analysis details and manuscript-style methods section;
-- primary sensor x time spatio-temporal cluster results;
-- individual sensors with FDR-significant time clusters;
-- 8-channel posterior/occipital ROI average;
-- 3-channel posterior ROI average (PO3, POz, PO4);
-- figures shading significant temporal clusters and scalp maps of significant
-  spatio-temporal clusters.
-
-ROI inference is participant-level: channels are averaged WITHIN participant
-before the paired one-sample permutation test.
-
-STATISTICAL DESIGN
-------------------
-All inferential contrasts use UNBASELINED power. For every included participant,
-alpha power is averaged across the user-selected frequency range and stimulation
-minus no-stimulation is formed. Tests are paired one-sample cluster permutation
-tests of these within-participant differences against zero, with tail=0.
-
-Cluster formation uses two-sided pointwise alpha=.10 (.05 in each tail). Final
-cluster significance is p<=.05 from the permutation maximum-cluster null.
-
-Single sensors:
-  Each sensor gets its own complete-case sample. A participant is included for a
-  sensor whenever that sensor is present and good in BOTH stim and no-stim. A bad
-  different sensor does not exclude that participant. Temporal clustering corrects
-  across time within that sensor. By default there is NO correction across sensors.
-
-Optional single-sensor FDR:
-  Add --sensor-fdr to apply Benjamini-Hochberg FDR across all single-sensor cluster
-  p-values after the cluster permutation tests. This is optional secondary analysis.
-
-ROI3:
-  PO3, POz, PO4 must ALL be good in both conditions. Only those complete-case
-  participants enter ROI3. Channels are averaged within participant before testing.
-
-ROI8:
-  PO3, POz, PO4, O1, Oz, O2, PO7, PO8 must ALL be good in both conditions. Only
-  those complete-case participants enter ROI8. Channels are averaged within
-  participant before testing.
-
-Whole-scalp sensor x time test:
-  Intentionally NOT performed. Requiring a common sensor set across every participant
-  removed many posterior sensors and answered a different question from the desired
-  channel-specific/ROI-specific analyses.
+Also perform a whole 0.3-0.8 s mean one-sample t-test against zero for
+each ROI. Results are descriptive/inferential at the participant level;
+ROI channel averages precede subject averaging. G02 writes peak estimates,
+not TFR objects, so the TFR is computed again from the same epochs.
 """
 from __future__ import annotations
 import argparse, csv, json, sys
+import pandas as pd
 from pathlib import Path
 import matplotlib.pyplot as plt
 import mne
@@ -69,9 +30,9 @@ for p in (ANALYSIS_DIR / "subject" / "EEG_all_channels", ANALYSIS_DIR / "utils")
 from pipeline_config import CONDITIONS, resolve_project_root, stage_path
 from pdf_report import ParticipantPDF
 
-DEFAULT_ALPHA = (8.0, 12.0)
-WINDOW = (0.2, 1.2)
-FREQS = np.arange(2.0, 31.0, 1.0)
+WINDOW = (0.3, 0.8)
+BASELINE = (-0.3, -0.1)
+FREQS = np.arange(2.0, 32.0, 0.5)
 N_CYCLES = FREQS / 2.0
 TIME_BANDWIDTH = 2.0
 DECIM = 2
@@ -90,25 +51,17 @@ def args():
     p.add_argument("--platform", choices=["mac", "bluebear"], default="mac")
     p.add_argument("--project-root", default=None)
     p.add_argument("--n-jobs", type=int, default=4)
-    p.add_argument(
-        "--alpha",
-        nargs=2,
-        type=float,
-        metavar=("FMIN", "FMAX"),
-        default=DEFAULT_ALPHA,
-        help="Frequency range in Hz to average before cluster testing, e.g. --alpha 8 12",
-    )
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--peaks-csv", type=Path, default=None)
+    p.add_argument("--peak-half-width", type=float, default=1.0)
     p.add_argument(
         "--sensor-fdr",
         action="store_true",
         help="Optionally apply BH-FDR across single-sensor cluster p-values; default is no FDR.",
     )
     a = p.parse_args()
-    if a.alpha[0] >= a.alpha[1]:
-        p.error("--alpha requires FMIN < FMAX")
-    if a.alpha[0] < FREQS.min() or a.alpha[1] > FREQS.max():
-        p.error(f"--alpha must lie within {FREQS.min():g}-{FREQS.max():g} Hz")
+    if a.peak_half_width <= 0:
+        p.error("--peak-half-width must be positive")
     return a
 
 
@@ -133,7 +86,7 @@ def good(x):
     ]
 
 
-def alpha(ep, chs, a):
+def alpha(ep, chs, a, peak):
     t = (
         ep.copy()
         .pick(chs)
@@ -143,6 +96,7 @@ def alpha(ep, chs, a):
             n_cycles=N_CYCLES,
             time_bandwidth=TIME_BANDWIDTH,
             use_fft=True,
+            zero_mean=True,
             return_itc=False,
             average=True,
             decim=DECIM,
@@ -150,9 +104,11 @@ def alpha(ep, chs, a):
             verbose=False,
         )
     )
-    fi = (t.freqs >= a.alpha[0]) & (t.freqs <= a.alpha[1])
+    lo, hi = (peak - a.peak_half_width, peak + a.peak_half_width)
+    fi = (t.freqs >= lo - 1e-9) & (t.freqs <= hi + 1e-9)
     ti = (t.times >= WINDOW[0]) & (t.times <= WINDOW[1])
-    return t.data[:, fi][:, :, ti].mean(1), t.times[ti], t.info
+    t.apply_baseline(BASELINE, mode='percent')
+    return 100.0 * t.data[:, fi][:, :, ti].mean(1), t.times[ti], t.info
 
 
 def one_d(X, seed):
@@ -220,13 +176,11 @@ def roi_plot(st, no, t, rows, title, ylabel):
     ax.fill_between(t, mn - sem_n, mn + sem_n, alpha=0.15)
     ax.plot(t, ms, label="Stimulation")
     ax.fill_between(t, ms - sem_s, ms + sem_s, alpha=0.15)
-    ax.axvline(0, color="k", ls="--", lw=0.8)
+    ax.set_xlim(WINDOW)
     ax.set_xlabel("Time (s)")
     ax.set_ylabel(ylabel)
     ax.set_title(title)
     ax.legend()
-    ax.relim()
-    ax.autoscale_view()
     shade(ax, rows)
     return fig
 
@@ -238,7 +192,7 @@ def sensor_plot(st, no, t, ch, rows):
         t,
         rows,
         f"{ch}: alpha power, stimulation vs no stimulation",
-        "Alpha power",
+        "Baseline-corrected alpha power (% change)",
     )
 
 
@@ -252,13 +206,13 @@ def participant_difference_traces(diff, t, subjects, title):
     ax.fill_between(t, mean - sem, mean + sem, color="k", alpha=0.12)
     ax.axhline(0, color="k", linewidth=0.8, linestyle=":")
     ax.set_xlabel("Time (s)")
-    ax.set_ylabel("Stim - no-stim alpha power")
+    ax.set_ylabel("Stim - no-stim alpha (percentage points)")
     ax.set_title(title)
     ax.legend(ncol=4, fontsize=7)
     return fig
 
 
-def participant_window_effects(diff, subjects, title):
+def participant_window_effects(diff, subjects, title, t_stat, p_value):
     values = diff.mean(1)
     fig, ax = plt.subplots(figsize=(10, 5), constrained_layout=True)
     x = np.arange(len(subjects))
@@ -270,10 +224,26 @@ def participant_window_effects(diff, subjects, title):
     )
     ax.set_xticks(x)
     ax.set_xticklabels([f"sub-{z}" for z in subjects], rotation=60, ha="right")
-    ax.set_ylabel(f"Mean stim - no-stim alpha, {WINDOW[0]:g}-{WINDOW[1]:g} s")
-    ax.set_title(title)
+    ax.set_ylabel(f"ON - OFF alpha (percentage points), {WINDOW[0]:g}-{WINDOW[1]:g} s")
+    ax.set_title(f'{title} | t={t_stat:.3f}, p={p_value:.4g}')
     ax.legend()
     return fig, values
+
+
+def roi_difference_plot(diff, times, significant, title):
+    """Group difference with SEM and significant temporal clusters."""
+    fig, ax = plt.subplots(figsize=(10, 5), constrained_layout=True)
+    mean = diff.mean(axis=0)
+    sem = diff.std(axis=0, ddof=1) / np.sqrt(len(diff))
+    ax.plot(times, mean, label="Mean ON - OFF", color="tab:purple")
+    ax.fill_between(times, mean - sem, mean + sem,
+                    color="tab:purple", alpha=0.2, label="SEM")
+    ax.axhline(0, color="black", linestyle="--", linewidth=0.8)
+    ax.set(xlim=WINDOW, xlabel="Time from cue (s)",
+           ylabel="ON - OFF (percentage points)", title=title)
+    shade(ax, significant)
+    ax.legend()
+    return fig
 
 
 def cluster_threshold(n):
@@ -378,6 +348,20 @@ def main():
     a = args()
     subs = [s.removeprefix("sub-") for s in a.subjects]
     root = resolve_project_root(a.platform, a.project_root)
+    peaks_path = a.peaks_csv or (
+        root / "derivatives" / "reports" / "group" / "individual_alpha_peaks.csv"
+    )
+    peaks_frame = pd.read_csv(peaks_path, dtype={"subject": str})
+    if not {"subject", "peak_hz"}.issubset(peaks_frame.columns):
+        raise ValueError("Peak CSV needs subject and peak_hz")
+    peaks_frame["subject"] = peaks_frame.subject.str.removeprefix("sub-")
+    if peaks_frame.subject.duplicated().any():
+        raise ValueError("Duplicate subject in peak CSV")
+    peaks = dict(zip(peaks_frame.subject,
+                     pd.to_numeric(peaks_frame.peak_hz, errors="coerce")))
+    for sub in subs:
+        if sub not in peaks or not np.isfinite(peaks[sub]) or not 8 <= peaks[sub] <= 12:
+            raise ValueError(f"Missing or invalid G02 alpha peak for sub-{sub}")
     ep = {s: load(root, s, a) for s in subs}
     g = {s: good(ep[s]) for s in subs}
     out = root / "derivatives" / "reports" / "group" / "EEG_all_channels_alpha_cluster"
@@ -387,14 +371,34 @@ def main():
     section = "Alpha cluster permutation"
     report.add_text(
         "Analysis structure",
-        "This report intentionally contains NO whole-scalp sensor x time cluster test. Single sensors are tested separately using every participant retaining that sensor in both stimulation conditions. ROI3 uses participants retaining PO3, POz and PO4 in both conditions. ROI8 uses participants retaining PO3, POz, PO4, O1, Oz, O2, PO7 and PO8 in both conditions. Thus a bad channel excludes a participant only from analyses that require that channel.",
+        "This report intentionally contains NO whole-scalp sensor x time cluster test. Single sensors are tested separately using every participant retaining that sensor in both stimulation conditions. ROI3 and ROI8 include participants with one or more good ROI sensors in both conditions; available sensors are averaged within participant first. Thus a bad channel excludes a participant only from analyses that require that channel.",
         section,
     )
-    details = f"N={len(subs)} paired participants; contrast=stimulation minus no stimulation calculated from UNBASELINED power; selected alpha range={a.alpha[0]:g}-{a.alpha[1]:g} Hz averaged across frequency; inferential window={WINDOW[0]:g}-{WINDOW[1]:g} s. TFR: multitaper, 2-30 Hz in 1-Hz steps, n_cycles=f/2, time-bandwidth={TIME_BANDWIDTH:g}, FFT=True, ITC=False, trial average=True, decimation={DECIM}. No baseline correction is applied before the stimulation-minus-no-stimulation contrast. Two-sided one-sample cluster permutation tests are applied to within-participant differences with all possible sign flips supported by MNE; cluster-forming threshold uses two-sided pointwise alpha=0.10 (0.05 in each tail); family-wise cluster significance p<=0.05. Single-sensor tests use sensor-specific complete-case participant samples and cluster across time. Across-sensor FDR is optional and is applied only when --sensor-fdr is supplied. ROI3 and ROI8 use separate ROI-specific complete-case participant samples; ROI channels are averaged within participant before temporal cluster permutation testing. No whole-scalp sensor x time cluster test is run."
+    details = (
+        f"Participants included: {', '.join('sub-' + x for x in subs)}. "
+        f"Peak file: {peaks_path}. Peak +/-{a.peak_half_width:g} Hz per subject. "
+        "G02-compatible multitaper TFR: 2-31.5 Hz in 0.5-Hz steps, "
+        "cycles=f/2, bandwidth=2, decimation=2, trial-averaged power. "
+        "For EACH participant/sensor/frequency, Stim ON and OFF power are "
+        "separately percent-baseline corrected (-0.3 to -0.1 s). "
+        "ON-percent minus OFF-percent (percentage points) is then tested "
+        "against zero during 0.3-0.8 s. Two-sided temporal cluster "
+        "permutation alpha=0.05 with forming alpha=0.10. "
+        "ROI means average sensors within participants first."
+    )
     report.add_text("Analysis details", details, section)
+    report.add_text("Individual peaks", "\n".join(
+        f"sub-{sub}: {peaks[sub]:.2f} Hz" for sub in subs), section)
     methods = (
-        "Alpha-band stimulation effects were assessed using paired cluster-based permutation tests on participant-level stimulation-minus-no-stimulation power. Time-frequency power was estimated with multitaper convolution and alpha power was defined as the mean from the user-specified frequency range ("
-        + f"{a.alpha[0]:g}-{a.alpha[1]:g} Hz). Statistical inference was restricted a priori to 0.2-1.2 s after cue onset. Stimulation-minus-no-stimulation contrasts were calculated from unbaselined power; no baseline correction was applied before contrast formation. Temporal cluster tests were performed separately for each EEG sensor using all participants retaining that sensor in both stimulation conditions. Across-sensor false-discovery-rate correction was optional and was not applied unless explicitly requested with --sensor-fdr. A priori ROI analyses tested averages comprising eight posterior/occipital sensors and PO3/POz/PO4. Each ROI used an ROI-specific complete-case sample: participants were included only if every required ROI channel was retained as good in both stimulation conditions. Sensor values were averaged within each included participant before group inference, ensuring participants rather than sensors were the unit of observation."
+        "Alpha power was measured using participant-specific OFF-derived "
+        "peak frequencies +/-1 Hz. Each cleaned participant-condition TFR "
+        "was separately baseline-corrected in percent mode over "
+        "-0.3 to -0.1 seconds. Differences in percentage points "
+        "(ON minus OFF) were tested against zero during 0.3-0.8 seconds "
+        "with two-sided one-sample temporal cluster permutations. "
+        "Posterior ROI sensors were averaged within participants before "
+        "testing; a whole-window one-sample t-test additionally tested "
+        "the mean participant difference against zero."
     )
     report.add_text("Manuscript-style statistical analysis", methods, section)
     # Whole-scalp sensor x time testing is intentionally NOT run here.
@@ -402,7 +406,7 @@ def main():
     # dataset discards many posterior/occipital sensors because one bad channel in
     # one participant removes that sensor from the entire whole-scalp test.
     # The inferential analyses below instead use channel/ROI-specific complete cases.
-    # Single-sensor tests: sensor-specific complete-case participants.
+    # Single-sensor tests: sensor-specific participants with usable ROI sensors.
     sensor_results = {}
     sensor_cluster_records = []
     sensor_pvals = []
@@ -419,8 +423,8 @@ def main():
         ch_st = []
         ch_no = []
         for sub in ch_subs:
-            xs, ct, _ = alpha(ep[sub]["stim"], [ch], a)
-            xn, ct2, _ = alpha(ep[sub]["no-stim"], [ch], a)
+            xs, ct, _ = alpha(ep[sub]["stim"], [ch], a, peaks[sub])
+            xn, ct2, _ = alpha(ep[sub]["no-stim"], [ch], a, peaks[sub])
             if not np.allclose(ct, ct2):
                 raise RuntimeError(f"Sensor time mismatch sub-{sub} {ch}")
             ch_st.append(xs[0])
@@ -461,13 +465,31 @@ def main():
             }
             sensor_cluster_records.append(rec)
             sensor_pvals.append(rec["p_cluster"])
-    if a.sensor_fdr and sensor_pvals:
+    # Each sensor is one FDR hypothesis: its strongest within-sensor
+    # temporally corrected cluster p-value (or p=1 if no cluster).
+    # Do NOT treat multiple clusters from the same sensor as independent
+    # across-sensor hypotheses.
+    sensor_names_for_fdr = list(sensor_results)
+    if a.sensor_fdr and sensor_names_for_fdr:
+        sensor_min_ps = np.asarray([
+            min((r["p"] for r in sensor_results[ch]["all_clusters"]),
+                default=1.0)
+            for ch in sensor_names_for_fdr
+        ])
         reject, qvals = fdr_correction(
-            np.asarray(sensor_pvals), alpha=PTHRESH, method="indep"
+            sensor_min_ps, alpha=PTHRESH, method="indep"
         )
-        for rec, rej, q in zip(sensor_cluster_records, reject, qvals):
-            rec["p_fdr"] = float(q)
-            rec["significant_fdr"] = bool(rej)
+        fdr_by_sensor = {
+            ch: (bool(rej), float(q))
+            for ch, rej, q in zip(sensor_names_for_fdr, reject, qvals)
+        }
+        for rec in sensor_cluster_records:
+            rej, q = fdr_by_sensor[rec["sensor"]]
+            rec["p_fdr"] = q  # sensor-level FDR q-value, not cluster q
+            rec["significant_fdr"] = bool(rej and rec["p_cluster"] <= PTHRESH)
+        for ch, (rej, q) in fdr_by_sensor.items():
+            sensor_results[ch]["sensor_level_p_fdr"] = q
+            sensor_results[ch]["significant_fdr"] = rej
     sig_uncorrected = sorted(
         {r["sensor"] for r in sensor_cluster_records if r["p_cluster"] <= PTHRESH}
     )
@@ -513,8 +535,8 @@ def main():
         st = []
         no = []
         for sub in ch_subs:
-            xs, ct, _ = alpha(ep[sub]["stim"], [ch], a)
-            xn, _, _ = alpha(ep[sub]["no-stim"], [ch], a)
+            xs, ct, _ = alpha(ep[sub]["stim"], [ch], a, peaks[sub])
+            xn, _, _ = alpha(ep[sub]["no-stim"], [ch], a, peaks[sub])
             st.append(xs[0])
             no.append(xn[0])
         rows = [
@@ -529,19 +551,19 @@ def main():
             f"Sensor-specific N={len(ch_subs)}. Gray vertical bands mark significant within-sensor cluster-permutation intervals and are labelled with cluster p-value and time range. Across-sensor FDR is not implied.",
             section,
         )
-    # ROI analyses use ROI-specific complete-case subject samples.
+    # ROI analyses use ROI-specific samples with at least one good ROI channel.
     # A participant contributes only when EVERY channel in that ROI is good in BOTH conditions.
     roi_results = {}
     for label, requested in (
         ("8-channel posterior/occipital ROI", ROI8),
         ("3-channel posterior ROI", ROI3),
     ):
-        roi_subs = [sub for sub in subs if all(ch in g[sub] for ch in requested)]
+        roi_subs = [sub for sub in subs if any(ch in g[sub] for ch in requested)]
         excluded_subs = [sub for sub in subs if sub not in roi_subs]
         if len(roi_subs) < 2:
             report.add_text(
                 label + " results",
-                f"Insufficient complete-case participants. Required channels: {', '.join(requested)}. Included: {', '.join('sub-'+x for x in roi_subs) if roi_subs else 'None'}. Excluded because at least one required ROI channel was bad/missing: {', '.join('sub-'+x for x in excluded_subs) if excluded_subs else 'None'}.",
+                f"Insufficient participants with available ROI channels. Required channels: {', '.join(requested)}. Included: {', '.join('sub-'+x for x in roi_subs) if roi_subs else 'None'}. Excluded because no ROI channel was usable: {', '.join('sub-'+x for x in excluded_subs) if excluded_subs else 'None'}.",
                 section,
             )
             roi_results[label] = {
@@ -554,8 +576,9 @@ def main():
         roi_st = []
         roi_no = []
         for sub in roi_subs:
-            st_sub, rt, rinfo = alpha(ep[sub]["stim"], list(requested), a)
-            no_sub, rt2, _ = alpha(ep[sub]["no-stim"], list(requested), a)
+            available = [ch for ch in requested if ch in g[sub]]
+            st_sub, rt, rinfo = alpha(ep[sub]["stim"], available, a, peaks[sub])
+            no_sub, rt2, _ = alpha(ep[sub]["no-stim"], available, a, peaks[sub])
             if not np.allclose(rt, rt2):
                 raise RuntimeError("ROI time mismatch " + sub)
             roi_st.append(st_sub.mean(0))
@@ -563,6 +586,9 @@ def main():
         st = np.asarray(roi_st)
         no = np.asarray(roi_no)
         roi_diff = st - no
+        window_means = roi_diff.mean(axis=1)
+        test = stats.ttest_1samp(window_means, popmean=0.0)
+        window_t, window_p = float(test.statistic), float(test.pvalue)
         roi_thresh = cluster_threshold(len(roi_subs))
         Tr, cr, pr, _ = permutation_cluster_1samp_test(
             roi_diff,
@@ -583,12 +609,14 @@ def main():
             "n_subjects": len(roi_subs),
             "rows": rows,
             "all_clusters": all_roi,
+            "whole_window_mean_t": window_t,
+            "whole_window_mean_p": window_p,
         }
         top_roi = sorted(all_roi, key=lambda r: r["p"])[:10]
         text = (
-            f"Required channels: {', '.join(requested)}. N={len(roi_subs)} complete-case participants. Included: {', '.join('sub-'+x for x in roi_subs)}. Excluded because at least one required ROI channel was bad/missing: {', '.join('sub-'+x for x in excluded_subs) if excluded_subs else 'None'}. "
+            f"Required channels: {', '.join(requested)}. N={len(roi_subs)} participants with available ROI channels. Included: {', '.join('sub-'+x for x in roi_subs)}. Excluded because no ROI sensor was usable: {', '.join('sub-'+x for x in excluded_subs) if excluded_subs else 'None'}. "
             + (
-                "No significant temporal clusters."
+                "No significant time clusters at corrected p <= 0.05."
                 if not rows
                 else " ".join(
                     f"Cluster {r['cluster']}: p={r['p']:.4f}, {r['t_start']:.3f}-{r['t_end']:.3f} s."
@@ -596,6 +624,7 @@ def main():
                 )
             )
         )
+        text += f"\n0.3-0.8 s participant mean vs zero: t={window_t:.5g}; two-sided p={window_p:.5g}."
         text += (
             f"\nActual ROI cluster-forming threshold: +/-{roi_thresh:.4f} (df={len(roi_subs)-1}; two-sided alpha={CLUSTER_FORMING_ALPHA:.2f}, 0.05 each tail).\nStrongest observed clusters, including non-significant:\n"
             + (
@@ -610,10 +639,21 @@ def main():
         report.add_text(label + " results", text, section)
         tag = "ROI8" if requested == ROI8 else "ROI3"
         report.add_figure(
-            roi_plot(st, no, rt, rows, label, "Alpha power"),
+            roi_plot(st, no, rt, rows, label, "Power change from baseline (%)"),
             str(figs / f"{tag}_alpha_clusters.png"),
             label + ": stimulation vs no stimulation",
-            f"Complete-case ROI sample N={len(roi_subs)}. All required ROI channels are retained in every included participant. Lines are group means; ribbons are SEM. Gray vertical bands mark significant cluster-permutation intervals and are labelled with cluster p-value and time range.",
+            f"ROI sample N={len(roi_subs)}. Available good ROI channels are averaged within each participant. Lines are group means; ribbons are SEM. Gray vertical bands mark significant cluster-permutation intervals and are labelled with cluster p-value and time range.",
+            section,
+        )
+        report.add_figure(
+            roi_difference_plot(
+                roi_diff, rt, rows, label + ": ON - OFF time course"
+            ),
+            str(figs / f"{tag}_ON_minus_OFF_cluster_timecourse.png"),
+            label + ": ON - OFF difference and significant clusters",
+            "Mean and SEM of participant-level differences. Shading marks "
+            "significant cluster-corrected intervals; no shading indicates "
+            "no significant cluster.",
             section,
         )
         report.add_figure(
@@ -622,16 +662,17 @@ def main():
             ),
             str(figs / f"{tag}_individual_difference_traces.png"),
             label + ": individual stim - no-stim traces",
-            f"Only participants retaining every required ROI channel are shown (N={len(roi_subs)}).",
+            f"Participants with at least one good ROI channel are shown (N={len(roi_subs)}).",
             section,
         )
         effect_fig, effect_values = participant_window_effects(
-            roi_diff, roi_subs, label + ": participant mean effects"
+            roi_diff, roi_subs, label + ": participant mean effects",
+            window_t, window_p
         )
         report.add_figure(
             effect_fig,
             str(figs / f"{tag}_participant_mean_effects.png"),
-            label + ": participant-level mean 0.2-1.2 s effects",
+            label + ": participant-level mean 0.3-0.8 s effects",
             f"Complete-case ROI N={len(roi_subs)}. Each point is one participant's mean stim - no-stim alpha effect.",
             section,
         )
@@ -647,10 +688,12 @@ def main():
     audit = {
         "subjects": subs,
         "n_subjects_requested": len(subs),
-        "alpha_hz": list(a.alpha),
+        "individual_alpha_peaks_hz": {x: float(peaks[x]) for x in subs},
+        "peaks_csv": str(peaks_path),
+        "peak_half_width_hz": a.peak_half_width,
         "window_s": WINDOW,
-        "baseline_s": None,
-        "contrast_power": "unbaselined",
+        "baseline_s": BASELINE,
+        "contrast_power": "stim percent minus no-stim percent, percentage points",
         "cluster_forming_alpha_two_sided": CLUSTER_FORMING_ALPHA,
         "cluster_forming_alpha_each_tail": CLUSTER_FORMING_ALPHA / 2,
         "cluster_level_significance": PTHRESH,
