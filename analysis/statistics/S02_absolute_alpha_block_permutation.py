@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-import textwrap
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -223,22 +222,29 @@ def run_permutation(data, iterations, seed, normalized=False):
 
 
 def text_page(title, sections):
-    """Render readable, wrapped report text to a PDF page."""
+    """Render one report page, automatically limiting long sections."""
     fig, ax = plt.subplots(figsize=(11.7, 8.3))
     ax.axis("off")
     ax.text(0.045, 0.95, title, fontsize=16, weight="bold",
             va="top", transform=ax.transAxes)
-    y = 0.88
+    y = 0.89
     for heading, content in sections:
-        ax.text(0.045, y, heading, fontsize=11.5, weight="bold",
+        ax.text(0.045, y, heading, fontsize=11, weight="bold",
                 va="top", transform=ax.transAxes)
-        y -= 0.045
-        lines = textwrap.wrap(str(content), width=98)
+        y -= 0.040
+        # Use axes-space line wrapping and stop rather than clip silently.
+        import textwrap
+        lines = textwrap.wrap(str(content), width=104)
         for line in lines:
-            ax.text(0.045, y, line, fontsize=9.3,
+            if y < 0.065:
+                raise ValueError(
+                    f"Report page '{title}' exceeds page height; "
+                    "split the sections into smaller pages."
+                )
+            ax.text(0.045, y, line, fontsize=9.0,
                     va="top", transform=ax.transAxes)
-            y -= 0.024
-        y -= 0.045
+            y -= 0.022
+        y -= 0.030
     return fig
 
 
@@ -290,6 +296,8 @@ def main():
     effects, observed, null, p_perm = run_permutation(
         data, args.n_permutations, args.seed
     )
+    # All primary and leave-one-out tests use percent-corrected ON-OFF.
+    # Only the normalized-ratio sensitivity uses original absolute power.
     n_positive = int(np.count_nonzero(effects > 0))
     n_negative = int(np.count_nonzero(effects < 0))
     n_nonzero = n_positive + n_negative
@@ -317,47 +325,84 @@ def main():
     figures.mkdir(parents=True, exist_ok=True)
     report_path = output / "absolute_alpha_block_permutation.pdf"
     pages = [
-        text_page("S02: subjects and analysis details", [
+        text_page("S02: included participants", [
             ("Included subjects (n=" + str(len(included)) + ")",
              ", ".join("sub-" + s for s in included)),
-            ("Input", str(csv_path)),
-            ("Participant-specific alpha peaks and retained sensors",
-             "; ".join(f"sub-{s}: {peak:g} Hz, {','.join(chs)}"
-                       for s, peak, chs, _, _, _ in details)),
-            ("Outcome and baseline",
-             "ON and OFF are percent-baseline corrected (-0.3 to -0.1 s) "
-             "per trial/sensor. Their difference is in percentage points. "
-             "The normalized (ON-OFF)/(ON+OFF) sensitivity uses original "
-             "UNBASELINED TFR power, with no baseline correction. "
-             "Both use peak +/-1 Hz and 0.3-0.8 s. B03 alpha_power is not reused."),
+            ("Verified trial mapping CSV", str(csv_path)),
+            ("Data and selection",
+             "Final cleaned cue epochs; two ON and two OFF confirmed "
+             "stimulation periods per participant. Both cue directions "
+             "are pooled. Each participant contributes equally to group "
+             "statistics, regardless of number of retained trials."),
         ]),
-        text_page("S02: tests and interpretation", [
-            ("Primary period-label permutation",
-             f"Two-sided, {args.n_permutations:,} permutations, seed {args.seed}; "
-             f"group mean ON-OFF = {observed:.5g} percentage points; p={p_perm:.6g}. "
-             "Each subject contributes equally; trials stay attached to one "
-             "of four verified stimulation periods; exactly two are ON."),
-            ("Exact sign test",
-             f"Positive={n_positive}, negative={n_negative}, ties="
-             f"{len(effects)-n_nonzero}; two-sided binomial p={sign_p:.6g}."),
-            ("Paired Wilcoxon signed-rank test",
-             f"W={w_stat:.6g}; two-sided p={w_p:.6g}. "
-             "Signed-rank is used instead of rank-sum because ON and OFF "
-             "measurements are paired within participant."),
-            ("Sensitivity: unbaselined normalized effect",
-             f"Mean (raw ON-raw OFF)/(raw ON+raw OFF)={norm_observed:.5g}; "
-             f"two-sided period permutation p={norm_p:.6g}. "
-             "Both numerator and denominator use ORIGINAL, UNBASELINED "
-             "absolute power. No percent-baseline values enter this ratio."),
-            ("Interpretation",
-             "These tests address participant-level cue-related alpha change. "
-             "Permutation inference assumes stimulation-period exchangeability; "
-             "order and carryover are not modelled. Sign and signed-rank "
-             "tests are complementary paired analyses, not independent replications."),
+        text_page("S02: TFR and baseline methodology", [
+            ("Multitaper parameters",
+             "2 to 31.5 Hz in 0.5-Hz steps; n_cycles=frequency/2; "
+             "time-bandwidth=2; decimation=2. Power computed per trial "
+             "and per good posterior sensor shared by ON and OFF."),
+            ("Percent baseline correction",
+             "For each trial, sensor and frequency: 100*(power(t,f) - "
+             "mean_baseline_power(f))/mean_baseline_power(f). "
+             "Baseline is -0.3 to -0.1 s, applied separately to "
+             "stimulation ON and stimulation OFF. MNE mode='percent' "
+             "returns fractions, so multiply by 100."),
+            ("Primary ON minus OFF outcome",
+             "After baseline correction, average each trial over "
+             "available posterior sensors, the individual OFF-derived "
+             "peak +/-1 Hz, and 0.3-0.8 s. Pool retained trials within "
+             "each condition for each participant. Subtract participant "
+             "OFF mean from ON mean, yielding percentage points."),
+            ("Separate unbaselined ratio",
+             "The normalized sensitivity (raw ON - raw OFF)/(raw ON + "
+             "raw OFF) is calculated only from original unbaselined "
+             "power, independently of the primary outcome."),
+        ]),
+        text_page("S02: primary and paired statistical tests", [
+            ("Two-sided whole-period permutation test",
+             f"Observed mean participant ON-OFF={observed:.6g} percentage "
+             f"points; p={p_perm:.6g}. Permutations={args.n_permutations:,}, "
+             f"seed={args.seed}. Permute four entire period labels "
+             "within each participant, preserving two ON and two OFF; "
+             "never permute individual trials."),
+            ("Two-sided exact sign test",
+             f"Positive={n_positive}; negative={n_negative}; "
+             f"ties={len(effects)-n_nonzero}; p={sign_p:.6g}. "
+             "Zero differences are excluded from the binomial count."),
+            ("Two-sided paired Wilcoxon signed-rank test",
+             f"W={w_stat:.6g}; p={w_p:.6g}. Uses participant-level "
+             "baseline-corrected ON-OFF differences, not individual "
+             "trials. Signed-rank (paired) is used rather than "
+             "rank-sum (independent samples)."),
+            ("Assumptions",
+             "Period-label permutation assumes exchangeability of "
+             "stimulation assignments; order/carryover effects are "
+             "not modeled. Paired tests are complementary analyses."),
+        ]),
+        text_page("S02: sensitivity analyses", [
+            ("Unbaselined normalized-ratio permutation",
+             f"Group mean ratio={norm_observed:.6g}; two-sided "
+             f"p={norm_p:.6g}. For each participant, calculate "
+             "(raw ON - raw OFF)/(raw ON + raw OFF), using original "
+             "absolute power. Recompute numerator and denominator "
+             "under each whole-period permutation. NO baseline."),
+            ("Leave-one-participant-out baseline-corrected permutation",
+             "Remove one participant at a time and rerun the SAME "
+             "primary baseline-corrected ON-OFF permutation test "
+             "on the remaining participants. The following pages "
+             "report each omitted participant, group effect in "
+             "percentage points and two-sided p-value. The "
+             "unbaselined normalized ratio is not used here."),
         ]),
     ]
-    for start in range(0, len(details), 14):
-        batch = details[start:start + 14]
+    for start in range(0, len(details), 8):
+        batch = details[start:start + 8]
+        pages.append(text_page("Participant peaks and sensors", [
+            (f"sub-{sub}", f"OFF-derived peak {peak:g} Hz; "
+             f"good posterior sensors: {', '.join(channels)}")
+            for sub, peak, channels, _, _, _ in batch
+        ]))
+    for start in range(0, len(details), 10):
+        batch = details[start:start + 10]
         pages.append(text_page("Participant effects", [
             (f"sub-{s}", f"OFF={off:.4g}%, ON={on:.4g}%, "
              f"ON-OFF={diff:.4g} percentage points; peak={peak:g} Hz")
@@ -375,22 +420,22 @@ def main():
             fig.savefig(figures / f"{name}.{extension}",
                         dpi=600, bbox_inches="tight")
     if loo:
-        for start in range(0, len(loo), 14):
+        for start in range(0, len(loo), 10):
             pages.append(text_page("Leave-one-out sensitivity", [
                 (f"Exclude sub-{s}",
                  f"Group ON-OFF={stat:.5g} percentage points; "
                  f"two-sided permutation p={p:.6g}")
-                for s, stat, p in loo[start:start + 14]
+                for s, stat, p in loo[start:start + 10]
             ]))
     with PdfPages(report_path) as pdf:
-        for page in pages[:2]:
+        for page in pages[:4]:
             pdf.savefig(page)
             plt.close(page)
         pdf.savefig(primary_fig)
         plt.close(primary_fig)
         pdf.savefig(normalized_fig)
         plt.close(normalized_fig)
-        for page in pages[2:]:
+        for page in pages[4:]:
             pdf.savefig(page)
             plt.close(page)
     print(f"Permutation p={p_perm:.6g}; sign p={sign_p:.6g}; "
