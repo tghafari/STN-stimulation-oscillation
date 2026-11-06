@@ -330,44 +330,38 @@ def main():
     figures.mkdir(parents=True, exist_ok=True)
     report_path = output / "absolute_alpha_block_permutation.pdf"
     pages = [
-        text_page("S02: subjects and analysis details", [
-            ("Included subjects (n=" + str(len(included)) + ")",
-             ", ".join("sub-" + s for s in included)),
-            ("Input", str(csv_path)),
-            ("Individual peaks CSV", str(peaks_path)),
-            ("Participant-specific alpha peaks and retained sensors",
-             "; ".join(f"sub-{s}: {peak:g} Hz, {','.join(chs)}"
-                       for s, peak, chs, _, _, _ in details)),
-            ("Outcome and baseline",
-             "ON and OFF are percent-baseline corrected (-0.3 to -0.1 s) "
-             "per trial/sensor. Their difference is in percentage points. "
-             "The normalized (ON-OFF)/(ON+OFF) sensitivity uses original "
-             "UNBASELINED TFR power, with no baseline correction. "
-             "Both use peak +/-1 Hz and 0.3-0.8 s. B03 alpha_power is not reused."),
+        text_page("S02: participants and data", [
+            ("Included participants", ", ".join("sub-" + x for x in included)),
+            ("Trial mapping", str(csv_path)),
+            ("Individual peak frequencies", str(peaks_path)),
+            ("Analysis outcome",
+             "Each participant: R=(mean raw ON power - mean raw OFF power) / "
+             "(mean raw ON power + mean raw OFF power). Power is unbaselined, "
+             "averaged over usable posterior sensors, individual OFF-derived "
+             "alpha peak +/-1 Hz, and 0.3-0.8 s. Trial mapping uses B03; "
+             "no baseline correction is used for any statistical test."),
         ]),
-        text_page("S02: tests and interpretation", [
-            ("PRIMARY: squared participant change", f"Mean squared baseline-corrected ON-OFF={sq_obs:.6g} percentage-points squared; upper-tail period permutation p={sq_p:.6g}. Sensitive to effects of either direction."),
-            ("Sensitivity: absolute participant change", f"Mean absolute baseline-corrected ON-OFF={abs_obs:.6g} percentage points; upper-tail period permutation p={abs_p:.6g}."),
-            ("Secondary signed-mean permutation",
-             f"Two-sided, {args.n_permutations:,} permutations, seed {args.seed}; "
-             f"group mean ON-OFF = {observed:.5g} percentage points; p={p_perm:.6g}. "
-             "Each subject contributes equally; trials stay attached to one "
-             "of four verified stimulation periods; exactly two are ON."),
-
-            ("Paired Wilcoxon signed-rank test",
+        text_page("S02: statistics", [
+            ("PRIMARY: squared normalized ratio",
+             f"Mean R squared={sq_obs:.6g}; upper-tail whole-period "
+             f"permutation p={sq_p:.6g}."),
+            ("Sensitivity: absolute normalized ratio",
+             f"Mean absolute R={abs_obs:.6g}; upper-tail permutation "
+             f"p={abs_p:.6g}."),
+            ("Secondary: signed normalized ratio",
+             f"Mean R={observed:.6g}; two-sided whole-period permutation "
+             f"p={p_perm:.6g}."),
+            ("Paired Wilcoxon signed-rank on participant ratios",
              f"W={w_stat:.6g}; two-sided p={w_p:.6g}. "
-             "Signed-rank is used instead of rank-sum because ON and OFF "
-             "measurements are paired within participant."),
-            ("Sensitivity: unbaselined normalized effect",
-             f"Mean (raw ON-raw OFF)/(raw ON+raw OFF)={observed:.5g}; "
-             f"two-sided period permutation p={p_perm:.6g}. "
-             "Both numerator and denominator use ORIGINAL, UNBASELINED "
-             "absolute power. No percent-baseline values enter this ratio."),
-            ("Interpretation",
-             "These tests address participant-level cue-related alpha change. "
-             "Permutation inference assumes stimulation-period exchangeability; "
-             "order and carryover are not modelled. Sign and signed-rank "
-             "tests are complementary paired analyses, not independent replications."),
+             "The signed-rank test detects a common signed shift, "
+             "not heterogeneous magnitude."),
+            ("Leave-one-out",
+             "Repeat the PRIMARY squared-ratio permutation after omitting "
+             "each participant. Results are tabulated below."),
+            ("Assumptions",
+             "Four stimulation periods per participant, two ON and two OFF. "
+             "Whole-period label permutations assume exchangeability and "
+             "do not model carryover or order effects."),
         ]),
     ]
     for start in range(0, len(details), 14):
@@ -377,22 +371,34 @@ def main():
              f"ON-OFF={diff:.4g} percentage points; peak={peak:g} Hz")
             for s, peak, _, on, off, diff in batch
         ]))
-    primary_fig = distribution_page(sq_null, sq_obs, sq_p, "Mean squared ON-OFF (pp squared)", two_sided=False,
-        explanation="PRIMARY TEST: Each participant contributes squared baseline-corrected ON-OFF. Increases and decreases cannot cancel. Blue bars are whole-period permutations, red is the observed statistic, and the dashed line is the upper 5% null cutoff. A red line beyond it indicates an unusually large effect under the null. Squaring emphasizes large individual effects.")
-    absolute_fig = distribution_page(abs_null, abs_obs, abs_p, "Mean absolute ON-OFF (pp)", two_sided=False,
-        explanation="SENSITIVITY TEST: Absolute baseline-corrected ON-OFF differences detect either direction, but weight extreme participants less than the squared statistic. Blue bars show the whole-period permutation null, red is the observed value, and dashed is the upper 5% cutoff. Compare with the primary squared-effect p-value.")
-    signed_fig = distribution_page(null, observed, p_perm, "Signed ON-OFF (pp)",
-        explanation="SECONDARY TEST: Signed participant differences are averaged, so increases and decreases may cancel. Blue bars show whole-period permutation statistics, red is the observed signed mean, and dashed lines indicate the two-sided 5% null cutoff.")
-    normalized_fig = distribution_page(
-        null, norm_observed, norm_p, "Unbaselined (ON-OFF)/(ON+OFF)",
-        explanation="SEPARATE RATIO SENSITIVITY: Both ON and OFF are original unbaselined alpha power. The ratio is never baseline corrected. Blue bars show the period-permutation null, red is observed, and dashed lines mark the two-sided 5% cutoff."
+    primary_fig = distribution_page(
+        sq_null, sq_obs, sq_p, "Mean squared normalized ratio",
+        two_sided=False,
+        explanation="PRIMARY: Participant ratios use only unbaselined "
+        "ON and OFF power. Squaring captures effects of either sign. "
+        "Blue: period-label permutation null; red: observed statistic; "
+        "dashed: upper 5% null threshold.",
     )
-    for name, fig in (("baseline_percent_squared_primary", primary_fig),
-                      ("baseline_percent_absolute_sensitivity", absolute_fig),
-                      ("baseline_percent_signed_secondary", signed_fig),
-                      ("normalized_sensitivity_permutation", signed_fig)):
-        for extension in ("svg", "tiff"):
-            fig.savefig(figures / f"{name}.{extension}",
+    absolute_fig = distribution_page(
+        abs_null, abs_obs, abs_p, "Mean absolute normalized ratio",
+        two_sided=False,
+        explanation="SENSITIVITY: Absolute participant ratios retain "
+        "either-direction effects, with less emphasis on outliers than "
+        "squaring. Blue: null; red: observed; dashed: upper 5% threshold.",
+    )
+    signed_fig = distribution_page(
+        null, observed, p_perm, "Mean signed normalized ratio",
+        explanation="SECONDARY: Participant ratios retain their signs, "
+        "so opposite directions may cancel. Blue: permutation null; "
+        "red: observed; dashed: two-sided 5% null thresholds.",
+    )
+    for name, fig in (
+        ("unbaselined_ratio_squared_primary", primary_fig),
+        ("unbaselined_ratio_absolute_sensitivity", absolute_fig),
+        ("unbaselined_ratio_signed_secondary", signed_fig),
+    ):
+        for ext in ("svg", "tiff"):
+            fig.savefig(figures / f"{name}.{ext}",
                         dpi=600, bbox_inches="tight")
     loo_figures = []
     for start in range(0, len(loo), 16):
