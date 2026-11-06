@@ -11,8 +11,8 @@ RIGHT STN ON versus DBS OFF, and LEFT STN ON versus DBS OFF:
     5. ON only: right minus left sensor absolute-power TFR.
 
 RIGHT STN ON versus LEFT STN ON:
-    1. Left sensors: right-STN ON minus left-STN ON TFR.
-    2. Right sensors: right-STN ON minus left-STN ON TFR.
+    1. Left sensors: (right-STN ON - left-STN ON) / their sum.
+    2. Right sensors: (right-STN ON - left-STN ON) / their sum.
     3. Right sensors: baseline-corrected right/left STN alpha curves.
     4. Left sensors: baseline-corrected right/left STN alpha curves.
 
@@ -38,8 +38,9 @@ Run from the repository root:
     python analysis/group/EEG_posterior_channels/stim_laterality/\
 run_stim_laterality_tfr.py --subjects 101 102 103
 
-The script outputs only PDF reports. No TFR baseline correction,
-interpolation, inferential tests or statistical exclusions are performed.
+The third PDF uses symmetric normalisation of linear, unbaselined power.
+Its final page averages participant TFRs after aligning frequency to each
+participant's OFF-defined alpha peak. No statistical tests are performed.
 """
 
 from __future__ import annotations
@@ -72,6 +73,8 @@ ALPHA_HALF_WIDTH_HZ = 1.0
 ALPHA_BASELINE = (-0.3, -0.1)
 STIM_LABELS = {"right": "stim_right", "left": "stim_left"}
 POWER_SCALE = 1e12  # V squared to microvolt squared.
+PEAK_RELATIVE_FREQS = np.arange(-5.0, 5.0 + 0.25, 0.5)
+GRAND_TIMES = np.arange(-0.5, 1.5 + 0.005, 0.01)
 
 
 def parse_args():
@@ -407,13 +410,108 @@ def plot_on_off_page(subject, side, times, maps, channels, peak, counts):
     return fig
 
 
+def normalised_stimulation_difference(right_power, left_power):
+    """Compute (right-STN ON - left-STN ON) / (right-STN ON + left-STN ON).
+
+    Inputs are non-baselined, trial-averaged linear powers for the SAME
+    posterior sensor ROI. A non-positive or nonfinite denominator is
+    invalid; it must not be replaced by an arbitrary epsilon.
+    """
+    denominator = right_power + left_power
+    if not np.isfinite(denominator).all() or np.any(denominator <= 0):
+        raise ValueError("Invalid right-ON + left-ON power denominator.")
+    return (right_power - left_power) / denominator
+
+
+def peak_aligned_map(values, peak, times):
+    """Interpolate a participant's normalised TFR to relative frequencies.
+
+    The y coordinate is frequency minus the participant's OFF-derived
+    alpha peak (Hz). Interpolate each time column to the common
+    -5..+5 Hz grid, then interpolate each frequency row in time to
+    -0.5..1.5 seconds in 10-ms steps. No extrapolation is permitted.
+    """
+    desired_frequencies = peak + PEAK_RELATIVE_FREQS
+    if (
+        desired_frequencies.min() < FREQUENCIES.min()
+        or desired_frequencies.max() > FREQUENCIES.max()
+        or GRAND_TIMES.min() < times.min() - 1e-8
+        or GRAND_TIMES.max() > times.max() + 1e-8
+    ):
+        raise ValueError(
+            "The TFR does not cover the common peak-relative "
+            "frequency/time window."
+        )
+    aligned_frequencies = np.stack([
+        np.interp(desired_frequencies, FREQUENCIES, values[:, index])
+        for index in range(values.shape[1])
+    ], axis=1)
+    return np.stack([
+        np.interp(GRAND_TIMES, times, frequency_row)
+        for frequency_row in aligned_frequencies
+    ])
+
+
+def plot_peak_aligned_grand_average(aligned, participants):
+    """Plot equally weighted participant averages in peak-relative Hz."""
+    if not participants:
+        raise ValueError("No participants to include in grand average.")
+    grand = {
+        hemisphere: np.mean(
+            np.stack([entry[hemisphere] for entry in aligned]), axis=0
+        )
+        for hemisphere in ("left", "right")
+    }
+    limit = colour_limit(
+        [grand["left"], grand["right"]], GRAND_TIMES
+    )
+    fig, axes = plt.subplots(
+        1, 2, figsize=(14, 6.8), layout="constrained"
+    )
+    for ax, hemisphere in zip(axes, ("left", "right")):
+        image = ax.pcolormesh(
+            GRAND_TIMES, PEAK_RELATIVE_FREQS, grand[hemisphere],
+            cmap="RdBu_r", shading="auto",
+            norm=TwoSlopeNorm(
+                vmin=-limit, vcenter=0, vmax=limit
+            ),
+            rasterized=True,
+        )
+        ax.axvline(0, color="black", linestyle="--", linewidth=0.8)
+        ax.axhline(0, color="black", linestyle=":", linewidth=1.3)
+        for edge in (-ALPHA_HALF_WIDTH_HZ, ALPHA_HALF_WIDTH_HZ):
+            ax.axhline(edge, color="black", linewidth=1.5)
+        ax.set(
+            title=f"{hemisphere.capitalize()} posterior sensors",
+            xlabel="Time from cue onset (s)",
+            ylabel="Frequency relative to individual alpha peak (Hz)",
+        )
+        fig.colorbar(
+            image, ax=ax, label="Mean normalised (R - L) / (R + L)",
+            shrink=0.82,
+        )
+    fig.suptitle(
+        "Grand average: RIGHT STN ON minus LEFT STN ON, "
+        f"individual-peak aligned (n={len(participants)})",
+        fontsize=14,
+    )
+    fig.text(
+        0.5, 0.012,
+        "Equal weight per participant | 0 Hz = individual alpha peak | "
+        "solid lines = peak +/-1 Hz | "
+        "no baseline correction of TFR power",
+        ha="center", fontsize=9,
+    )
+    return fig
+
+
 def plot_stim_comparison_page(subject, times, maps, channels, peak, counts):
     """Two right-minus-left STN TFRs and two alpha-condition curves."""
-    left_diff = (
-        maps[("stim_right", "left")] - maps[("stim_left", "left")]
+    left_diff = normalised_stimulation_difference(
+        maps[("stim_right", "left")], maps[("stim_left", "left")]
     )
-    right_diff = (
-        maps[("stim_right", "right")] - maps[("stim_left", "right")]
+    right_diff = normalised_stimulation_difference(
+        maps[("stim_right", "right")], maps[("stim_left", "right")]
     )
     limit = colour_limit([left_diff, right_diff], times)
     fig, axes = plt.subplots(
@@ -423,13 +521,16 @@ def plot_stim_comparison_page(subject, times, maps, channels, peak, counts):
         axes[0],
         (left_diff, right_diff),
         (
-            "Left sensors: right STN ON - left STN ON",
-            "Right sensors: right STN ON - left STN ON",
+            "Left sensors: (right STN ON - left STN ON) / sum",
+            "Right sensors: (right STN ON - left STN ON) / sum",
         ),
     ):
         image = add_tfr(ax, times, values, title, limit)
+        for edge in (peak - ALPHA_HALF_WIDTH_HZ,
+                     peak + ALPHA_HALF_WIDTH_HZ):
+            ax.axhline(edge, color="black", linewidth=1.5)
         fig.colorbar(
-            image, ax=ax, label="Power difference (microvolt squared)",
+            image, ax=ax, label="Normalised (R - L) / (R + L)",
             shrink=0.85, pad=0.01,
         )
 
@@ -467,7 +568,8 @@ def plot_stim_comparison_page(subject, times, maps, channels, peak, counts):
         0.5, 0.003,
         f"Left: {', '.join(channels['left'])} | "
         f"Right: {', '.join(channels['right'])} | "
-        "Alpha curves: baseline-corrected. TFRs: unbaselined.",
+        "Alpha curves: baseline-corrected; TFRs: normalised, "
+        "unbaselined. Black lines: peak +/-1 Hz.",
         ha="center", fontsize=9,
     )
     return fig
@@ -509,15 +611,33 @@ def methods_page(report_key):
     ]
     if report_key == "comparison":
         details = (
-            "Panels 1 and 2 are unbaselined right-STN-ON minus "
-            "left-STN-ON TFRs on left and right sensors, respectively. "
-            "Panel 3 shows baseline-corrected alpha curves for right "
-            "sensors under right-STN ON and left-STN ON. Panel 4 "
-            "shows the same comparison for left sensors. Both ON "
-            "periods are analysed separately; OFF is not used in "
-            "these comparisons."
+            "Panels 1 and 2 are the symmetric normalised differences "
+            "(right-STN ON minus left-STN ON) divided by their SUM, "
+            "computed from unbaselined linear power for left and right "
+            "sensors, respectively. These TFRs are dimensionless; "
+            "no percent baseline correction is applied. Black "
+            "horizontal lines mark the participant's alpha peak "
+            "+/-1 Hz. Panel 3 shows separately baseline-corrected "
+            "right- and left-STN alpha curves on right sensors, and "
+            "panel 4 shows them on left sensors. No OFF trials enter "
+            "either TFR contrast."
         )
         title = "RIGHT versus LEFT STN ON: analysis methods"
+        shared[-1] = (
+            "Normalisation and grand-average frequency alignment",
+            "For each participant and sensor hemisphere, calculate "
+            "(R - L) / (R + L) from trial-averaged, unbaselined "
+            "right- and left-STN power. A zero or invalid sum is "
+            "an error. Then shift the frequency axis by subtracting "
+            "that participant's OFF-defined alpha peak. Interpolate "
+            "the normalised TFR to a common grid from -5 to +5 Hz "
+            "relative to peak, in 0.5-Hz steps, and to a common "
+            "10-ms time grid. Average aligned maps with one equal "
+            "weight per participant, separately for left and right "
+            "sensors. The final PDF page shows the resulting grand "
+            "averages. No averaging across absolute alpha frequencies "
+            "or baseline correction is performed on TFRs."
+        )
     else:
         side = report_key.upper()
         details = (
@@ -591,6 +711,8 @@ def main():
         for key, filename in names.items()
     }
     pages = {key: 0 for key in names}
+    grand_aligned = []
+    grand_subjects = []
     try:
         for report_key, pdf in pdfs.items():
             page = methods_page(report_key)
@@ -632,11 +754,46 @@ def main():
                 pdfs["comparison"].savefig(fig)
                 plt.close(fig)
                 pages["comparison"] += 1
+
+                # Align the participant's already-normalised TFR
+                # before averaging across participants. This does not
+                # affect either of the first two reports.
+                relative = {}
+                try:
+                    for hemisphere in ("left", "right"):
+                        right_power = maps[("stim_right", hemisphere)]
+                        left_power = maps[("stim_left", hemisphere)]
+                        normalised = normalised_stimulation_difference(
+                            right_power, left_power
+                        )
+                        relative[hemisphere] = peak_aligned_map(
+                            normalised, peak, times
+                        )
+                except ValueError as exc:
+                    print(
+                        f"sub-{subject}: grand-average alignment "
+                        f"unavailable: {exc}"
+                    )
+                else:
+                    grand_aligned.append(relative)
+                    grand_subjects.append(subject)
                 print(f"sub-{subject}: saved all three report pages.")
             except (
                 FileNotFoundError, ValueError, RuntimeError, KeyError
             ) as exc:
                 print(f"sub-{subject}: skipped - {exc}")
+        if grand_aligned:
+            figure = plot_peak_aligned_grand_average(
+                grand_aligned, grand_subjects
+            )
+            pdfs["comparison"].savefig(figure)
+            plt.close(figure)
+            print(
+                "Peak-aligned grand average: "
+                f"{len(grand_subjects)} participants."
+            )
+        else:
+            print("No eligible participants for peak-aligned grand average.")
     finally:
         for pdf in pdfs.values():
             pdf.close()
