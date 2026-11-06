@@ -55,11 +55,17 @@ def args():
     p.add_argument("--peaks-csv", type=Path, default=None)
     p.add_argument("--peak-half-width", type=float, default=1.0)
     p.add_argument(
+        "--min-cluster-ms", type=float, default=50.0,
+        help="Minimum temporal cluster span to report (default: 50 ms).",
+    )
+    p.add_argument(
         "--sensor-fdr",
         action="store_true",
         help="Optionally apply BH-FDR across single-sensor cluster p-values; default is no FDR.",
     )
     a = p.parse_args()
+    if a.min_cluster_ms < 0:
+        p.error("--min-cluster-ms must be nonnegative")
     if a.peak_half_width <= 0:
         p.error("--peak-half-width must be positive")
     return a
@@ -124,6 +130,11 @@ def one_d(X, seed):
     )
 
 
+def duration_eligible(row, minimum_seconds):
+    """Check contiguous sampled duration, including one sample width."""
+    return row["duration_s"] + 1e-9 >= minimum_seconds
+
+
 def sig_1d(T, cl, p, t):
     out = []
     for i, (m, pv) in enumerate(zip(cl, p)):
@@ -138,6 +149,7 @@ def sig_1d(T, cl, p, t):
                     "peak_t": float(t[ix[np.argmax(np.abs(T[ix]))]]),
                     "peak_stat": float(T[ix][np.argmax(np.abs(T[ix]))]),
                     "n_samples": int(ix.size),
+                    "duration_s": float(ix.size * np.median(np.diff(t))),
                 }
             )
     return out
@@ -275,6 +287,7 @@ def summarize_clusters(T, clusters, pvals, t, chs=None):
                     p=float(pv),
                     cluster_stat=float(vals.sum()),
                     n_samples=int(ix.size),
+                    duration_s=float(ix.size * np.median(np.diff(t))),
                     n_sensors=1,
                     t_start=float(t[ix].min()),
                     t_end=float(t[ix].max()),
@@ -293,6 +306,7 @@ def summarize_clusters(T, clusters, pvals, t, chs=None):
                     p=float(pv),
                     cluster_stat=float(vals.sum()),
                     n_samples=int(mask.sum()),
+                    duration_s=float(len(np.unique(ti)) * np.median(np.diff(t))),
                     n_sensors=len(used),
                     t_start=float(t[ti].min()),
                     t_end=float(t[ti].max()),
@@ -398,6 +412,16 @@ def main():
     )
     report.add_text("Analysis details", details, section)
     report.add_text(
+        "Cluster duration criterion",
+        f"Only clusters spanning at least {a.min_cluster_ms:g} ms of "
+        "sampled time and having cluster-corrected p <= 0.05 are "
+        "reported as significant. The p-values are from the "
+        "unmodified cluster-mass permutation test; the duration "
+        "criterion is an additional reporting filter, not a new "
+        "duration-corrected p-value.",
+        section,
+    )
+    report.add_text(
         "How to read significant time intervals",
         (
             "A cluster time range lists the centres of sampled TFR time "
@@ -471,7 +495,11 @@ def main():
             verbose=False,
         )
         all_ch = summarize_clusters(Ts, cs, ps, ct)
-        sig_ch = [r for r in all_ch if r["p"] <= PTHRESH]
+        sig_ch = [
+            r for r in all_ch
+            if r["p"] <= PTHRESH
+            and duration_eligible(r, a.min_cluster_ms / 1000.0)
+        ]
         sensor_results[ch] = {
             "n_subjects": len(ch_subs),
             "included_subjects": ch_subs,
@@ -490,6 +518,7 @@ def main():
                 "n_samples": r["n_samples"],
                 "t_start": r["t_start"],
                 "t_end": r["t_end"],
+                "duration_s": r["duration_s"],
             }
             sensor_cluster_records.append(rec)
             sensor_pvals.append(rec["p_cluster"])
@@ -500,7 +529,7 @@ def main():
     sensor_names_for_fdr = list(sensor_results)
     if a.sensor_fdr and sensor_names_for_fdr:
         sensor_min_ps = np.asarray([
-            min((r["p"] for r in sensor_results[ch]["all_clusters"]),
+            min((r["p"] for r in sensor_results[ch]["significant_clusters"]),
                 default=1.0)
             for ch in sensor_names_for_fdr
         ])
@@ -514,12 +543,16 @@ def main():
         for rec in sensor_cluster_records:
             rej, q = fdr_by_sensor[rec["sensor"]]
             rec["p_fdr"] = q  # sensor-level FDR q-value, not cluster q
-            rec["significant_fdr"] = bool(rej and rec["p_cluster"] <= PTHRESH)
+            rec["significant_fdr"] = bool(
+                rej and rec["p_cluster"] <= PTHRESH
+                and duration_eligible(rec, a.min_cluster_ms / 1000.0)
+            )
         for ch, (rej, q) in fdr_by_sensor.items():
             sensor_results[ch]["sensor_level_p_fdr"] = q
             sensor_results[ch]["significant_fdr"] = rej
     sig_uncorrected = sorted(
-        {r["sensor"] for r in sensor_cluster_records if r["p_cluster"] <= PTHRESH}
+        ch for ch, result in sensor_results.items()
+        if result["significant_clusters"]
     )
     sig_fdr = sorted(
         {r["sensor"] for r in sensor_cluster_records if r.get("significant_fdr")}
@@ -554,6 +587,7 @@ def main():
             r
             for r in sensor_cluster_records
             if r["sensor"] == ch and r["p_cluster"] <= PTHRESH
+            and duration_eligible(r, a.min_cluster_ms / 1000.0)
         ]
         details = (
             f"{ch}: N={dat['n_subjects']}; "
@@ -625,7 +659,10 @@ def main():
             seed=a.seed,
             verbose=False,
         )
-        rows = sig_1d(Tr, cr, pr, rt)
+        rows = [
+            r for r in sig_1d(Tr, cr, pr, rt)
+            if duration_eligible(r, a.min_cluster_ms / 1000.0)
+        ]
         all_roi = summarize_clusters(Tr, cr, pr, rt)
         roi_results[label] = {
             "required_channels": list(requested),
@@ -717,6 +754,7 @@ def main():
         "peaks_csv": str(peaks_path),
         "peak_half_width_hz": a.peak_half_width,
         "window_s": WINDOW,
+        "minimum_reported_cluster_duration_ms": a.min_cluster_ms,
         "baseline_s": BASELINE,
         "contrast_power": "stim percent minus no-stim percent, percentage points",
         "cluster_forming_alpha_two_sided": CLUSTER_FORMING_ALPHA,
@@ -744,6 +782,7 @@ def main():
             "n_samples",
             "t_start",
             "t_end",
+            "duration_s",
         ]
         if a.sensor_fdr:
             fields += ["p_fdr", "significant_fdr"]
