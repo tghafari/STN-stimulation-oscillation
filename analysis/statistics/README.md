@@ -10,7 +10,7 @@ Run from repository root:
 python analysis/statistics/S02_absolute_alpha_block_permutation.py --subjects 101 102 103 105 106 107 108 112 113 114 115 116 118 120 121 123 --platform mac
 ```
 
-Primary test: upper-tail whole-stimulation-period permutation of mean squared participant ratios (either-direction magnitude). Sensitivity: mean absolute ratio permutation and leave-one-participant-out squared-ratio permutation. Secondary tests: two-sided signed-mean ratio permutation and paired Wilcoxon signed-rank test of participant ratios against zero. **No sign test.** The signed-rank test assesses a consistent direction, not heterogeneous magnitude.
+Primary test: upper-tail whole-stimulation-period permutation of mean squared participant ratios (either-direction magnitude). Sensitivity: mean absolute ratio permutation and leave-one-participant-out squared-ratio permutation. Secondary tests: two-sided signed-mean ratio permutation paired Wilcoxon signed-rank test of participant ratios against zero, and an exact two-sided sign test on positive versus negative participant ratios (zero ratios excluded). The signed-rank test assesses a consistent direction, not heterogeneous magnitude.
 
 The PDF, permutation figures, and leave-one-out table are saved under `<PROJECT_ROOT>/derivatives/reports/group/absolute_alpha_block_permutation/`. The PDF includes participants, individual peaks, methods, test statistics, p-values and figure explanations. Optional `--input-csv`, `--peaks-csv`, `--project-root`, `--n-permutations`, `--seed`, and `--n-jobs` flags are supported.
 

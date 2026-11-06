@@ -30,7 +30,7 @@ import mne
 import numpy as np
 import pandas as pd
 from matplotlib.backends.backend_pdf import PdfPages
-from scipy.stats import wilcoxon
+from scipy.stats import binomtest, wilcoxon
 
 HERE = Path(__file__).resolve().parent
 SUBJECT_DIR = HERE.parent / "subject" / "EEG_all_channels"
@@ -289,7 +289,11 @@ def main():
     )
     _, sq_obs, sq_null, sq_p = run_permutation(data, args.n_permutations, args.seed, statistic="squared")
     _, abs_obs, abs_null, abs_p = run_permutation(data, args.n_permutations, args.seed, statistic="absolute")
-    n_nonzero = int(np.count_nonzero(effects))
+    n_positive = int(np.count_nonzero(effects > 0))
+    n_negative = int(np.count_nonzero(effects < 0))
+    n_nonzero = n_positive + n_negative
+    sign_p = (float(binomtest(n_positive, n_nonzero, p=0.5, alternative='two-sided').pvalue)
+              if n_nonzero else 1.0)
     if n_nonzero:
         wilcox = wilcoxon(effects, zero_method="wilcox",
                          alternative="two-sided", method="auto")
@@ -331,6 +335,8 @@ def main():
             ("Secondary: signed normalized ratio",
              f"Mean R={observed:.6g}; two-sided whole-period permutation "
              f"p={p_perm:.6g}."),
+            ("Exact two-sided sign test on participant ratios",
+             f"Positive={n_positive}, negative={n_negative}, ties={len(effects)-n_nonzero}; p={sign_p:.6g}. Zero ratios are excluded."),
             ("Paired Wilcoxon signed-rank on participant ratios",
              f"W={w_stat:.6g}; two-sided p={w_p:.6g}. "
              "The signed-rank test detects a common signed shift, "
@@ -402,7 +408,7 @@ def main():
                                    constrained_layout=True)
     axes[0].hist(effects, bins=min(12, max(3, len(effects))))
     axes[0].axvline(0, color="black", linestyle="--")
-    axes[0].set(title="Individual normalized ON-OFF ratios", ylabel="Participants")
+    axes[0].set(title=f"Individual normalized ratios; sign test p={sign_p:.5g}", ylabel="Participants")
     axes[1].axhline(0, color="black", linestyle="--")
     order = np.argsort(np.abs(effects))
     axes[1].scatter(np.arange(1, len(effects) + 1), effects[order])
@@ -434,8 +440,8 @@ def main():
             pdf.savefig(page)
             plt.close(page)
     print(f"Squared ratio primary p={sq_p:.6g}; absolute ratio sensitivity p={abs_p:.6g}; "
-          f"Signed permutation p={p_perm:.6g}; "
-          f"Wilcoxon signed-rank p={w_p:.6g}; sensitivity p={norm_p:.6g}")
+          f"Signed permutation p={p_perm:.6g}; sign test p={sign_p:.6g}; "
+          f"Wilcoxon signed-rank p={w_p:.6g}")
     print(f"Report: {report_path}")
 
 
