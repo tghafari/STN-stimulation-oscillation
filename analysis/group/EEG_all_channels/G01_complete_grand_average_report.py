@@ -840,7 +840,14 @@ def main():
         "\n".join(f"{ch} (n={len(by[ch])}): {', '.join(by[ch])}" for ch in chs),
         "Overview",
     )
-    logic = "Power is computed separately for Stim and No-stim for every participant/sensor. Difference and Ratio are then computed for that participant/sensor from ORIGINAL UNBASELINED power. Participants are averaged independently per sensor. For ROI TFRs, average good sensors within each participant before averaging participants equally. Plotted difference: Stim percent-baseline power minus No-stim percent-baseline power (percentage points), each normalized to -0.3 to -0.1 s at participant/sensor level. Absolute difference QC and normalized ratio retain ORIGINAL UNBASELINED power. Ratio baseline: NONE."
+    logic = "Power is computed separately for Stim and No-stim for every participant/sensor. " \
+    "Difference and Ratio are then computed for that participant/sensor from ORIGINAL " \
+    "UNBASELINED power. Participants are averaged independently per sensor. For ROI TFRs, " \
+    "average good sensors within each participant before averaging participants equally. " \
+    "Plotted difference: Stim percent-baseline power minus No-stim percent-baseline power " \
+    "(percentage points), each normalized to -0.3 to -0.1 s at participant/sensor level. " \
+    "Absolute difference QC and normalized ratio retain ORIGINAL UNBASELINED power. " \
+    "Ratio baseline: NONE."
     report.add_text("Final analysis logic", logic, "Overview")
     # ERP ROI summaries retained; ERP baseline is independent of TFR contrasts.
     erp = {c: {} for c in CONDITIONS}
