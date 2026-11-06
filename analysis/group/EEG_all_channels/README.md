@@ -69,6 +69,9 @@ Optional `--sensor-fdr` applies FDR correction across single-sensor cluster resu
 - Three-channel ROI: PO3, POz, PO4.
 - Eight-channel ROI: PO3, POz, PO4, O1, Oz, O2, PO7, PO8.
 - Bad or missing channels are not interpolated for group analysis.
+- TFR scalp maps: average participants independently for each sensor (excluding participants missing that sensor).
+- TFR ROI plots: average available good ROI sensors **within each participant first**, then average participant-level ROI arrays equally. Participants with no usable ROI sensors are excluded from that ROI. ROI channel membership can differ across participants and is documented in the report.
+- ERP ROI plots and separate Q01/Q02/S01 analyses are unchanged by this G01 TFR-only update.
 - The subject is the unit of statistical inference.
 
 ## Outputs
