@@ -242,15 +242,16 @@ def text_page(title, sections):
     return fig
 
 
-def distribution_page(null, observed, p, label):
+def distribution_page(null, observed, p, label, two_sided=True):
     """Plot two-sided null, observed statistic and critical thresholds."""
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.hist(null, bins=50, color="lightsteelblue")
     ax.axvline(observed, color="darkred", linewidth=2, label="Observed")
-    threshold = np.quantile(np.abs(null), 0.95)
-    ax.axvline(-threshold, color="gray", linestyle="--")
+    threshold = np.quantile(np.abs(null) if two_sided else null, 0.95)
+    if two_sided:
+        ax.axvline(-threshold, color="gray", linestyle="--")
     ax.axvline(threshold, color="gray", linestyle="--",
-               label="Two-sided 5% threshold")
+               label="Two-sided 5% threshold" if two_sided else "Upper-tail 5% threshold")
     ax.set(title=f"{label}: observed={observed:.4g}, p={p:.5g}",
            xlabel=label, ylabel="Permutations")
     ax.legend()
@@ -379,8 +380,8 @@ def main():
              f"ON-OFF={diff:.4g} percentage points; peak={peak:g} Hz")
             for s, peak, _, on, off, diff in batch
         ]))
-    primary_fig = distribution_page(sq_null, sq_obs, sq_p, "Mean squared ON-OFF (pp squared)")
-    absolute_fig = distribution_page(abs_null, abs_obs, abs_p, "Mean absolute ON-OFF (pp)")
+    primary_fig = distribution_page(sq_null, sq_obs, sq_p, "Mean squared ON-OFF (pp squared)", two_sided=False)
+    absolute_fig = distribution_page(abs_null, abs_obs, abs_p, "Mean absolute ON-OFF (pp)", two_sided=False)
     signed_fig = distribution_page(null, observed, p_perm, "Signed ON-OFF (pp)")
     normalized_fig = distribution_page(
         norm_null, norm_observed, norm_p, "Unbaselined (ON-OFF)/(ON+OFF)"
