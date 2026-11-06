@@ -30,7 +30,6 @@ for p in (ANALYSIS_DIR / "subject" / "EEG_all_channels", ANALYSIS_DIR / "utils")
 from pipeline_config import CONDITIONS, resolve_project_root, stage_path
 from pdf_report import ParticipantPDF
 
-DEFAULT_ALPHA = (8.0, 12.0)  # legacy --alpha option; peak range is primary
 WINDOW = (0.3, 0.8)
 BASELINE = (-0.3, -0.1)
 FREQS = np.arange(2.0, 32.0, 0.5)
@@ -52,14 +51,6 @@ def args():
     p.add_argument("--platform", choices=["mac", "bluebear"], default="mac")
     p.add_argument("--project-root", default=None)
     p.add_argument("--n-jobs", type=int, default=4)
-    p.add_argument(
-        "--alpha",
-        nargs=2,
-        type=float,
-        metavar=("FMIN", "FMAX"),
-        default=DEFAULT_ALPHA,
-        help="Frequency range in Hz to average before cluster testing, e.g. --alpha 8 12",
-    )
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--peaks-csv", type=Path, default=None)
     p.add_argument("--peak-half-width", type=float, default=1.0)
@@ -69,10 +60,8 @@ def args():
         help="Optionally apply BH-FDR across single-sensor cluster p-values; default is no FDR.",
     )
     a = p.parse_args()
-    if a.alpha[0] >= a.alpha[1]:
-        p.error("--alpha requires FMIN < FMAX")
-    if a.alpha[0] < FREQS.min() or a.alpha[1] > FREQS.max():
-        p.error(f"--alpha must lie within {FREQS.min():g}-{FREQS.max():g} Hz")
+    if a.peak_half_width <= 0:
+        p.error("--peak-half-width must be positive")
     return a
 
 
@@ -368,7 +357,7 @@ def main():
     section = "Alpha cluster permutation"
     report.add_text(
         "Analysis structure",
-        "This report intentionally contains NO whole-scalp sensor x time cluster test. Single sensors are tested separately using every participant retaining that sensor in both stimulation conditions. ROI3 uses participants retaining PO3, POz and PO4 in both conditions. ROI8 uses participants retaining PO3, POz, PO4, O1, Oz, O2, PO7 and PO8 in both conditions. Thus a bad channel excludes a participant only from analyses that require that channel.",
+        "This report intentionally contains NO whole-scalp sensor x time cluster test. Single sensors are tested separately using every participant retaining that sensor in both stimulation conditions. ROI3 and ROI8 include participants with one or more good ROI sensors in both conditions; available sensors are averaged within participant first. Thus a bad channel excludes a participant only from analyses that require that channel.",
         section,
     )
     details = (
@@ -403,7 +392,7 @@ def main():
     # dataset discards many posterior/occipital sensors because one bad channel in
     # one participant removes that sensor from the entire whole-scalp test.
     # The inferential analyses below instead use channel/ROI-specific complete cases.
-    # Single-sensor tests: sensor-specific complete-case participants.
+    # Single-sensor tests: sensor-specific participants with usable ROI sensors.
     sensor_results = {}
     sensor_cluster_records = []
     sensor_pvals = []
@@ -542,7 +531,7 @@ def main():
         if len(roi_subs) < 2:
             report.add_text(
                 label + " results",
-                f"Insufficient complete-case participants. Required channels: {', '.join(requested)}. Included: {', '.join('sub-'+x for x in roi_subs) if roi_subs else 'None'}. Excluded because at least one required ROI channel was bad/missing: {', '.join('sub-'+x for x in excluded_subs) if excluded_subs else 'None'}.",
+                f"Insufficient complete-case participants. Required channels: {', '.join(requested)}. Included: {', '.join('sub-'+x for x in roi_subs) if roi_subs else 'None'}. Excluded because no ROI channel was usable: {', '.join('sub-'+x for x in excluded_subs) if excluded_subs else 'None'}.",
                 section,
             )
             roi_results[label] = {
@@ -621,7 +610,7 @@ def main():
             roi_plot(st, no, rt, rows, label, "Alpha power"),
             str(figs / f"{tag}_alpha_clusters.png"),
             label + ": stimulation vs no stimulation",
-            f"Complete-case ROI sample N={len(roi_subs)}. All required ROI channels are retained in every included participant. Lines are group means; ribbons are SEM. Gray vertical bands mark significant cluster-permutation intervals and are labelled with cluster p-value and time range.",
+            f"ROI sample N={len(roi_subs)}. Available good ROI channels are averaged within each participant. Lines are group means; ribbons are SEM. Gray vertical bands mark significant cluster-permutation intervals and are labelled with cluster p-value and time range.",
             section,
         )
         report.add_figure(
@@ -630,7 +619,7 @@ def main():
             ),
             str(figs / f"{tag}_individual_difference_traces.png"),
             label + ": individual stim - no-stim traces",
-            f"Only participants retaining every required ROI channel are shown (N={len(roi_subs)}).",
+            f"Participants with at least one good ROI channel are shown (N={len(roi_subs)}).",
             section,
         )
         effect_fig, effect_values = participant_window_effects(
@@ -639,7 +628,7 @@ def main():
         report.add_figure(
             effect_fig,
             str(figs / f"{tag}_participant_mean_effects.png"),
-            label + ": participant-level mean 0.2-1.2 s effects",
+            label + ": participant-level mean 0.3-0.8 s effects",
             f"Complete-case ROI N={len(roi_subs)}. Each point is one participant's mean stim - no-stim alpha effect.",
             section,
         )
