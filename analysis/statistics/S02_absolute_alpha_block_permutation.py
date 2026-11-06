@@ -346,7 +346,9 @@ def main():
              "Both use peak +/-1 Hz and 0.3-0.8 s. B03 alpha_power is not reused."),
         ]),
         text_page("S02: tests and interpretation", [
-            ("Primary period-label permutation",
+            ("PRIMARY: squared participant change", f"Mean squared baseline-corrected ON-OFF={sq_obs:.6g} percentage-points squared; upper-tail period permutation p={sq_p:.6g}. Sensitive to effects of either direction."),
+            ("Sensitivity: absolute participant change", f"Mean absolute baseline-corrected ON-OFF={abs_obs:.6g} percentage points; upper-tail period permutation p={abs_p:.6g}."),
+            ("Secondary signed-mean permutation",
              f"Two-sided, {args.n_permutations:,} permutations, seed {args.seed}; "
              f"group mean ON-OFF = {observed:.5g} percentage points; p={p_perm:.6g}. "
              "Each subject contributes equally; trials stay attached to one "
@@ -377,13 +379,15 @@ def main():
              f"ON-OFF={diff:.4g} percentage points; peak={peak:g} Hz")
             for s, peak, _, on, off, diff in batch
         ]))
-    primary_fig = distribution_page(
-        null, observed, p_perm, "ON - OFF (percentage points)"
-    )
+    primary_fig = distribution_page(sq_null, sq_obs, sq_p, "Mean squared ON-OFF (pp squared)")
+    absolute_fig = distribution_page(abs_null, abs_obs, abs_p, "Mean absolute ON-OFF (pp)")
+    signed_fig = distribution_page(null, observed, p_perm, "Signed ON-OFF (pp)")
     normalized_fig = distribution_page(
         norm_null, norm_observed, norm_p, "Unbaselined (ON-OFF)/(ON+OFF)"
     )
-    for name, fig in (("baseline_percent_permutation", primary_fig),
+    for name, fig in (("baseline_percent_squared_primary", primary_fig),
+                      ("baseline_percent_absolute_sensitivity", absolute_fig),
+                      ("baseline_percent_signed_secondary", signed_fig),
                       ("normalized_sensitivity_permutation", normalized_fig)):
         for extension in ("svg", "tiff"):
             fig.savefig(figures / f"{name}.{extension}",
@@ -392,11 +396,11 @@ def main():
     for start in range(0, len(loo), 16):
         fig, ax = plt.subplots(figsize=(11, 8))
         ax.axis("off")
-        ax.set_title("Leave-one-out: baseline-corrected ON - OFF")
+        ax.set_title("Leave-one-out: squared baseline-corrected ON - OFF")
         table = ax.table(
             cellText=[[f"sub-{sub}", f"{stat:.5f}", f"{p:.5g}"]
                       for sub, stat, p in loo[start:start + 16]],
-            colLabels=["Omitted subject", "Mean difference (percentage points)",
+            colLabels=["Omitted subject", "Mean squared difference (pp squared)",
                        "Two-sided permutation p"],
             colWidths=[0.22, 0.48, 0.30],
             loc="center", cellLoc="center",
@@ -429,6 +433,10 @@ def main():
             plt.close(page)
         pdf.savefig(primary_fig)
         plt.close(primary_fig)
+        pdf.savefig(absolute_fig)
+        plt.close(absolute_fig)
+        pdf.savefig(signed_fig)
+        plt.close(signed_fig)
         pdf.savefig(normalized_fig)
         plt.close(normalized_fig)
         pdf.savefig(paired_fig)
@@ -439,7 +447,8 @@ def main():
         for page in pages[2:]:
             pdf.savefig(page)
             plt.close(page)
-    print(f"Permutation p={p_perm:.6g}; sign p={sign_p:.6g}; "
+    print(f"Squared primary p={sq_p:.6g}; absolute sensitivity p={abs_p:.6g}; "
+          f"Signed permutation p={p_perm:.6g}; sign p={sign_p:.6g}; "
           f"Wilcoxon signed-rank p={w_p:.6g}; sensitivity p={norm_p:.6g}")
     print(f"Report: {report_path}")
 
