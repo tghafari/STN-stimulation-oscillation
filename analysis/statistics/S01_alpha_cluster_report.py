@@ -1,56 +1,16 @@
 #!/usr/bin/env python
-"""Alpha cluster-permutation analysis with a self-contained PDF report.
+"""Individual-alpha-peak-based ON-minus-OFF cluster statistics.
 
-Tests stimulation minus no-stimulation alpha power (8-12 Hz)
-from 0.2 to 1.2 s.
-Default power is condition-wise percent baseline (-0.3 to -0.1 s), matching the
-subject-level descriptive TFR analysis.
+Recompute G02-style trial-averaged TFRs from cleaned cue epochs, selecting
+each participant's OFF-derived alpha peak +/- 1 Hz from the individual peak
+CSV. Percent-baseline correct ON and OFF separately (-0.3 to -0.1 s).
+Test their paired difference against ZERO over 0.3-0.8 s with two-sided
+temporal cluster permutation tests for sensors, ROI3 and ROI8.
 
-Report includes:
-- analysis details and manuscript-style methods section;
-- primary sensor x time spatio-temporal cluster results;
-- individual sensors with FDR-significant time clusters;
-- 8-channel posterior/occipital ROI average;
-- 3-channel posterior ROI average (PO3, POz, PO4);
-- figures shading significant temporal clusters and scalp maps of significant
-  spatio-temporal clusters.
-
-ROI inference is participant-level: channels are averaged WITHIN participant
-before the paired one-sample permutation test.
-
-STATISTICAL DESIGN
-------------------
-All inferential contrasts use UNBASELINED power. For every included participant,
-alpha power is averaged across the user-selected frequency range and stimulation
-minus no-stimulation is formed. Tests are paired one-sample cluster permutation
-tests of these within-participant differences against zero, with tail=0.
-
-Cluster formation uses two-sided pointwise alpha=.10 (.05 in each tail). Final
-cluster significance is p<=.05 from the permutation maximum-cluster null.
-
-Single sensors:
-  Each sensor gets its own complete-case sample. A participant is included for a
-  sensor whenever that sensor is present and good in BOTH stim and no-stim. A bad
-  different sensor does not exclude that participant. Temporal clustering corrects
-  across time within that sensor. By default there is NO correction across sensors.
-
-Optional single-sensor FDR:
-  Add --sensor-fdr to apply Benjamini-Hochberg FDR across all single-sensor cluster
-  p-values after the cluster permutation tests. This is optional secondary analysis.
-
-ROI3:
-  PO3, POz, PO4 must ALL be good in both conditions. Only those complete-case
-  participants enter ROI3. Channels are averaged within participant before testing.
-
-ROI8:
-  PO3, POz, PO4, O1, Oz, O2, PO7, PO8 must ALL be good in both conditions. Only
-  those complete-case participants enter ROI8. Channels are averaged within
-  participant before testing.
-
-Whole-scalp sensor x time test:
-  Intentionally NOT performed. Requiring a common sensor set across every participant
-  removed many posterior sensors and answered a different question from the desired
-  channel-specific/ROI-specific analyses.
+Also perform a whole 0.3-0.8 s mean one-sample t-test against zero for
+each ROI. Results are descriptive/inferential at the participant level;
+ROI channel averages precede subject averaging. G02 writes peak estimates,
+not TFR objects, so the TFR is computed again from the same epochs.
 """
 from __future__ import annotations
 import argparse, csv, json, sys
@@ -70,7 +30,7 @@ for p in (ANALYSIS_DIR / "subject" / "EEG_all_channels", ANALYSIS_DIR / "utils")
 from pipeline_config import CONDITIONS, resolve_project_root, stage_path
 from pdf_report import ParticipantPDF
 
-DEFAULT_ALPHA = (8.0, 12.0)
+DEFAULT_ALPHA = (8.0, 12.0)  # legacy --alpha option; peak range is primary
 WINDOW = (0.3, 0.8)
 BASELINE = (-0.3, -0.1)
 FREQS = np.arange(2.0, 32.0, 0.5)
@@ -411,11 +371,31 @@ def main():
         "This report intentionally contains NO whole-scalp sensor x time cluster test. Single sensors are tested separately using every participant retaining that sensor in both stimulation conditions. ROI3 uses participants retaining PO3, POz and PO4 in both conditions. ROI8 uses participants retaining PO3, POz, PO4, O1, Oz, O2, PO7 and PO8 in both conditions. Thus a bad channel excludes a participant only from analyses that require that channel.",
         section,
     )
-    details = f"N={len(subs)} paired participants; contrast=stimulation minus no stimulation calculated from UNBASELINED power; selected alpha range={a.alpha[0]:g}-{a.alpha[1]:g} Hz averaged across frequency; inferential window={WINDOW[0]:g}-{WINDOW[1]:g} s. TFR: multitaper, 2-30 Hz in 1-Hz steps, n_cycles=f/2, time-bandwidth={TIME_BANDWIDTH:g}, FFT=True, ITC=False, trial average=True, decimation={DECIM}. No baseline correction is applied before the stimulation-minus-no-stimulation contrast. Two-sided one-sample cluster permutation tests are applied to within-participant differences with all possible sign flips supported by MNE; cluster-forming threshold uses two-sided pointwise alpha=0.10 (0.05 in each tail); family-wise cluster significance p<=0.05. Single-sensor tests use sensor-specific complete-case participant samples and cluster across time. Across-sensor FDR is optional and is applied only when --sensor-fdr is supplied. ROI3 and ROI8 use separate ROI-specific complete-case participant samples; ROI channels are averaged within participant before temporal cluster permutation testing. No whole-scalp sensor x time cluster test is run."
+    details = (
+        f"Participants included: {', '.join('sub-' + x for x in subs)}. "
+        f"Peak file: {peaks_path}. Peak +/-{a.peak_half_width:g} Hz per subject. "
+        "G02-compatible multitaper TFR: 2-31.5 Hz in 0.5-Hz steps, "
+        "cycles=f/2, bandwidth=2, decimation=2, trial-averaged power. "
+        "For EACH participant/sensor/frequency, Stim ON and OFF power are "
+        "separately percent-baseline corrected (-0.3 to -0.1 s). "
+        "ON-percent minus OFF-percent (percentage points) is then tested "
+        "against zero during 0.3-0.8 s. Two-sided temporal cluster "
+        "permutation alpha=0.05 with forming alpha=0.10. "
+        "ROI means average sensors within participants first."
+    )
     report.add_text("Analysis details", details, section)
+    report.add_text("Individual peaks", "\n".join(
+        f"sub-{sub}: {peaks[sub]:.2f} Hz" for sub in subs), section)
     methods = (
-        "Alpha-band stimulation effects were assessed using paired cluster-based permutation tests on participant-level stimulation-minus-no-stimulation power. Time-frequency power was estimated with multitaper convolution and alpha power was defined as the mean from the user-specified frequency range ("
-        + f"{a.alpha[0]:g}-{a.alpha[1]:g} Hz). Statistical inference was restricted a priori to 0.2-1.2 s after cue onset. Stimulation-minus-no-stimulation contrasts were calculated from unbaselined power; no baseline correction was applied before contrast formation. Temporal cluster tests were performed separately for each EEG sensor using all participants retaining that sensor in both stimulation conditions. Across-sensor false-discovery-rate correction was optional and was not applied unless explicitly requested with --sensor-fdr. A priori ROI analyses tested averages comprising eight posterior/occipital sensors and PO3/POz/PO4. Each ROI used an ROI-specific complete-case sample: participants were included only if every required ROI channel was retained as good in both stimulation conditions. Sensor values were averaged within each included participant before group inference, ensuring participants rather than sensors were the unit of observation."
+        "Alpha power was measured using participant-specific OFF-derived "
+        "peak frequencies +/-1 Hz. Each cleaned participant-condition TFR "
+        "was separately baseline-corrected in percent mode over "
+        "-0.3 to -0.1 seconds. Differences in percentage points "
+        "(ON minus OFF) were tested against zero during 0.3-0.8 seconds "
+        "with two-sided one-sample temporal cluster permutations. "
+        "Posterior ROI sensors were averaged within participants before "
+        "testing; a whole-window one-sample t-test additionally tested "
+        "the mean participant difference against zero."
     )
     report.add_text("Manuscript-style statistical analysis", methods, section)
     # Whole-scalp sensor x time testing is intentionally NOT run here.
@@ -668,10 +648,12 @@ def main():
     audit = {
         "subjects": subs,
         "n_subjects_requested": len(subs),
-        "alpha_hz": list(a.alpha),
+        "individual_alpha_peaks_hz": {x: float(peaks[x]) for x in subs},
+        "peaks_csv": str(peaks_path),
+        "peak_half_width_hz": a.peak_half_width,
         "window_s": WINDOW,
-        "baseline_s": None,
-        "contrast_power": "unbaselined",
+        "baseline_s": BASELINE,
+        "contrast_power": "stim percent minus no-stim percent, percentage points",
         "cluster_forming_alpha_two_sided": CLUSTER_FORMING_ALPHA,
         "cluster_forming_alpha_each_tail": CLUSTER_FORMING_ALPHA / 2,
         "cluster_level_significance": PTHRESH,
