@@ -10,7 +10,7 @@ All scripts use the final cleaned EEG epochs from each participant, separately f
 
 | Script | Description |
 |---|---|
-| `G01_complete_grand_average_report.py` | Main group-analysis implementation. Calculates grand-average ERP and TFR, sensor-level stimulation contrasts, and posterior ROI summaries. |
+| `G01_complete_grand_average_report.py` | Main group-analysis implementation. Calculates grand-average ERP and TFR, sensor-level stimulation contrasts, and posterior ROI summaries. The plotted stimulation-minus-no-stimulation TFR is the difference of condition-wise baseline-percent changes; the normalized ratio remains unbaselined. |
 | `run_grand_average.py` | Recommended entry point for G01. Adds detailed scalp and posterior figures to the group PDF. |
 | `Q01_participant_eight_posterior_TFR_QC.py` | Displays individual-participant TFRs in 4 × 4 grids for three and eight posterior channels, separately for stimulation ON, OFF, difference, and normalized difference. |
 | `Q02_alpha_sensor_scalp_QC.py` | Descriptive alpha-power time courses across EEG sensors. Displays group mean ± SEM, using the participants retaining each sensor. |
@@ -63,7 +63,9 @@ Optional `--sensor-fdr` applies FDR correction across single-sensor cluster resu
 
 - ERP baseline: −0.1 to 0 seconds.
 - Descriptive TFR baseline: −0.3 to −0.1 seconds, percent change within each condition.
-- TFR differences and normalized differences: original unbaselined power.
+- Displayed TFR difference: stimulation percent change minus no-stimulation percent change, each baseline-corrected over −0.3 to −0.1 seconds per participant and sensor (percentage-point difference). This avoids dividing a near-zero raw difference by its own baseline.
+- Normalized TFR difference `(stim - no-stim) / (stim + no-stim)`: original unbaselined power, **no baseline correction**.
+- Absolute alpha-power QC difference: original unbaselined power (not the plotted baseline-corrected TFR difference).
 - Three-channel ROI: PO3, POz, PO4.
 - Eight-channel ROI: PO3, POz, PO4, O1, Oz, O2, PO7, PO8.
 - Bad or missing channels are not interpolated for group analysis.
