@@ -40,7 +40,9 @@ from S02_absolute_alpha_block_permutation import (
     validated_subject,
     run_permutation,
 )
-from pipeline_config import resolve_project_root
+from pipeline_config import resolve_project_root, stage_path
+import mne
+from S04_fixed_frequency_tfr import FREQS, WINDOW, ROI8, power_epochs, normalise, plot_map
 
 
 def arguments():
@@ -66,6 +68,88 @@ def arguments():
     if args.n_permutations < 1:
         parser.error("Number of permutations must be positive.")
     return args
+
+
+
+def fixed_frequency_analysis(root, args, trials):
+    """Run whole-period magnitude permutations without individual peaks."""
+    dataset = []
+    for subject in args.subjects:
+        rows = trials.loc[trials.subject == subject]
+        if rows.empty or not rows.label_verified.astype(str).str.lower().eq("true").all():
+            raise ValueError(f"sub-{subject}: unverified mapping")
+        epochs = {}
+        for condition in ("no-stim", "stim"):
+            path = stage_path(root, subject, args.session, args.task, args.run,
+                              condition, "clean", "epo")
+            ep = mne.read_epochs(path, preload=True, verbose=False)
+            cues = [key for key in ("cue_onset_left", "cue_onset_right")
+                    if key in ep.event_id]
+            epochs[condition] = ep[cues]
+        channels = [ch for ch in ROI8 if all(
+            ch in ep.ch_names and ch not in ep.info["bads"]
+            for ep in epochs.values()
+        )]
+        if not channels:
+            raise ValueError(f"sub-{subject}: no good posterior sensors")
+        periods = [[] for _ in range(4)]
+        labels = np.zeros(4, dtype=bool)
+        times = None
+        for condition, ep in epochs.items():
+            subset = rows.loc[rows.source_condition == condition]
+            indices = subset.trial_index_in_condition.to_numpy(dtype=int)
+            if not np.array_equal(np.sort(indices), np.arange(len(ep))):
+                raise ValueError(f"sub-{subject}: invalid trial indices")
+            values, current_times = power_epochs(
+                ep, channels, args.n_jobs, average=False
+            )
+            if times is None:
+                times = current_times
+            elif not np.array_equal(times, current_times):
+                raise ValueError("Condition time grids differ")
+            values = values.mean(axis=1)
+            for row in subset.itertuples(index=False):
+                index = int(row.stimulation_period) - 1
+                if index not in range(4):
+                    raise ValueError("Invalid stimulation period")
+                periods[index].append(values[int(row.trial_index_in_condition)])
+        for index in range(4):
+            subset = rows.loc[rows.stimulation_period == index + 1]
+            if subset.empty or subset.dbs_on.nunique() != 1:
+                raise ValueError("Incomplete stimulation period")
+            labels[index] = str(subset.dbs_on.iloc[0]).lower() == "true"
+        if labels.sum() != 2 or any(not p for p in periods):
+            raise ValueError("Expected two ON and two OFF periods")
+        dataset.append(([np.stack(p) for p in periods], labels, times))
+
+    times = dataset[0][2]
+    if any(not np.array_equal(times, item[2]) for item in dataset):
+        raise ValueError("Participant time axes differ")
+    window = (times >= WINDOW[0]) & (times <= WINDOW[1])
+    alpha_band = (FREQS >= 8.0) & (FREQS <= 12.0)
+
+    def participant_map(periods, labels):
+        on = np.concatenate([p for p, flag in zip(periods, labels)
+                             if flag]).mean(axis=0)
+        off = np.concatenate([p for p, flag in zip(periods, labels)
+                              if not flag]).mean(axis=0)
+        return normalise(on, off)
+
+    maps = [participant_map(p, labels) for p, labels, _ in dataset]
+    observed = float(np.mean([
+        np.abs(value[alpha_band][:, window]).mean() for value in maps
+    ]))
+    rng = np.random.default_rng(args.seed)
+    null = np.empty(args.n_permutations)
+    for iteration in range(args.n_permutations):
+        null[iteration] = np.mean([
+            np.abs(participant_map(p, rng.permutation(labels))[alpha_band][:, window]).mean()
+            for p, labels, _ in dataset
+        ])
+    p_value = (
+        1 + np.count_nonzero(null >= observed)
+    ) / (args.n_permutations + 1)
+    return np.mean(maps, axis=0), times, observed, null, p_value
 
 
 def main():
@@ -103,6 +187,9 @@ def main():
     effects, observed, null, p_value = run_permutation(
         data, args.n_permutations, args.seed,
         normalized=False, statistic="absolute",
+    )
+    fixed_mean, fixed_times, fixed_observed, fixed_null, fixed_p = (
+        fixed_frequency_analysis(root, args, trials)
     )
     output = group / "alpha_magnitude_permutation"
     output.mkdir(parents=True, exist_ok=True)
@@ -181,6 +268,49 @@ def main():
         )
         ax.tick_params(axis="x", rotation=45)
         fig.tight_layout()
+        pdf.savefig(fig)
+        plt.close(fig)
+        fig = plot_map(
+            fixed_mean, fixed_times,
+            "No peak selection: grand-average normalised ON-OFF TFR"
+        )
+        pdf.savefig(fig)
+        plt.close(fig)
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.hist(fixed_null, bins=45, color="lightsteelblue")
+        ax.axvline(fixed_observed, color="darkred", linewidth=2,
+                   label="Observed mean absolute normalised effect")
+        ax.axvline(np.quantile(fixed_null, 0.95), color="black",
+                   linestyle="--", label="95th percentile of null")
+        ax.set(
+            title=f"Fixed-frequency magnitude test: p={fixed_p:.4g}",
+            xlabel="Mean absolute normalised effect, fixed 8-12 Hz",
+            ylabel="Permutations",
+        )
+        ax.legend()
+        fig.tight_layout()
+        pdf.savefig(fig)
+        plt.close(fig)
+        fig, ax = plt.subplots(figsize=(11, 5))
+        ax.axis("off")
+        text = (
+            "Fixed-frequency sensitivity (NO individual peak selection)\n\n"
+            "Each participant's ON and OFF power is averaged over trials "
+            "and good posterior sensors at every absolute frequency/time "
+            "point. Compute (ON-OFF)/(ON+OFF) without baseline correction. "
+            "The TFR grand average weights participants equally.\n\n"
+            "Magnitude statistic: mean across participants of each "
+            "participant's mean absolute normalised effect over "
+            "fixed 8-12 Hz and 0.3-0.8 s. Shuffle four whole period labels "
+            "within each participant, preserving two ON and two OFF, "
+            "and recompute the statistic for every permutation.\n\n"
+            f"Observed: {fixed_observed:.6g}\n"
+            f"Upper-tail permutation p: {fixed_p:.6g}\n"
+            f"Permutations: {args.n_permutations}\n\n"
+            "This test uses fixed 8-12 Hz without individual peak selection."
+        )
+        ax.text(0.05, 0.95, text, va="top", transform=ax.transAxes,
+                fontsize=10, wrap=True)
         pdf.savefig(fig)
         plt.close(fig)
     print(f"Mean absolute effect: {observed:.6g} pp")

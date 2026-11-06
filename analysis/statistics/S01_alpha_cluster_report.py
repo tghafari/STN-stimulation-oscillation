@@ -29,6 +29,10 @@ for p in (ANALYSIS_DIR / "subject" / "EEG_all_channels", ANALYSIS_DIR / "utils")
         sys.path.insert(0, str(p))
 from pipeline_config import CONDITIONS, resolve_project_root, stage_path
 from pdf_report import ParticipantPDF
+from S04_fixed_frequency_tfr import (
+    ROI8 as FIXED_ROI8, ROI3 as FIXED_ROI3,
+    participant_map, signed_cluster_test, plot_map,
+)
 
 WINDOW = (0.3, 0.8)
 BASELINE = (-0.3, -0.1)
@@ -52,6 +56,7 @@ def args():
     p.add_argument("--project-root", default=None)
     p.add_argument("--n-jobs", type=int, default=4)
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--fixed-frequency-permutations", type=int, default=1024)
     p.add_argument("--peaks-csv", type=Path, default=None)
     p.add_argument("--peak-half-width", type=float, default=1.0)
     p.add_argument(
@@ -777,6 +782,71 @@ def main():
             print(
                 f"{label} cluster {r['cluster']}: stat={r['cluster_stat']:.4f}, p={r['p']:.4f}, samples={r['n_samples']}, time={r['t_start']:.3f}-{r['t_end']:.3f}"
             )
+    # Fixed-frequency sensitivity: identical absolute Hz for everyone.
+    # This is separate from the individual-alpha-peak temporal tests.
+    fixed_frequency_results = {}
+    for label, requested, tag in (
+        ("8-channel posterior/occipital ROI", FIXED_ROI8, "ROI8"),
+        ("3-channel posterior ROI", FIXED_ROI3, "ROI3"),
+    ):
+        maps = []
+        included = []
+        time_grid = None
+        for sub in subs:
+            channels = [ch for ch in requested if ch in g[sub]]
+            if not channels:
+                continue
+            contrast, time_axis = participant_map(
+                ep[sub], channels, a.n_jobs
+            )
+            if time_grid is None:
+                time_grid = time_axis
+            elif not np.array_equal(time_grid, time_axis):
+                raise ValueError("Fixed-frequency participant time mismatch")
+            maps.append(contrast)
+            included.append(sub)
+        if len(maps) < 2:
+            continue
+        maps = np.stack(maps)
+        significant, clusters = signed_cluster_test(
+            maps, time_grid, a.fixed_frequency_permutations, a.seed
+        )
+        fixed_frequency_results[tag] = {
+            "participants": included,
+            "clusters": clusters,
+            "n_permutations": a.fixed_frequency_permutations,
+        }
+        report.add_text(
+            f"{tag}: fixed-frequency sensitivity analysis",
+            (
+                "This separate analysis does NOT use individual alpha "
+                "peaks. Unbaselined ON and OFF power were trial-averaged "
+                "and averaged over available ROI sensors separately. "
+                "For each participant and each absolute frequency/time "
+                "bin, the statistic is (ON-OFF)/(ON+OFF). "
+                "A two-sided frequency-by-time cluster permutation test "
+                "covers 2-31.5 Hz and 0.3-0.8 s, correcting clusters "
+                "across both dimensions. Black outlines mark clusters "
+                "with corrected p <= 0.05. "
+                f"N={len(included)}; permutations="
+                f"{a.fixed_frequency_permutations}. "
+                f"Significant clusters: {clusters if clusters else 'none'}."
+            ),
+            section,
+        )
+        report.add_figure(
+            plot_map(
+                maps.mean(axis=0), time_grid,
+                f"{tag}: fixed-frequency grand average (N={len(included)})",
+                significant,
+            ),
+            str(figs / f"{tag}_fixed_frequency_normalised_TFR.png"),
+            f"{tag}: normalised grand-average TFR, absolute frequency",
+            "Black outlines indicate two-sided frequency-time cluster "
+            "permutation significance. No outline means no cluster "
+            "passed the corrected p <= 0.05 threshold.",
+            section,
+        )
     # audit
     audit = {
         "subjects": subs,
@@ -799,6 +869,7 @@ def main():
         "ROI8": roi_results.get("8-channel posterior/occipital ROI"),
         "ROI3": roi_results.get("3-channel posterior ROI"),
         "whole_scalp_spatiotemporal_test": "not run",
+        "fixed_frequency_sensitivity": fixed_frequency_results,
     }
     (out / "alpha_cluster_report_audit.json").write_text(
         json.dumps(audit, indent=2) + "\n"
