@@ -176,13 +176,11 @@ def roi_plot(st, no, t, rows, title, ylabel):
     ax.fill_between(t, mn - sem_n, mn + sem_n, alpha=0.15)
     ax.plot(t, ms, label="Stimulation")
     ax.fill_between(t, ms - sem_s, ms + sem_s, alpha=0.15)
-    ax.axvline(0, color="k", ls="--", lw=0.8)
+    ax.set_xlim(WINDOW)
     ax.set_xlabel("Time (s)")
     ax.set_ylabel(ylabel)
     ax.set_title(title)
     ax.legend()
-    ax.relim()
-    ax.autoscale_view()
     shade(ax, rows)
     return fig
 
@@ -451,13 +449,31 @@ def main():
             }
             sensor_cluster_records.append(rec)
             sensor_pvals.append(rec["p_cluster"])
-    if a.sensor_fdr and sensor_pvals:
+    # Each sensor is one FDR hypothesis: its strongest within-sensor
+    # temporally corrected cluster p-value (or p=1 if no cluster).
+    # Do NOT treat multiple clusters from the same sensor as independent
+    # across-sensor hypotheses.
+    sensor_names_for_fdr = list(sensor_results)
+    if a.sensor_fdr and sensor_names_for_fdr:
+        sensor_min_ps = np.asarray([
+            min((r["p"] for r in sensor_results[ch]["all_clusters"]),
+                default=1.0)
+            for ch in sensor_names_for_fdr
+        ])
         reject, qvals = fdr_correction(
-            np.asarray(sensor_pvals), alpha=PTHRESH, method="indep"
+            sensor_min_ps, alpha=PTHRESH, method="indep"
         )
-        for rec, rej, q in zip(sensor_cluster_records, reject, qvals):
-            rec["p_fdr"] = float(q)
-            rec["significant_fdr"] = bool(rej)
+        fdr_by_sensor = {
+            ch: (bool(rej), float(q))
+            for ch, rej, q in zip(sensor_names_for_fdr, reject, qvals)
+        }
+        for rec in sensor_cluster_records:
+            rej, q = fdr_by_sensor[rec["sensor"]]
+            rec["p_fdr"] = q  # sensor-level FDR q-value, not cluster q
+            rec["significant_fdr"] = bool(rej and rec["p_cluster"] <= PTHRESH)
+        for ch, (rej, q) in fdr_by_sensor.items():
+            sensor_results[ch]["sensor_level_p_fdr"] = q
+            sensor_results[ch]["significant_fdr"] = rej
     sig_uncorrected = sorted(
         {r["sensor"] for r in sensor_cluster_records if r["p_cluster"] <= PTHRESH}
     )
