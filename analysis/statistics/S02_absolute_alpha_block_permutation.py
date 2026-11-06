@@ -359,8 +359,8 @@ def main():
              "Signed-rank is used instead of rank-sum because ON and OFF "
              "measurements are paired within participant."),
             ("Sensitivity: unbaselined normalized effect",
-             f"Mean (raw ON-raw OFF)/(raw ON+raw OFF)={norm_observed:.5g}; "
-             f"two-sided period permutation p={norm_p:.6g}. "
+             f"Mean (raw ON-raw OFF)/(raw ON+raw OFF)={observed:.5g}; "
+             f"two-sided period permutation p={p_perm:.6g}. "
              "Both numerator and denominator use ORIGINAL, UNBASELINED "
              "absolute power. No percent-baseline values enter this ratio."),
             ("Interpretation",
@@ -384,13 +384,13 @@ def main():
     signed_fig = distribution_page(null, observed, p_perm, "Signed ON-OFF (pp)",
         explanation="SECONDARY TEST: Signed participant differences are averaged, so increases and decreases may cancel. Blue bars show whole-period permutation statistics, red is the observed signed mean, and dashed lines indicate the two-sided 5% null cutoff.")
     normalized_fig = distribution_page(
-        norm_null, norm_observed, norm_p, "Unbaselined (ON-OFF)/(ON+OFF)",
+        null, norm_observed, norm_p, "Unbaselined (ON-OFF)/(ON+OFF)",
         explanation="SEPARATE RATIO SENSITIVITY: Both ON and OFF are original unbaselined alpha power. The ratio is never baseline corrected. Blue bars show the period-permutation null, red is observed, and dashed lines mark the two-sided 5% cutoff."
     )
     for name, fig in (("baseline_percent_squared_primary", primary_fig),
                       ("baseline_percent_absolute_sensitivity", absolute_fig),
                       ("baseline_percent_signed_secondary", signed_fig),
-                      ("normalized_sensitivity_permutation", normalized_fig)):
+                      ("normalized_sensitivity_permutation", signed_fig)):
         for extension in ("svg", "tiff"):
             fig.savefig(figures / f"{name}.{extension}",
                         dpi=600, bbox_inches="tight")
@@ -398,11 +398,11 @@ def main():
     for start in range(0, len(loo), 16):
         fig, ax = plt.subplots(figsize=(11, 8))
         ax.axis("off")
-        ax.set_title("Leave-one-out: squared baseline-corrected ON - OFF")
+        ax.set_title("Leave-one-out: squared unbaselined normalized ratio")
         table = ax.table(
             cellText=[[f"sub-{sub}", f"{stat:.5f}", f"{p:.5g}"]
                       for sub, stat, p in loo[start:start + 16]],
-            colLabels=["Omitted subject", "Mean squared difference (pp squared)",
+            colLabels=["Omitted subject", "Mean squared ratio",
                        "Two-sided permutation p"],
             colWidths=[0.22, 0.48, 0.30],
             loc="center", cellLoc="center",
@@ -421,9 +421,9 @@ def main():
     order = np.argsort(np.abs(effects))
     axes[1].scatter(np.arange(1, len(effects) + 1), effects[order])
     axes[1].set(
-        title=f"Wilcoxon signed-rank, W={w_stat:g}, p={w_p:.5g}",
+        title=f"Wilcoxon signed-rank on ratios, W={w_stat:g}, p={w_p:.5g}",
         xlabel="Participants sorted by absolute effect",
-        ylabel="Baseline-corrected ON - OFF (percentage points)",
+        ylabel="Unbaselined (ON - OFF)/(ON + OFF)",
     )
     for ext in ("svg", "tiff"):
         paired_fig.savefig(figures / f"paired_sign_wilcoxon.{ext}",
@@ -438,8 +438,7 @@ def main():
         plt.close(absolute_fig)
         pdf.savefig(signed_fig)
         plt.close(signed_fig)
-        pdf.savefig(normalized_fig)
-        plt.close(normalized_fig)
+
         pdf.savefig(paired_fig)
         plt.close(paired_fig)
         for fig in loo_figures:
@@ -448,7 +447,7 @@ def main():
         for page in pages[2:]:
             pdf.savefig(page)
             plt.close(page)
-    print(f"Squared primary p={sq_p:.6g}; absolute sensitivity p={abs_p:.6g}; "
+    print(f"Squared ratio primary p={sq_p:.6g}; absolute ratio sensitivity p={abs_p:.6g}; "
           f"Signed permutation p={p_perm:.6g}; "
           f"Wilcoxon signed-rank p={w_p:.6g}; sensitivity p={norm_p:.6g}")
     print(f"Report: {report_path}")
