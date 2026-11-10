@@ -13,6 +13,11 @@ Also perform a whole 0.3-0.8 s mean one-sample t-test against zero for
 each ROI. Results are descriptive/inferential at the participant level;
 ROI channel averages precede subject averaging. G02 writes peak estimates,
 not TFR objects, so the TFR is computed again from the same epochs.
+
+run:
+    python analysis/statistics/S01_alpha_cluster_report.py \
+        --subjects 101 102 103 105 106 107 108 112 113 114 115 116 118 120 121 123 \
+        --platform mac
 ======================================================================
 """
 from __future__ import annotations

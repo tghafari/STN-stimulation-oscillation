@@ -21,7 +21,7 @@ Inference assumes whole-period stimulation labels are exchangeable; order/carryo
 `S01_alpha_cluster_report.py` reads participant OFF-derived peaks from the same `individual_alpha_peaks.csv`, recomputes G02-compatible multitaper TFRs from final cleaned epochs, separately percent-baseline-corrects ON/OFF over -0.3 to -0.1 seconds, and tests ON - OFF against **zero** during 0.3-0.8 seconds. Alpha power is averaged over each participant's peak +/-1 Hz. A two-sided temporal cluster-permutation test is performed per sensor and ROI3/ROI8. Each ROI additionally reports a whole-window mean one-sample t-test against zero. Available good sensors are averaged within each participant before ROI testing. The optional `--sensor-fdr` applies BH-FDR across sensors using each sensor's minimum time-cluster-corrected p-value; sensors with no clusters enter with p=1. This does not correct the two ROI tests against one another.
 
 ```bash
-python analysis/statistics/S01_alpha_cluster_report.py --subjects 101 102 103 105 106 107 108 112 113 114 115 116 118 120 121 123 --platform mac --peaks-csv /path/to/individual_alpha_peaks.csv
+python analysis/statistics/S01_alpha_cluster_report.py --subjects 101 102 103 105 106 107 108 112 113 114 115 116 118 120 121 123 --platform mac 
 ```
 
 Output: `<PROJECT_ROOT>/derivatives/reports/group/EEG_all_channels_alpha_cluster/` (PDF, figures, sensor cluster CSV and analysis audit JSON). G02 does not persist TFR arrays, so S01 recomputes them from cleaned epochs. The tests are on participant-level baseline-percent differences, not on unbaselined ratios.
