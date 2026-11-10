@@ -30,9 +30,10 @@ single EEG sensor, posterior ROI3 (PO3, POz, PO4), and posterior ROI8
 | Theta | Absolute 4-5.5 Hz | 0.1-0.4 s |
 
 The input is cleaned ON and OFF cue epochs. Multitaper power is
-trial-averaged in each condition, without baseline correction, and
-the dimensionless contrast `(ON-OFF)/(ON+OFF)` is computed for each
-participant. ROI sensors are averaged **within each participant and
+trial-averaged in each condition. ON and OFF are then independently
+percent-baseline corrected over -0.3 to -0.1 s at each sensor and
+frequency, before computing **baselined ON minus baselined OFF**.
+The contrast is measured in percentage points, not a dimensionless ratio. ROI sensors are averaged **within each participant and
 condition before normalisation**. Alpha maps are interpolated to a
 common peak-relative 0.5-Hz grid; theta uses absolute frequencies.
 
@@ -42,7 +43,7 @@ cluster-level correction across the selected window. Across all
 sensor/ROI x band tests, BH-FDR is additionally applied to each
 test's minimum cluster p-value (or 1 when no clusters exist).
 A PDF provides the methods, per-test participant counts, p-values,
-cluster details and grand-average normalised maps with black outlines
+cluster details and grand-average baseline-corrected ON-minus-OFF maps with black outlines
 around clusters with within-test corrected p <= 0.05.
 
 **Important:** These windows were chosen from observed grand averages.

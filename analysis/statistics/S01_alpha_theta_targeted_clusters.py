@@ -6,12 +6,13 @@ Test two visually selected, post-hoc windows:
   theta: absolute 4-5.5 Hz, 0.1-0.4 s.
 
 For each participant and sensor, compute trial-averaged linear multitaper
-power without baseline correction, then (ON-OFF)/(ON+OFF). Alpha is
+power, then separately baseline-correct ON and OFF before subtracting.
+The baseline is -0.3 to -0.1 s, applied after trial averaging. Alpha is
 aligned by each participant's OFF-derived peak; theta remains in Hz.
 Within-participant sensor averages precede ROI-level tests.
 
 Two-sided, one-sample cluster-mass sign-flip permutations test whether
-the mean normalised contrast differs from zero, correcting across the
+the mean baseline-corrected ON-minus-OFF contrast differs from zero, correcting across the
 frequency x time search space of each window. BH-FDR is additionally
 applied across the family of all sensor/ROI x alpha/theta tests, using
 each test's smallest cluster-corrected p (1 if no cluster). The windows
@@ -106,12 +107,26 @@ def power(epochs, channels, n_jobs):
     return tfr.data, tfr.times
 
 
+def baseline_percent(values, times):
+    """Correct trial-averaged power using each sensor/frequency baseline.
+
+    Each stimulation condition is corrected independently. The
+    reference is mean power from -0.3 to -0.1 seconds.
+    """
+    baseline = (times >= -0.3) & (times <= -0.1)
+    if not baseline.any():
+        raise ValueError("No baseline samples")
+    reference = values[..., baseline].mean(axis=-1, keepdims=True)
+    if not np.isfinite(reference).all() or np.any(reference <= 0):
+        raise ValueError("Invalid baseline reference power")
+    return 100.0 * (values / reference - 1.0)
+
+
 def contrast(on, off):
-    """Compute the dimensionless symmetric normalised contrast."""
-    denominator = on + off
-    if not np.isfinite(denominator).all() or np.any(denominator <= 0):
-        raise ValueError("Nonpositive or nonfinite ON+OFF denominator")
-    return (on - off) / denominator
+    """Subtract separately baseline-corrected ON and OFF power."""
+    if not np.isfinite(on).all() or not np.isfinite(off).all():
+        raise ValueError("Nonfinite baseline-corrected power")
+    return on - off
 
 
 def interpolate_alpha(values, peak):
@@ -128,11 +143,13 @@ def interpolate_alpha(values, peak):
 
 
 def subject_maps(epochs, good, peak, args):
-    """Compute sensor and ROI normalised maps for both frequency windows."""
+    """Compute baselined sensor/ROI contrasts in both windows."""
     on, times = power(epochs["stim"], good, args.n_jobs)
     off, off_times = power(epochs["no-stim"], good, args.n_jobs)
     if not np.array_equal(times, off_times):
         raise ValueError("ON/OFF TFR time grids differ")
+    on = baseline_percent(on, times)
+    off = baseline_percent(off, times)
     available = {ch: index for index, ch in enumerate(good)}
     groups = {ch: [ch] for ch in good}
     for name, requested in (("ROI3", ROI3), ("ROI8", ROI8)):
@@ -143,7 +160,8 @@ def subject_maps(epochs, good, peak, args):
     output = {}
     for name, sensors in groups.items():
         indices = [available[ch] for ch in sensors]
-        # Sensor means are computed within condition before normalising.
+        # Trial means are baseline corrected at each sensor/frequency.
+        # ROI sensor means are then computed within each condition.
         full = contrast(
             on[indices].mean(axis=0),
             off[indices].mean(axis=0),
@@ -195,7 +213,7 @@ def cluster_test(data, n_permutations, seed):
 
 
 def figure_for_test(data, frequency, times, records, title):
-    """Plot mean normalised effect and outline cluster-corrected bins."""
+    """Plot mean baselined difference and cluster outlines."""
     mean = data.mean(axis=0)
     limit = max(float(np.quantile(np.abs(mean), 0.99)), 1e-8)
     fig, ax = plt.subplots(figsize=(10.5, 6), constrained_layout=True)
@@ -219,7 +237,7 @@ def figure_for_test(data, frequency, times, records, title):
             if "alpha" in title.lower() else "Absolute frequency (Hz)"
         ),
     )
-    fig.colorbar(image, ax=ax, label="(ON - OFF) / (ON + OFF)")
+    fig.colorbar(image, ax=ax, label="Baselined ON - OFF (percentage points)")
     return fig
 
 
@@ -270,7 +288,7 @@ def main():
         collected[subject] = subject_maps(
             epochs, good, peaks[subject], args
         )
-        print(f"sub-{subject}: computed normalised alpha/theta maps")
+        print(f"sub-{subject}: computed baselined alpha/theta maps")
 
     keys = sorted(set().union(*(
         set(value) for value in collected.values()
@@ -321,9 +339,12 @@ def main():
             "Theta: absolute 4-5.5 Hz, cue-relative time 0.1-0.4 s.",
             "For each participant and condition: trial-average linear "
             "multitaper power (2-31.5 Hz, 0.5-Hz steps, cycles=f/2, "
-            "bandwidth=2, decimation=2). No baseline correction. "
-            "Average sensors within each ROI and condition, then "
-            "compute (ON-OFF)/(ON+OFF) per frequency/time bin.",
+            "bandwidth=2, decimation=2). "
+            "Average sensors within each ROI and condition after "
+            "baseline-correct ON and OFF independently at each "
+            "sensor/frequency over -0.3 to -0.1 s, using "
+            "100*(power/baseline - 1). Then subtract ON minus OFF. "
+            "The resulting difference is in percentage points.",
             "Two-sided one-sample frequency x time cluster-mass "
             "sign-flip permutation tests. Cluster-level p values "
             "control the frequency/time search within each window. "
