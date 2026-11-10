@@ -1,5 +1,7 @@
 #!/usr/bin/env python
-"""Individual-alpha-peak-based normalised alpha cluster statistics.
+"""
+======================================================================
+Individual-alpha-peak-based normalised alpha cluster statistics.
 
 Recompute unbaselined trial-averaged TFRs from cleaned cue epochs and
 select each participant's OFF-derived alpha peak +/- 1 Hz. For each
@@ -11,6 +13,7 @@ Also perform a whole 0.3-0.8 s mean one-sample t-test against zero for
 each ROI. Results are descriptive/inferential at the participant level;
 ROI channel averages precede subject averaging. G02 writes peak estimates,
 not TFR objects, so the TFR is computed again from the same epochs.
+======================================================================
 """
 from __future__ import annotations
 import argparse, csv, json, sys
