@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Exploratory alpha/theta frequency-time cluster permutation analysis.
+"""
+======================================================================
+Exploratory alpha/theta frequency-time cluster permutation analysis.
 
 Test two visually selected, post-hoc windows:
   alpha: individual OFF-derived peak -2.5 to +1 Hz, 0.1-0.7 s;
@@ -20,6 +22,11 @@ were selected after visual inspection: results are EXPLORATORY, not
 independent confirmatory evidence.
 
 One PDF is written. The script never modifies cleaned EEG files.
+
+run:
+    python analysis/statistics/S01_alpha_theta_targeted_clusters.py \
+        --subjects 101 102 103 105 106 107 108 112 113 114 115 116 118 120 121 123
+=======================================================================
 """
 from __future__ import annotations
 
