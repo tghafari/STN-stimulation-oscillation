@@ -174,6 +174,8 @@ def subject_maps(epochs, good, peak, args):
             off[indices].mean(axis=0),
         )
         for band, limits in WINDOWS.items():
+            if name in ("ROI3", "ROI8") and band == "theta":
+                continue
             time_mask = (
                 (times >= limits["time"][0])
                 & (times <= limits["time"][1])
@@ -325,75 +327,193 @@ def main():
         })
     if not results:
         raise RuntimeError("No eligible sensor or ROI tests")
-    reject, adjusted, _, _ = multipletests(
-        [result["minimum_p"] for result in results],
-        alpha=0.05, method="fdr_bh",
+    # Correct only the individual-sensor family. ROI3/ROI8 alpha
+    # results are exploratory and retain within-window cluster p-values.
+    sensor_results = [
+        result for result in results
+        if result["key"][0] not in ("ROI3", "ROI8")
+    ]
+    sensor_p = [result["minimum_p"] for result in sensor_results]
+    sensor_reject, sensor_q, _, _ = multipletests(
+        sensor_p, alpha=0.05, method="fdr_bh"
     )
+    for result, rejected, q_value in zip(
+        sensor_results, sensor_reject, sensor_q
+    ):
+        result["fdr_q"] = float(q_value)
+        result["fdr_significant"] = bool(rejected)
+    for result in results:
+        if "fdr_q" not in result:
+            result["fdr_q"] = None
+            result["fdr_significant"] = None
     output = args.output_dir or (
         group / "EEG_posterior_alpha_theta_clusters"
     )
     output.mkdir(parents=True, exist_ok=True)
     pdf_path = output / "S01_alpha_theta_targeted_clusters.pdf"
+    # One page per sensor with both bands, then explicit ROI3/ROI8 pages.
+    by_name = {}
+    for result in results:
+        name, band = result["key"]
+        by_name.setdefault(name, {})[band] = result
+
     with PdfPages(pdf_path) as pdf:
-        page = text_page("Targeted alpha and theta cluster tests", [
-            "EXPLORATORY POST-HOC WINDOWS: these frequency/time limits were "
-            "selected after visually inspecting grand-average TFRs. "
-            "Reported p-values cannot be interpreted as independent "
-            "confirmation of the observed patterns.",
-            "Alpha: participant OFF-derived peak -2.5 to +1 Hz, "
-            "cue-relative time 0.1-0.7 s. Frequency is aligned to "
-            "each participant's peak before group testing.",
-            "Theta: absolute 4-5.5 Hz, cue-relative time 0.1-0.4 s.",
-            "For each participant and condition: trial-average linear "
-            "multitaper power (2-31.5 Hz, 0.5-Hz steps, cycles=f/2, "
-            "bandwidth=2, decimation=2). "
-            "Average sensors within each ROI and condition after "
-            "baseline-correct ON and OFF independently at each "
-            "sensor/frequency over -0.3 to -0.1 s, using "
-            "100*(power/baseline - 1). Then subtract ON minus OFF. "
-            "The resulting difference is in percentage points.",
-            "Two-sided one-sample frequency x time cluster-mass "
-            "sign-flip permutation tests. Cluster-level p values "
-            "control the frequency/time search within each window. "
-            "The smallest cluster p per test (or 1 if none) is "
-            "additionally BH-FDR corrected across all eligible "
-            "sensor/ROI x band tests.",
-            "Cluster significance does not precisely localise onset "
-            "or offset, and single-bin clusters are not evidence "
-            "of a sustained effect. These tests assume participant "
-            "differences are independent and sign-exchangeable.",
+        page = text_page("Alpha and theta: exploratory cluster tests", [
+            "Question: does STN stimulation change baseline-relative "
+            "EEG power compared with no stimulation?",
+            "For each participant, trial-average ON and OFF power "
+            "separately. At every channel and frequency, convert each "
+            "condition to percentage change relative to its own "
+            "-0.3 to -0.1 s baseline. Subtract OFF from ON. "
+            "Negative values mean less baseline-relative power ON.",
+            "ALPHA: individual OFF-derived alpha peak -2.5 to +1 Hz, "
+            "0.1-0.7 s after cue. Alpha frequency is aligned to each "
+            "participant's peak before the group test.",
+            "THETA: absolute 4-5.5 Hz, 0.1-0.4 s after cue.",
+            "For each good EEG sensor, test alpha and theta separately. "
+            "ROI3 (PO3, POz, PO4) and ROI8 "
+            "(PO3, POz, PO4, O1, Oz, O2, PO7, PO8) are tested "
+            "for ALPHA ONLY. Each ROI is averaged within participant "
+            "before the group statistical test.",
+            "Each test uses two-sided participant sign-flip "
+            "frequency-by-time cluster permutation. Black contours "
+            "show clusters with within-test corrected p <= 0.05. "
+            "Contours do not identify individually significant bins.",
+            "BH-FDR is applied across the INDIVIDUAL SENSOR alpha "
+            "and theta test family only. ROI3 and ROI8 receive NO "
+            "across-ROI FDR; their cluster p-values are exploratory.",
+            "The frequency/time windows were selected after viewing "
+            "the data. These tests are exploratory, not independent "
+            "confirmatory tests.",
             f"Participants requested: {', '.join(args.subjects)}",
-            f"Permutation count: {args.n_permutations}; seed: {args.seed}",
+            f"Permutations per test: {args.n_permutations}; "
+            f"random seed: {args.seed}",
         ])
         pdf.savefig(page)
         plt.close(page)
-        for result, is_rejected, q in zip(results, reject, adjusted):
-            name, band = result["key"]
-            title = f"{name}: {band} | N={len(result['subjects'])}"
-            cluster_details = [
-                (
-                    f"Cluster {row['index']}: p={row['p']:.5g}; "
-                    f"bins={row['n_bins']}; "
-                    f"mass={row['mass']:.5g}"
-                )
-                for row in result["clusters"]
-            ] or ["No supra-threshold clusters."]
-            page = text_page(title + " | cluster details", [
-                f"Sensors: {', '.join(result['sensors'])}",
-                f"Participants: {', '.join(result['subjects'])}",
-                f"Minimum cluster p={result['minimum_p']:.5g}; "
-                f"across-test BH-FDR q={q:.5g}; "
-                f"FDR significant={bool(is_rejected)}",
-                *cluster_details,
-            ])
-            pdf.savefig(page)
-            plt.close(page)
-            figure = figure_for_test(
-                result["data"], result["frequency"],
-                result["times"], result["clusters"], title,
+
+        def draw_result(ax, result, band):
+            """Plot one group mean TFR on an existing report axis."""
+            values = result["data"].mean(axis=0)
+            limit = max(
+                float(np.nanquantile(np.abs(values), 0.99)), 1e-8
             )
-            pdf.savefig(figure)
-            plt.close(figure)
+            image = ax.pcolormesh(
+                result["times"], result["frequency"], values,
+                cmap="RdBu_r", shading="auto",
+                norm=TwoSlopeNorm(
+                    vmin=-limit, vcenter=0, vmax=limit
+                ),
+            )
+            mask = np.zeros_like(values, dtype=bool)
+            for cluster in result["clusters"]:
+                if cluster["p"] <= 0.05:
+                    mask |= cluster["mask"]
+            if mask.any():
+                ax.contour(
+                    result["times"], result["frequency"],
+                    mask.astype(float), levels=[0.5],
+                    colors="black", linewidths=2,
+                )
+            ax.set(
+                title=f"{band.capitalize()} | N={len(result['subjects'])}",
+                xlabel="Time from cue (s)",
+                ylabel=(
+                    "Hz relative to alpha peak"
+                    if band == "alpha" else "Absolute frequency (Hz)"
+                ),
+            )
+            pdf_label = "ON - OFF (percentage points)"
+            ax.figure.colorbar(image, ax=ax, label=pdf_label, shrink=0.8)
+
+        def findings(result, band):
+            """Describe within-window p and across-sensor FDR separately."""
+            if result is None:
+                return f"{band.capitalize()}: not available."
+            clusters = sorted(
+                result["clusters"], key=lambda item: item["p"]
+            )
+            significant = [
+                row for row in clusters if row["p"] <= 0.05
+            ]
+            if significant:
+                cluster_text = "; ".join(
+                    f"cluster {row['index']}: p={row['p']:.4g}, "
+                    f"{row['n_bins']} frequency-time bins"
+                    for row in significant[:4]
+                )
+            else:
+                cluster_text = (
+                    "No significant frequency-time cluster "
+                    "within the tested window"
+                )
+            correction = (
+                f"Sensor-family BH-FDR q={result['fdr_q']:.4g}; "
+                f"survives FDR={result['fdr_significant']}"
+                if result["fdr_q"] is not None
+                else "ROI: no across-ROI FDR correction"
+            )
+            return (
+                f"{band.capitalize()}: {cluster_text}. "
+                f"{correction}. "
+                f"N={len(result['subjects'])}; "
+                f"channels={', '.join(result['sensors'])}."
+            )
+
+        for name in sorted(by_name, key=lambda item: (
+            item in ("ROI3", "ROI8"), item
+        )):
+            bands = by_name[name]
+            is_roi = name in ("ROI3", "ROI8")
+            fig = plt.figure(figsize=(12.5, 9.5))
+            fig.suptitle(
+                f"{name}: {'alpha ROI analysis' if is_roi else 'alpha and theta'}",
+                fontsize=16, weight="bold",
+            )
+            grid = fig.add_gridspec(
+                2, 2, left=0.08, right=0.94,
+                top=0.89, bottom=0.30, hspace=0.45, wspace=0.40,
+            )
+            if is_roi:
+                ax = fig.add_subplot(grid[:, :])
+                draw_result(ax, bands["alpha"], "alpha")
+            else:
+                for column, band in enumerate(("alpha", "theta")):
+                    ax = fig.add_subplot(grid[:, column])
+                    if band in bands:
+                        draw_result(ax, bands[band], band)
+                    else:
+                        ax.axis("off")
+                        ax.text(
+                            0.5, 0.5, f"{band}: insufficient data",
+                            ha="center", va="center",
+                            transform=ax.transAxes,
+                        )
+            descriptions = [
+                findings(bands.get("alpha"), "alpha")
+            ]
+            if not is_roi:
+                descriptions.append(
+                    findings(bands.get("theta"), "theta")
+                )
+            import textwrap
+            y = 0.23
+            for description in descriptions:
+                wrapped = textwrap.fill(description, width=130)
+                fig.text(
+                    0.08, y, wrapped, fontsize=10,
+                    ha="left", va="top",
+                )
+                y -= 0.085 + 0.018 * wrapped.count("\n")
+            fig.text(
+                0.08, 0.035,
+                "Black outlines: within-window cluster p <= 0.05. "
+                "Sensor FDR is reported in text; ROI tests are "
+                "not FDR-corrected. Exploratory post-hoc windows.",
+                fontsize=8.5,
+            )
+            pdf.savefig(fig)
+            plt.close(fig)
     print(f"Report: {pdf_path}")
 
 
