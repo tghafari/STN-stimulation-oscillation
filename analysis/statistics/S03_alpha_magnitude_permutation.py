@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Test whether STN stimulation changes alpha magnitude in either direction.
+"""
+======================================================================
+Test whether STN stimulation changes alpha magnitude in either direction.
 
 This is a SEPARATE exploratory analysis from S01's signed temporal cluster
 test. It reuses S02's validated B03 mapping and trial-level alpha extraction.
@@ -25,6 +27,7 @@ analyses. No separate CSVs are written.
 Run from repository root:
 python analysis/statistics/S03_alpha_magnitude_permutation.py \\
     --subjects 101 102 103 105 106 107 108 112 113 114 115 116 118 120 121 123
+======================================================================
 """
 
 from __future__ import annotations
@@ -73,69 +76,34 @@ def arguments():
 
 
 def fixed_frequency_analysis(root, args, trials):
-    """Run exact-equivalent, fast whole-period magnitude permutations.
-
-    Compute trial sums and counts once for each of four periods. The
-    original statistic pools trials, so unequal period trial counts
-    must be preserved. There are only six assignments of two ON periods
-    among four; precompute the statistic for every assignment once per
-    participant, then sample those six values in the Monte Carlo loop.
-    """
-    from itertools import combinations
-
-    assignments = np.asarray([
-        [index in on_periods for index in range(4)]
-        for on_periods in combinations(range(4), 2)
-    ], dtype=bool)
-    observed_scores = []
-    possible_scores = []
-    observed_maps = []
-    common_times = None
-
+    """Run whole-period magnitude permutations without individual peaks."""
+    dataset = []
     for subject in args.subjects:
         rows = trials.loc[trials.subject == subject]
-        if rows.empty or not rows.label_verified.astype(
-            str
-        ).str.lower().eq("true").all():
+        if rows.empty or not rows.label_verified.astype(str).str.lower().eq("true").all():
             raise ValueError(f"sub-{subject}: unverified mapping")
-
         epochs = {}
         for condition in ("no-stim", "stim"):
-            path = stage_path(
-                root, subject, args.session, args.task, args.run,
-                condition, "clean", "epo",
-            )
+            path = stage_path(root, subject, args.session, args.task, args.run,
+                              condition, "clean", "epo")
             ep = mne.read_epochs(path, preload=True, verbose=False)
-            cues = [
-                key for key in ("cue_onset_left", "cue_onset_right")
-                if key in ep.event_id
-            ]
-            if not cues:
-                raise ValueError(f"sub-{subject}: no cue events")
+            cues = [key for key in ("cue_onset_left", "cue_onset_right")
+                    if key in ep.event_id]
             epochs[condition] = ep[cues]
-
-        channels = [
-            ch for ch in ROI8
-            if all(
-                ch in ep.ch_names and ch not in ep.info["bads"]
-                for ep in epochs.values()
-            )
-        ]
+        channels = [ch for ch in ROI8 if all(
+            ch in ep.ch_names and ch not in ep.info["bads"]
+            for ep in epochs.values()
+        )]
         if not channels:
             raise ValueError(f"sub-{subject}: no good posterior sensors")
-
-        period_sums = [None] * 4
-        period_counts = np.zeros(4, dtype=int)
+        periods = [[] for _ in range(4)]
         labels = np.zeros(4, dtype=bool)
         times = None
-
         for condition, ep in epochs.items():
             subset = rows.loc[rows.source_condition == condition]
             indices = subset.trial_index_in_condition.to_numpy(dtype=int)
             if not np.array_equal(np.sort(indices), np.arange(len(ep))):
-                raise ValueError(
-                    f"sub-{subject}: invalid {condition} trial indices"
-                )
+                raise ValueError(f"sub-{subject}: invalid trial indices")
             values, current_times = power_epochs(
                 ep, channels, args.n_jobs, average=False
             )
@@ -143,99 +111,49 @@ def fixed_frequency_analysis(root, args, trials):
                 times = current_times
             elif not np.array_equal(times, current_times):
                 raise ValueError("Condition time grids differ")
-
-            # One linear-power map per trial, averaged over sensors.
             values = values.mean(axis=1)
-            for period_index in range(4):
-                selection = subset.loc[
-                    subset.stimulation_period == period_index + 1,
-                    "trial_index_in_condition",
-                ].to_numpy(dtype=int)
-                if not len(selection):
-                    continue
-                total = values[selection].sum(axis=0)
-                if period_sums[period_index] is None:
-                    period_sums[period_index] = total
-                else:
-                    period_sums[period_index] += total
-                period_counts[period_index] += len(selection)
-
-        if np.any(period_counts == 0):
-            raise ValueError(f"sub-{subject}: empty stimulation period")
+            for row in subset.itertuples(index=False):
+                index = int(row.stimulation_period) - 1
+                if index not in range(4):
+                    raise ValueError("Invalid stimulation period")
+                periods[index].append(values[int(row.trial_index_in_condition)])
         for index in range(4):
             subset = rows.loc[rows.stimulation_period == index + 1]
             if subset.empty or subset.dbs_on.nunique() != 1:
-                raise ValueError(
-                    f"sub-{subject}: inconsistent stimulation period"
-                )
-            labels[index] = (
-                str(subset.dbs_on.iloc[0]).lower() == "true"
-            )
-        if labels.sum() != 2:
-            raise ValueError(f"sub-{subject}: expected two ON periods")
-        if common_times is None:
-            common_times = times
-        elif not np.array_equal(common_times, times):
-            raise ValueError("Participant time axes differ")
+                raise ValueError("Incomplete stimulation period")
+            labels[index] = str(subset.dbs_on.iloc[0]).lower() == "true"
+        if labels.sum() != 2 or any(not p for p in periods):
+            raise ValueError("Expected two ON and two OFF periods")
+        dataset.append(([np.stack(p) for p in periods], labels, times))
 
-        attention = (
-            (times >= WINDOW[0]) & (times <= WINDOW[1])
-        )
-        alpha_band = (FREQS >= 8.0) & (FREQS <= 12.0)
-        if not attention.any() or not alpha_band.any():
-            raise ValueError("Missing fixed alpha/attention bins")
+    times = dataset[0][2]
+    if any(not np.array_equal(times, item[2]) for item in dataset):
+        raise ValueError("Participant time axes differ")
+    window = (times >= WINDOW[0]) & (times <= WINDOW[1])
+    alpha_band = (FREQS >= 8.0) & (FREQS <= 12.0)
 
-        sums = np.stack(period_sums)
-        on_sums = sums[assignments].reshape(
-            len(assignments), 2, *sums.shape[1:]
-        ).sum(axis=1)
-        off_sums = sums[~assignments].reshape(
-            len(assignments), 2, *sums.shape[1:]
-        ).sum(axis=1)
-        on_counts = assignments @ period_counts
-        off_counts = (~assignments) @ period_counts
-        on_means = on_sums / on_counts[:, None, None]
-        off_means = off_sums / off_counts[:, None, None]
-        contrasts = normalise(on_means, off_means)
-        scores = np.abs(
-            contrasts[:, alpha_band, :][:, :, attention]
-        ).mean(axis=(1, 2))
+    def participant_map(periods, labels):
+        on = np.concatenate([p for p, flag in zip(periods, labels)
+                             if flag]).mean(axis=0)
+        off = np.concatenate([p for p, flag in zip(periods, labels)
+                              if not flag]).mean(axis=0)
+        return normalise(on, off)
 
-        observed_index = np.flatnonzero(
-            np.all(assignments == labels, axis=1)
-        )
-        if len(observed_index) != 1:
-            raise ValueError("Could not identify observed period labels")
-        index = int(observed_index[0])
-        observed_scores.append(float(scores[index]))
-        possible_scores.append(scores)
-        observed_maps.append(contrasts[index])
-        print(
-            f"sub-{subject}: fixed-frequency summaries prepared "
-            "(6 possible period assignments)"
-        )
-
-    observed = float(np.mean(observed_scores))
-    lookup = np.stack(possible_scores)
+    maps = [participant_map(p, labels) for p, labels, _ in dataset]
+    observed = float(np.mean([
+        np.abs(value[alpha_band][:, window]).mean() for value in maps
+    ]))
     rng = np.random.default_rng(args.seed)
-    # Each of the six assignments is equally likely under a uniform
-    # shuffle of two ON and two OFF labels.
-    sampled = rng.integers(
-        0, 6, size=(args.n_permutations, len(args.subjects))
-    )
-    null = lookup[
-        np.arange(len(args.subjects))[None, :], sampled
-    ].mean(axis=1)
+    null = np.empty(args.n_permutations)
+    for iteration in range(args.n_permutations):
+        null[iteration] = np.mean([
+            np.abs(participant_map(p, rng.permutation(labels))[alpha_band][:, window]).mean()
+            for p, labels, _ in dataset
+        ])
     p_value = (
         1 + np.count_nonzero(null >= observed)
     ) / (args.n_permutations + 1)
-    return (
-        np.mean(observed_maps, axis=0),
-        common_times,
-        observed,
-        null,
-        float(p_value),
-    )
+    return np.mean(maps, axis=0), times, observed, null, p_value
 
 
 def main():
