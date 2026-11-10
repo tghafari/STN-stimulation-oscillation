@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""S02: unbaselined normalized posterior alpha stimulation effects.
+"""
+======================================================================
+S02: unbaselined normalized posterior alpha stimulation effects.
 
 Read B03 verified trial-to-stimulation-period mapping and cleaned cue epochs.
 For each participant, calculate unbaselined multitaper alpha power within
@@ -16,8 +18,15 @@ against zero. No sign test. Permutations preserve the four whole periods
 and two ON/two OFF labels per participant; valid inference requires
 exchangeable stimulation-period labels.
 
+run:
+    python analysis/statistics/S02_absolute_alpha_block_permutation.py \
+        --subjects 101 102 103 105 106 107 108 112 113 114 115 116 118 120 121 123 \
+        --platform mac
+
 Output: derivatives/reports/group/absolute_alpha_block_permutation/
+======================================================================
 """
+
 from __future__ import annotations
 
 import argparse
