@@ -20,7 +20,7 @@ Inference assumes whole-period stimulation labels are exchangeable; order/carryo
 
 `S01_alpha_theta_targeted_clusters.py` generates one PDF with a
 methods page, **one page per EEG sensor showing alpha and theta TFRs
-side by side with findings below**, followed by dedicated ROI3 and ROI8
+side by side with findings below**, followed by dedicated ROI3, ROI6 and ROI8
 pages showing **alpha only**.
 
 | Test | Frequency window | Time after cue |
@@ -35,14 +35,14 @@ points. Each ROI is averaged across its available good sensors within
 participant and condition, before subtraction.
 
 Every eligible sensor is tested separately for alpha and theta.
-ROI3 (PO3, POz, PO4) and ROI8 (PO3, POz, PO4, O1, Oz, O2, PO7, PO8)
+ROI3 (PO3, POz, PO4), ROI6 (PO3, PO4, O2, O1, POz, Oz), and ROI8 (PO3, POz, PO4, O1, Oz, O2, PO7, PO8)
 are tested for alpha only. Each test is a two-sided, one-sample
 frequency-by-time cluster-mass sign-flip permutation test.
 
 **Multiple comparisons:** Cluster-level p-values are corrected within
 each frequency-time search window. BH-FDR is additionally calculated
 across the **individual-sensor alpha and theta test family only**.
-ROI3 and ROI8 do not receive across-ROI FDR correction. Black contours
+ROI3, ROI6 and ROI8 do not receive across-ROI FDR correction. Black contours
 show within-test significant clusters; the text under each sensor
 distinguishes these from results surviving sensor-family FDR.
 The ROI pages explicitly state that no across-ROI FDR was applied.

@@ -51,6 +51,7 @@ from pipeline_config import resolve_project_root, stage_path  # noqa: E402
 FREQS = np.arange(2.0, 32.0, 0.5)
 ROI8 = ("PO3", "POz", "PO4", "O1", "Oz", "O2", "PO7", "PO8")
 ROI3 = ("PO3", "POz", "PO4")
+ROI6 = ("PO3", "PO4", "O2", "O1", "POz", "Oz")
 WINDOWS = {
     "alpha": {"freq": (-2.5, 1.0), "time": (0.1, 0.7)},
     "theta": {"freq": (4.0, 5.5), "time": (0.1, 0.4)},
@@ -159,7 +160,7 @@ def subject_maps(epochs, good, peak, args):
     off = baseline_percent(off, times)
     available = {ch: index for index, ch in enumerate(good)}
     groups = {ch: [ch] for ch in good}
-    for name, requested in (("ROI3", ROI3), ("ROI8", ROI8)):
+    for name, requested in (("ROI3", ROI3), ("ROI6", ROI6), ("ROI8", ROI8)):
         chosen = [ch for ch in requested if ch in available]
         if chosen:
             groups[name] = chosen
@@ -174,7 +175,7 @@ def subject_maps(epochs, good, peak, args):
             off[indices].mean(axis=0),
         )
         for band, limits in WINDOWS.items():
-            if name in ("ROI3", "ROI8") and band == "theta":
+            if name in ("ROI3", "ROI6", "ROI8") and band == "theta":
                 continue
             time_mask = (
                 (times >= limits["time"][0])
@@ -327,11 +328,11 @@ def main():
         })
     if not results:
         raise RuntimeError("No eligible sensor or ROI tests")
-    # Correct only the individual-sensor family. ROI3/ROI8 alpha
+    # Correct only the individual-sensor family. ROI3/ROI6/ROI8 alpha
     # results are exploratory and retain within-window cluster p-values.
     sensor_results = [
         result for result in results
-        if result["key"][0] not in ("ROI3", "ROI8")
+        if result["key"][0] not in ("ROI3", "ROI6", "ROI8")
     ]
     sensor_p = [result["minimum_p"] for result in sensor_results]
     sensor_reject, sensor_q, _, _ = multipletests(
@@ -351,7 +352,7 @@ def main():
     )
     output.mkdir(parents=True, exist_ok=True)
     pdf_path = output / "S01_alpha_theta_targeted_clusters.pdf"
-    # One page per sensor with both bands, then explicit ROI3/ROI8 pages.
+    # One page per sensor with both bands, then explicit ROI3/ROI6/ROI8 pages.
     by_name = {}
     for result in results:
         name, band = result["key"]
@@ -371,7 +372,7 @@ def main():
             "participant's peak before the group test.",
             "THETA: absolute 4-5.5 Hz, 0.1-0.4 s after cue.",
             "For each good EEG sensor, test alpha and theta separately. "
-            "ROI3 (PO3, POz, PO4) and ROI8 "
+            "ROI3 (PO3, POz, PO4), ROI6 (PO3, PO4, O2, O1, POz, Oz), and ROI8 "
             "(PO3, POz, PO4, O1, Oz, O2, PO7, PO8) are tested "
             "for ALPHA ONLY. Each ROI is averaged within participant "
             "before the group statistical test.",
@@ -380,7 +381,7 @@ def main():
             "show clusters with within-test corrected p <= 0.05. "
             "Contours do not identify individually significant bins.",
             "BH-FDR is applied across the INDIVIDUAL SENSOR alpha "
-            "and theta test family only. ROI3 and ROI8 receive NO "
+            "and theta test family only. ROI3, ROI6 and ROI8 receive NO "
             "across-ROI FDR; their cluster p-values are exploratory.",
             "The frequency/time windows were selected after viewing "
             "the data. These tests are exploratory, not independent "
@@ -461,10 +462,10 @@ def main():
             )
 
         for name in sorted(by_name, key=lambda item: (
-            item in ("ROI3", "ROI8"), item
+            item in ("ROI3", "ROI6", "ROI8"), item
         )):
             bands = by_name[name]
-            is_roi = name in ("ROI3", "ROI8")
+            is_roi = name in ("ROI3", "ROI6", "ROI8")
             fig = plt.figure(figsize=(12.5, 9.5))
             fig.suptitle(
                 f"{name}: {'alpha ROI analysis' if is_roi else 'alpha and theta'}",
