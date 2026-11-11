@@ -40,6 +40,7 @@ from pipeline_config import CONDITIONS, resolve_project_root, stage_path
 from pdf_report import ParticipantPDF
 
 ROI3 = ("PO3", "POz", "PO4")
+ROI6 = ("PO3", "PO4", "O2", "O1", "POz", "Oz")
 ROI8 = ("PO3", "POz", "PO4", "O1", "Oz", "O2", "PO7", "PO8")
 ERP_BASELINE = (-0.1, 0.0)
 ERP_LP = 30.0
@@ -538,7 +539,7 @@ def build_peak_aligned_report(
             "Peak-aligned maps were averaged with equal participant "
             "weight. Whole-scalp sensor plots use each sensor's own "
             "eligible participant set (N can differ by sensor). "
-            "For ROI3 and ROI8, available good channels were first "
+            "For ROI3, ROI6 and ROI8, available good channels were first "
             "averaged within each participant and then participants "
             "were averaged equally. No missing channels were "
             "interpolated for group averaging. The individual peak "
@@ -706,10 +707,11 @@ def build_peak_aligned_report(
         )
         plt.close(figure)
 
-        # Posterior ROIs: average available sensors within each participant,
+        # Posterior ROI3, ROI6 and ROI8: average available sensors per participant,
         # then average participant maps equally.
         for roi_channels, roi_name in (
             (ROI3, "ROI3"),
+            (ROI6, "ROI6"),
             (ROI8, "ROI8"),
         ):
             participant_maps = []
@@ -865,8 +867,14 @@ def main():
         for ch in chs:
             items = [make_evoked(ep[s][c], ch) for s in by[ch]]
             erp[c][ch] = (np.mean([x.data[0] for x in items], 0), items[0].times)
-    for R, name in ((ROI3, "PO3/POz/PO4"), (ROI8, "8 posterior channels")):
+    for R, name, roi_label in (
+        (ROI3, "PO3/POz/PO4", "ROI3"),
+        (ROI6, "6 posterior channels", "ROI6"),
+        (ROI8, "8 posterior channels", "ROI8"),
+    ):
         av = [c for c in R if c in erp["stim"]]
+        if not av:
+            continue
         no = np.mean([erp["no-stim"][c][0] for c in av], 0)
         st = np.mean([erp["stim"][c][0] for c in av], 0)
         f, ax = plt.subplots(figsize=(10, 5))
@@ -876,7 +884,7 @@ def main():
         ax.set_title("ERP mean " + name)
         report.add_figure(
             f,
-            str(figs / f"ERP_mean{len(av)}.png"),
+            str(figs / f"ERP_{roi_label}_mean.png"),
             "ERP mean " + name,
             "ERP baseline -0.1 to 0 s.",
             "ERP",
@@ -978,7 +986,7 @@ def main():
             False,
         ),
     ]
-    # ROI TFRs: first average available good sensors within each participant,
+    # ROI3/ROI6/ROI8 TFRs: average good sensors within each participant,
     # then average participant-level ROI values with equal participant weight.
     # Scalp plots retain their independent per-sensor group averages.
     def participant_roi(key, channels):
@@ -1031,7 +1039,11 @@ def main():
             + detail,
             "TFR - " + title,
         )
-        for R, name, n in ((ROI3, "PO3/POz/PO4", 3), (ROI8, "8 posterior channels", 8)):
+        for R, name, n in (
+            (ROI3, "PO3/POz/PO4", 3),
+            (ROI6, "6 posterior channels", 6),
+            (ROI8, "8 posterior channels", 8),
+        ):
             x, participants, membership = participant_roi(key, R)
             if x is not None:
                 report.add_figure(
@@ -1075,7 +1087,7 @@ def main():
         "WITH BASELINE CORRECTION: first baseline-correct ON and OFF "
         "separately, then subtract ON minus OFF (percentage points), "
         "then average participant-level contrasts for each sensor. "
-        "For posterior ROI3/ROI8 summaries, available good sensors "
+        "For posterior ROI3/ROI6/ROI8 summaries, available good sensors "
         "were averaged within each participant before participants "
         "were averaged equally. The normalized ratio "
         "(P_stim-P_no-stim)/(P_stim+P_no-stim) was the ONLY plotted "

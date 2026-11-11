@@ -33,8 +33,9 @@ This runs G01 internally. Do not run both scripts separately unless specifically
 - Displayed TFR difference: stimulation percent change minus no-stimulation percent change, each baseline-corrected over −0.3 to −0.1 seconds per participant and sensor (percentage-point difference). This avoids dividing a near-zero raw difference by its own baseline.
 - Normalized TFR difference `(stim - no-stim) / (stim + no-stim)`: original unbaselined power, **no baseline correction**.
 - Absolute alpha-power QC difference: original unbaselined power (not the plotted baseline-corrected TFR difference).
-- Three-channel ROI: PO3, POz, PO4.
-- Eight-channel ROI: PO3, POz, PO4, O1, Oz, O2, PO7, PO8.
+- Three-channel ROI (ROI3): PO3, POz, PO4.
+- Six-channel ROI (ROI6): PO3, PO4, O2, O1, POz, Oz.
+- Eight-channel ROI (ROI8): PO3, POz, PO4, O1, Oz, O2, PO7, PO8.
 - Bad or missing channels are not interpolated for group analysis.
 - TFR scalp maps: average participants independently for each sensor (excluding participants missing that sensor).
 - TFR ROI plots: average available good ROI sensors **within each participant first**, then average participant-level ROI arrays equally. Participants with no usable ROI sensors are excluded from that ROI. ROI channel membership can differ across participants and is documented in the report.
@@ -65,3 +66,7 @@ In **both the normal-frequency and peak-aligned TFR reports**:
 The additional **absolute-power QC** table reports unbaselined 8-12 Hz power and its raw difference only to check power values and condition labels. It is **not** the plotted baseline-corrected TFR difference.
 
 The peak-aligned report and its `figures/peak_aligned/` folder are saved beside the standard report under `derivatives/reports/group/EEG_all_channels_complete_grand_average/`. A companion analysis JSON records the CSV source, exact peaks, relative-frequency grid and per-channel participant membership.
+
+## ROI6 outputs
+
+G01 now includes ROI6 alongside ROI3 and ROI8 in the standard grand-average report and the individual-alpha-peak-aligned report. For each of the four TFR measures (ON, OFF, baseline-corrected ON minus OFF, and the unbaselined symmetric ratio), ROI6 receives a separate plot and participant/channel inclusion documentation. The standard report also includes an ROI6 ERP average. ROI6 follows the same participant-weighting and bad-channel rules as the other ROIs. Peak-aligned ROI6 TFR figures are generated for each existing peak-aligned contrast.
