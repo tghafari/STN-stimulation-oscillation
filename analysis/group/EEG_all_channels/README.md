@@ -108,3 +108,5 @@ The separate peak-aligned G01 PDF also contains seven four-panel scalp topograph
 ## Peak-aligned alpha topoplots at 0.1-0.7 s
 
 G01 produces seven separate four-panel scalp topographies in the peak-aligned PDF, for requested times **0.1, 0.2, 0.3, 0.4, 0.5, 0.6 and 0.7 seconds** after cue onset. The frequency is **0 Hz relative to each participant's CSV alpha peak**. Each figure shows stim OFF, stim ON, their separately baseline-corrected difference, and the unbaselined normalized ratio. The nearest available TFR time sample is recorded in the caption and analysis JSON. PNGs are saved as `figures/peak_aligned/peak_aligned_alpha_topomap_0p1s.png` through `peak_aligned_alpha_topomap_0p7s.png`.
+
+The seven 0.1-0.7 s peak-aligned alpha scalp figures are inserted into **both** the standard G01 grand-average PDF (alongside the ERP and standard-frequency TFR results) and the separate peak-aligned TFR PDF. The figures are computed once and reused in both reports.

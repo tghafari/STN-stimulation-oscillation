@@ -564,6 +564,7 @@ def build_peak_aligned_report(
     times,
     montage_info,
     project_root,
+    grand_report,
 ):
     """Create a separate grand-average report with participant-specific peaks.
 
@@ -873,25 +874,37 @@ def build_peak_aligned_report(
             target_time=target_time,
         )
         time_tag = f"0p{tenth}"
+        figure_path = str(
+            peak_figure_dir
+            / f"peak_aligned_alpha_topomap_{time_tag}s.png"
+        )
+        figure_title = (
+            f"Peak-aligned alpha scalp topography at {target_time:.1f} s"
+        )
+        figure_caption = (
+            "Relative frequency = 0 Hz (each participant's own alpha "
+            "peak from CSV). Requested time = "
+            f"{target_time:.1f} s; nearest available TFR sample = "
+            f"{actual_time:.3f} s. Stim ON and OFF are separately "
+            "percent-baseline corrected (-0.3 to -0.1 s). "
+            "Difference = baseline-corrected ON minus OFF "
+            "(percentage points); normalized ratio uses unbaselined "
+            "power. Channel-specific eligible participant averages, "
+            "symmetric zero-centered colourbars, blue negative and "
+            "red positive."
+        )
         peak_report.add_figure(
             topo_figure,
-            str(
-                peak_figure_dir
-                / f"peak_aligned_alpha_topomap_{time_tag}s.png"
-            ),
-            f"Peak-aligned alpha scalp topography at {target_time:.1f} s",
-            (
-                "Relative frequency = 0 Hz (each participant's own alpha "
-                "peak from CSV). Requested time = "
-                f"{target_time:.1f} s; nearest available TFR sample = "
-                f"{actual_time:.3f} s. Stim ON and OFF are separately "
-                "percent-baseline corrected (-0.3 to -0.1 s). "
-                "Difference = baseline-corrected ON minus OFF "
-                "(percentage points); normalized ratio uses unbaselined "
-                "power. Channel-specific eligible participant averages, "
-                "symmetric zero-centered colourbars, blue negative and "
-                "red positive."
-            ),
+            figure_path,
+            figure_title,
+            figure_caption,
+            "Peak-aligned alpha topography",
+        )
+        grand_report.add_figure(
+            topo_figure,
+            figure_path,
+            figure_title,
+            figure_caption,
             "Peak-aligned alpha topography",
         )
         plt.close(topo_figure)
@@ -1219,6 +1232,7 @@ def main():
         times=times,
         montage_info=info,
         project_root=root,
+        grand_report=report,
     )
 
     manuscript = (
