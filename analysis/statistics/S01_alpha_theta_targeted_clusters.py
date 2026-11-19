@@ -53,7 +53,7 @@ ROI8 = ("PO3", "POz", "PO4", "O1", "Oz", "O2", "PO7", "PO8")
 ROI3 = ("PO3", "POz", "PO4")
 ROI6 = ("PO3", "PO4", "O2", "O1", "POz", "Oz")
 WINDOWS = {
-    "alpha": {"freq": (-2.0, 2.0), "time": (0.1, 0.7)},
+    "alpha": {"freq": (-2.0, 2.0), "time": (0.3, 0.8)},
     "theta": {"freq": (4.0, 5.5), "time": (0.1, 0.4)},
 }
 
@@ -368,7 +368,7 @@ def main():
             "-0.3 to -0.1 s baseline. Subtract OFF from ON. "
             "Negative values mean less baseline-relative power ON.",
             "ALPHA: individual OFF-derived alpha peak -2.0 to +2.0 Hz, "
-            "0.1-0.7 s after cue. Alpha frequency is aligned to each "
+            "0.3-0.8 s after cue. Alpha frequency is aligned to each "
             "participant's peak before the group test.",
             "THETA: absolute 4-5.5 Hz, 0.1-0.4 s after cue.",
             "For each good EEG sensor, test alpha and theta separately. "
