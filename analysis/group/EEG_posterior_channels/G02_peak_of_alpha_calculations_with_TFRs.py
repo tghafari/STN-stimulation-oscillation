@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""Participant posterior TFR quality control and individual alpha peaks.
+"""
+=====================================================================
+Participant posterior TFR quality control and individual alpha peaks.
 
 For each participant, this script reads final cleaned cue epochs for DBS ON
 and OFF and selects posterior EEG sensors retained in both conditions.
@@ -35,6 +37,7 @@ Outputs:
 The CSV supplies participant alpha peaks for the stimulation-laterality
 runner. Run the full intended participant set before that analysis because
 each run replaces the CSV with the participants selected for that run.
+=====================================================================
 """
 
 from __future__ import annotations
