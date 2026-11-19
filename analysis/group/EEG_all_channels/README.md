@@ -70,3 +70,21 @@ The peak-aligned report and its `figures/peak_aligned/` folder are saved beside 
 ## ROI6 outputs
 
 G01 now includes ROI6 alongside ROI3 and ROI8 in the standard grand-average report and the individual-alpha-peak-aligned report. For each of the four TFR measures (ON, OFF, baseline-corrected ON minus OFF, and the unbaselined symmetric ratio), ROI6 receives a separate plot and participant/channel inclusion documentation. The standard report also includes an ROI6 ERP average. ROI6 follows the same participant-weighting and bad-channel rules as the other ROIs. Peak-aligned ROI6 TFR figures are generated for each existing peak-aligned contrast.
+
+## Unbaselined stimulation-OFF peak-aligned alpha by sensor
+
+Run `G03_off_peak_aligned_alpha_sensor_curves.py` after generating the individual OFF-derived peak CSV and final cleaned no-stim cue epochs:
+
+```bash
+python analysis/group/EEG_all_channels/G03_off_peak_aligned_alpha_sensor_curves.py --subjects 101 102 103 104 105 106 107 108 110 111 112 113 114 115 116 118 119 120 121 122 123 --platform mac --n-jobs 1
+```
+
+For each participant, the script computes trial-averaged multitaper power from **unbaselined OFF epochs only**, then averages the bins within their individual alpha peak ±2 Hz. It plots the 0–1.2 s alpha-power time course for each good EEG sensor, averaging participants separately per sensor (equal subject weight; shaded between-subject SEM). The participant peak is read from `derivatives/reports/group/individual_alpha_peaks.csv`; use `--peaks-csv PATH` if stored elsewhere. There is **no baseline correction**, no stimulation ON analysis and no ROI averaging.
+
+Outputs under `derivatives/reports/group/EEG_all_channels_OFF_peak_alpha/`:
+
+- `off_peak_alpha_sensor_report.pdf`: ranking figure and individual sensor alpha curves.
+- `sensor_alpha_power_ranking.png`: sensors ranked by absolute alpha power in 0.3–0.8 s, with a second bar for 0.1–0.7 s.
+- `alpha_power_per_sensor.csv`: two absolute-power means per sensor, participant counts and included subject IDs.
+
+Both window means are calculated from the group-mean alpha curve, and are expressed in original TFR power units (V²/Hz). The number of subjects can vary by sensor when channels are bad/missing. This is descriptive analysis; it does not test statistical significance.
