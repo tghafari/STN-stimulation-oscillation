@@ -88,3 +88,15 @@ Outputs under `derivatives/reports/group/EEG_all_channels_OFF_peak_alpha/`:
 - `alpha_power_per_sensor.csv`: two absolute-power means per sensor, participant counts and included subject IDs.
 
 Both window means are calculated from the group-mean alpha curve, and are expressed in original TFR power units (V²/Hz). The number of subjects can vary by sensor when channels are bad/missing. This is descriptive analysis; it does not test statistical significance.
+
+## Q03: baseline-corrected stimulation-OFF alpha sensor curves
+
+`Q03_off_peak_aligned_alpha_sensor_curves.py` reads cleaned OFF cue epochs and participant-specific OFF-derived peaks from `derivatives/reports/group/individual_alpha_peaks.csv`. It computes trial-averaged multitaper power, applies **percent baseline (-0.3 to -0.1 s) per participant/sensor/frequency**, then averages peak ±2 Hz and participants equally per sensor. Peaks in the CSV are not re-estimated. The 0–1.2 s curves and the two window means (0.3–0.8 and 0.1–0.7 s) are expressed in **percent change from baseline**.
+
+Run from repository root:
+
+```bash
+python analysis/group/EEG_all_channels/Q03_off_peak_aligned_alpha_sensor_curves.py --subjects 101 102 103 104 105 106 107 108 110 111 112 113 114 115 116 118 119 120 121 122 123 --platform mac --n-jobs 1
+```
+
+Outputs: `derivatives/reports/group/EEG_all_channels_OFF_peak_alpha/` containing `off_peak_alpha_sensor_report.pdf`, `sensor_alpha_power_ranking.png`, and `alpha_power_per_sensor.csv`. The existing output directory name is retained; files are replaced when rerun.
