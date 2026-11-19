@@ -100,3 +100,7 @@ python analysis/group/EEG_all_channels/Q03_off_peak_aligned_alpha_sensor_curves.
 ```
 
 Outputs: `derivatives/reports/group/EEG_all_channels_OFF_peak_alpha/` containing `off_peak_alpha_sensor_report.pdf`, `sensor_alpha_power_ranking.png`, and `alpha_power_per_sensor.csv`. The existing output directory name is retained; files are replaced when rerun.
+
+## Peak-aligned alpha topography at 0.3 s
+
+The separate peak-aligned G01 PDF also contains a four-panel scalp topography at **0 Hz relative to each participant's individual alpha peak** and the closest TFR time sample to **0.3 s after cue onset**. Panels show no-stimulation, stimulation, their difference, and normalized ratio. ON/OFF and difference are percent-baseline corrected; only the ratio is unbaselined. Each channel uses its own eligible participant set. The figure is saved under `figures/peak_aligned/peak_aligned_alpha_topomap_0p3s.png`; the analysis JSON includes the actual time sample and channel values.

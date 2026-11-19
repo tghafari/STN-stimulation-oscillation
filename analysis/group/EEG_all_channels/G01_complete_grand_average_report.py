@@ -465,6 +465,90 @@ def peak_aligned_roi_figure(data, times, title, vlim):
     return fig
 
 
+def peak_aligned_alpha_topomap(group_maps, members, times, montage_info):
+    """Plot peak-aligned alpha power at 0.3 s for all four contrasts.
+
+    The alpha sample is relative frequency 0 Hz (each subject's CSV peak).
+    Each channel's value is the mean of its eligible participant maps.
+    Condition and difference values are percent-baseline corrected;
+    the normalized ratio is computed from unbaselined power.
+    """
+    frequency_index = int(np.argmin(np.abs(RELATIVE_FREQS)))
+    time_index = int(np.argmin(np.abs(times - 0.3)))
+    if not np.isclose(RELATIVE_FREQS[frequency_index], 0.0):
+        raise RuntimeError("The relative-frequency grid does not include 0 Hz.")
+
+    positions = montage_info.get_montage()
+    if positions is None:
+        raise RuntimeError("A channel montage is required for topomaps.")
+
+    panels = (
+        ("no-stim", "No stimulation", "% baseline"),
+        ("stim", "Stimulation", "% baseline"),
+        ("difference", "Stimulation - no stimulation", "percentage points"),
+        ("ratio", "(Stim - No-stim) / (Stim + No-stim)", "normalized ratio"),
+    )
+    fig, axes = plt.subplots(1, 4, figsize=(19, 5), constrained_layout=True)
+    values_by_condition = {}
+    for key, _, _ in panels:
+        values_by_condition[key] = {
+            channel: float(values[frequency_index, time_index])
+            for channel, values in group_maps[key].items()
+        }
+
+    # One symmetric color scale for both condition maps; contrast maps
+    # have separate scales because their units are different.
+    limits = {
+        "conditions": scale(
+            [
+                np.asarray(list(values_by_condition[key].values()))
+                for key in ("no-stim", "stim")
+            ]
+        ),
+        "difference": scale(
+            [np.asarray(list(values_by_condition["difference"].values()))]
+        ),
+        "ratio": scale(
+            [np.asarray(list(values_by_condition["ratio"].values()))]
+        ),
+    }
+
+    for axis, (key, title, unit) in zip(axes, panels):
+        channel_values = values_by_condition[key]
+        channels = [ch for ch in montage_info.ch_names if ch in channel_values]
+        if len(channels) < 3:
+            raise RuntimeError(
+                f"At least three positioned channels are required for {key} topomap."
+            )
+        info = mne.pick_info(
+            montage_info.copy(),
+            mne.pick_channels(montage_info.ch_names, channels, ordered=True),
+        )
+        values = np.array([channel_values[ch] for ch in info.ch_names])
+        lim = limits["conditions"] if key in ("stim", "no-stim") else limits[key]
+        if lim is None:
+            lim = (-1.0, 1.0)
+        image, _ = mne.viz.plot_topomap(
+            values,
+            info,
+            axes=axis,
+            show=False,
+            cmap="RdBu_r",
+            vlim=lim,
+            contours=0,
+            sensors=True,
+        )
+        axis.set_title(title, fontsize=11)
+        fig.colorbar(image, ax=axis, shrink=0.72, label=unit)
+
+    fig.suptitle(
+        "Grand-average alpha-peak-aligned scalp distribution at "
+        f"{times[time_index]:.3f} s (relative frequency 0 Hz)",
+        fontsize=13,
+    )
+    return fig, values_by_condition, float(times[time_index])
+
+
 def build_peak_aligned_report(
     report_dir,
     figure_dir,
@@ -773,12 +857,52 @@ def build_peak_aligned_report(
             )
             plt.close(figure)
 
+    # Scalp topographies at the individual-alpha-peak row (0 relative Hz)
+    # and the nearest available time sample to 0.3 s after cue onset.
+    topo_figure, topo_values, topo_time = peak_aligned_alpha_topomap(
+        group_data,
+        membership,
+        times,
+        montage_info,
+    )
+    peak_report.add_figure(
+        topo_figure,
+        str(peak_figure_dir / "peak_aligned_alpha_topomap_0p3s.png"),
+        "Peak-aligned alpha scalp topography at 0.3 s",
+        (
+            "Grand-average topographic distribution at relative frequency "
+            "0 Hz (each participant's own alpha peak) and the nearest "
+            f"TFR time sample to 0.3 s ({topo_time:.3f} s). "
+            "Stimulation ON and OFF are separately percent-baseline "
+            "corrected (-0.3 to -0.1 s). Difference = ON minus OFF "
+            "in percentage points after separate baseline correction. "
+            "Only the normalized ratio uses unbaselined power. "
+            "Each sensor averages its own eligible participants with "
+            "equal weight; no bad or missing channels are interpolated. "
+            "Blue indicates negative and red positive values, with "
+            "symmetric zero-centered color scales."
+        ),
+        "Peak-aligned alpha topography",
+    )
+    plt.close(topo_figure)
+    peak_report.add_text(
+        "Topomap channel sample sizes",
+        "\\n".join(
+            f"{channel}: n={len(subjects_for_channel)}"
+            for channel, subjects_for_channel in membership["difference"].items()
+        ),
+        "Peak-aligned alpha topography",
+    )
+
     peak_summary = {
         "subjects": subjects,
         "alpha_peak_csv": str(peak_csv_path),
         "alpha_peak_source": str(peak_csv_path),
         "alpha_peak_method": "Read exact peak_hz values from Q01 CSV; no G01 re-estimation.",
         "relative_frequency_hz": RELATIVE_FREQS.tolist(),
+        "alpha_topomap_time_seconds": topo_time,
+        "alpha_topomap_relative_frequency_hz": 0.0,
+        "alpha_topomap_channel_values": topo_values,
         "condition_baseline": {
             "window_seconds": BASELINE,
             "mode": "percent",
