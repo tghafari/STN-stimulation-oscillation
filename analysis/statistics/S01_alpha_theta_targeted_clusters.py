@@ -53,7 +53,7 @@ ROI8 = ("PO3", "POz", "PO4", "O1", "Oz", "O2", "PO7", "PO8")
 ROI3 = ("PO3", "POz", "PO4")
 ROI6 = ("PO3", "PO4", "O2", "O1", "POz", "Oz")
 WINDOWS = {
-    "alpha": {"freq": (-2.5, 1.0), "time": (0.1, 0.7)},
+    "alpha": {"freq": (-2.0, 2.0), "time": (0.1, 0.7)},
     "theta": {"freq": (4.0, 5.5), "time": (0.1, 0.4)},
 }
 
@@ -139,7 +139,7 @@ def contrast(on, off):
 
 def interpolate_alpha(values, peak):
     """Align a participant's frequency axis to their individual peak."""
-    relative = np.arange(-2.5, 1.0 + 0.01, 0.5)
+    relative = np.arange(-2.0, 2.0 + 0.01, 0.5)
     absolute = relative + peak
     if absolute.min() < FREQS.min() or absolute.max() > FREQS.max():
         raise ValueError(f"Peak {peak} Hz lacks required alpha coverage")
@@ -367,7 +367,7 @@ def main():
             "condition to percentage change relative to its own "
             "-0.3 to -0.1 s baseline. Subtract OFF from ON. "
             "Negative values mean less baseline-relative power ON.",
-            "ALPHA: individual OFF-derived alpha peak -2.5 to +1 Hz, "
+            "ALPHA: individual OFF-derived alpha peak -2.0 to +2.0 Hz, "
             "0.1-0.7 s after cue. Alpha frequency is aligned to each "
             "participant's peak before the group test.",
             "THETA: absolute 4-5.5 Hz, 0.1-0.4 s after cue.",

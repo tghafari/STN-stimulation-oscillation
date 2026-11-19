@@ -10,8 +10,7 @@ and OFF and selects posterior EEG sensors retained in both conditions.
 The individual alpha peak is estimated from DBS OFF **unbaselined** multitaper
 power: average over retained posterior sensors and 0.3-0.8 seconds after cue,
 restrict to 8-12 Hz, and select the frequency bin with maximum power
-(0.5-Hz resolution). This is a maximum-power estimate, not an
-aperiodic-corrected or independently validated oscillatory peak.
+(0.5-Hz resolution). 
 The same participant-specific peak +/- --alpha-peak-half-width Hz is used
 for ON and OFF alpha curves.
 
