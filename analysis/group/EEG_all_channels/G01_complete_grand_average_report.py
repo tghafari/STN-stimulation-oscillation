@@ -604,7 +604,7 @@ def build_peak_aligned_report(
             "individual_alpha_peaks.csv in derivatives/reports/group, "
             "NOT re-estimated by G01. The Q01 OFF-derived method "
             "selects the maximum of unbaselined power over 8-12 Hz "
-            "after averaging available posterior sensors and 0.3-0.8 s. "
+            "after averaging available posterior sensors and 0.1-0.7 s. "
             "CSV values such as 8.5 Hz are retained without rounding "
             "to integer frequencies. The same individual peak is used "
             "for ON, OFF, difference and ratio.\\n\\n"
@@ -1059,7 +1059,7 @@ def main():
     rat = {}
     absolute_checks = {}
     fm = (FREQS >= 8) & (FREQS <= 12)
-    tm = (times >= 0.3) & (times <= 0.8)
+    tm = (times >= 0.1) & (times <= 0.7)
     if not fm.any() or not tm.any():
         raise RuntimeError("Alpha QC window absent from TFR axes.")
     for ch in chs:
@@ -1119,7 +1119,7 @@ def main():
     report.add_text(
         "QC only: absolute alpha power (not the TFR difference plot)",
         "These diagnostic numbers are UNBASELINED absolute power "
-        "(8-12 Hz, 0.3-0.8 s after cue). They are included to check "
+        "(8-12 Hz, 0.1-0.7 s after cue). They are included to check "
         "raw power and condition labels, NOT as the group TFR "
         "difference. All displayed TFR differences subtract "
         "separately percent-baseline-corrected stimulation ON and OFF "
