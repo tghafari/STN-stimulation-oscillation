@@ -51,7 +51,6 @@ from pipeline_config import resolve_project_root, stage_path  # noqa: E402
 FREQS = np.arange(2.0, 32.0, 0.5)
 ROI8 = ("PO3", "POz", "PO4", "O1", "Oz", "O2", "PO7", "PO8")
 ROI3 = ("PO3", "POz", "PO4")
-ROI6 = ("PO3", "PO4", "O2", "O1", "POz", "Oz")
 WINDOWS = {
     "alpha": {"freq": (-2.0, 2.0), "time": (0.1, 0.7)},
     "theta": {"freq": (4.0, 5.5), "time": (0.1, 0.4)},
@@ -160,7 +159,7 @@ def subject_maps(epochs, good, peak, args):
     off = baseline_percent(off, times)
     available = {ch: index for index, ch in enumerate(good)}
     groups = {ch: [ch] for ch in good}
-    for name, requested in (("ROI3", ROI3), ("ROI6", ROI6), ("ROI8", ROI8)):
+    for name, requested in (("ROI3", ROI3), ("ROI8", ROI8)):
         chosen = [ch for ch in requested if ch in available]
         if chosen:
             groups[name] = chosen
@@ -175,7 +174,7 @@ def subject_maps(epochs, good, peak, args):
             off[indices].mean(axis=0),
         )
         for band, limits in WINDOWS.items():
-            if name in ("ROI3", "ROI6", "ROI8") and band == "theta":
+            if name in ("ROI3", "ROI8") and band == "theta":
                 continue
             time_mask = (
                 (times >= limits["time"][0])
@@ -309,7 +308,17 @@ def main():
         if len(subjects) < 3:
             continue
         data = np.stack([collected[s][key][0] for s in subjects])
-        frequency, times, sensors = collected[subjects[0]][key][1:]
+        frequency, times, _ = collected[subjects[0]][key][1:]
+        channels_by_subject = {
+            sub: list(collected[sub][key][3]) for sub in subjects
+        }
+        sensors = sorted({
+            ch for channels in channels_by_subject.values() for ch in channels
+        })
+        channel_counts = {
+            ch: sum(ch in channels_by_subject[sub] for sub in subjects)
+            for ch in sensors
+        }
         for subject in subjects[1:]:
             other_freq, other_times, _ = collected[subject][key][1:]
             if not (
@@ -323,16 +332,18 @@ def main():
         minimum_p = min((row["p"] for row in clusters), default=1.0)
         results.append({
             "key": key, "subjects": subjects, "sensors": sensors,
+            "channels_by_subject": channels_by_subject,
+            "channel_counts": channel_counts,
             "data": data, "frequency": frequency, "times": times,
             "clusters": clusters, "minimum_p": minimum_p,
         })
     if not results:
         raise RuntimeError("No eligible sensor or ROI tests")
-    # Correct only the individual-sensor family. ROI3/ROI6/ROI8 alpha
+    # Correct only the individual-sensor family. ROI3/ROI8 alpha
     # results are exploratory and retain within-window cluster p-values.
     sensor_results = [
         result for result in results
-        if result["key"][0] not in ("ROI3", "ROI6", "ROI8")
+        if result["key"][0] not in ("ROI3", "ROI8")
     ]
     sensor_p = [result["minimum_p"] for result in sensor_results]
     sensor_reject, sensor_q, _, _ = multipletests(
@@ -352,7 +363,7 @@ def main():
     )
     output.mkdir(parents=True, exist_ok=True)
     pdf_path = output / "S01_alpha_theta_targeted_clusters.pdf"
-    # One page per sensor with both bands, then explicit ROI3/ROI6/ROI8 pages.
+    # One page per sensor with both bands, then explicit ROI3/ROI8 pages.
     by_name = {}
     for result in results:
         name, band = result["key"]
@@ -372,7 +383,7 @@ def main():
             "participant's peak before the group test.",
             "THETA: absolute 4-5.5 Hz, 0.1-0.4 s after cue.",
             "For each good EEG sensor, test alpha and theta separately. "
-            "ROI3 (PO3, POz, PO4), ROI6 (PO3, PO4, O2, O1, POz, Oz), and ROI8 "
+            "ROI3 (PO3, POz, PO4) and ROI8 "
             "(PO3, POz, PO4, O1, Oz, O2, PO7, PO8) are tested "
             "for ALPHA ONLY. Each ROI is averaged within participant "
             "before the group statistical test.",
@@ -381,7 +392,7 @@ def main():
             "show clusters with within-test corrected p <= 0.05. "
             "Contours do not identify individually significant bins.",
             "BH-FDR is applied across the INDIVIDUAL SENSOR alpha "
-            "and theta test family only. ROI3, ROI6 and ROI8 receive NO "
+            "and theta test family only. ROI3 and ROI8 receive NO "
             "across-ROI FDR; their cluster p-values are exploratory.",
             "The frequency/time windows were selected after viewing "
             "the data. These tests are exploratory, not independent "
@@ -458,14 +469,18 @@ def main():
                 f"{band.capitalize()}: {cluster_text}. "
                 f"{correction}. "
                 f"N={len(result['subjects'])}; "
-                f"channels={', '.join(result['sensors'])}."
+                f"channels used across participants={', '.join(result['sensors'])}. "
+                + "Per-channel N: " + ", ".join(
+                    f"{ch}={n}/{len(result['subjects'])}"
+                    for ch, n in result["channel_counts"].items()
+                ) + "."
             )
 
         for name in sorted(by_name, key=lambda item: (
-            item in ("ROI3", "ROI6", "ROI8"), item
+            item in ("ROI3", "ROI8"), item
         )):
             bands = by_name[name]
-            is_roi = name in ("ROI3", "ROI6", "ROI8")
+            is_roi = name in ("ROI3", "ROI8")
             fig = plt.figure(figsize=(12.5, 9.5))
             fig.suptitle(
                 f"{name}: {'alpha ROI analysis' if is_roi else 'alpha and theta'}",
@@ -515,6 +530,30 @@ def main():
             )
             pdf.savefig(fig)
             plt.close(fig)
+            if is_roi:
+                roi = bands["alpha"]
+                entries = [
+                    f"sub-{sub}: {', '.join(roi['channels_by_subject'][sub])} "
+                    f"({len(roi['channels_by_subject'][sub])} sensors)"
+                    for sub in roi["subjects"]
+                ]
+                summary = (
+                    f"{name}: N={len(roi['subjects'])}. Channel counts: "
+                    + "; ".join(
+                        f"{ch}={n}/{len(roi['subjects'])}"
+                        for ch, n in roi["channel_counts"].items()
+                    )
+                    + ". Channels are averaged within each participant "
+                    "before group testing; membership may vary by participant."
+                )
+                for start in range(0, len(entries), 12):
+                    page = text_page(
+                        f"{name}: channels per participant "
+                        f"({start + 1}-{min(start + 12, len(entries))})",
+                        [summary] + entries[start:start + 12],
+                    )
+                    pdf.savefig(page)
+                    plt.close(page)
     print(f"Report: {pdf_path}")
 
 
