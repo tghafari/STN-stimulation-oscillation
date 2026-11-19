@@ -1,20 +1,17 @@
 #!/usr/bin/env python3
-"""
-==================================================================
-Unbaselined DBS OFF individual-peak alpha curves for each EEG sensor.
+"""Percent-baseline-corrected DBS OFF peak-aligned alpha curves by sensor.
 
-For each participant, load final cleaned no-stim cue epochs and the
-OFF-derived individual alpha peak from individual_alpha_peaks.csv.
-Compute trial-averaged multitaper power (2-31.5 Hz, 0.5-Hz steps,
-n_cycles=f/2, time-bandwidth=2, decimation=2). Average the frequencies
-within peak +/-2 Hz at each time point, then grand-average subjects
-separately for each good EEG sensor (equal participant weight).
-NO baseline correction or stimulation ON data are used.
+Load final cleaned OFF cue epochs and individual OFF-derived alpha peak
+frequencies from individual_alpha_peaks.csv. For each participant, compute
+trial-averaged multitaper TFR power and apply percent baseline correction
+(-0.3 to -0.1 s) separately for each sensor and frequency, before averaging
+the peak +/-2 Hz band. Then grand-average participants per sensor equally.
 
-Plot 0-1.2 s alpha curves, group mean +/- SEM, and report absolute
-mean alpha power separately for 0.3-0.8 and 0.1-0.7 s.
+The CSV peaks are NOT re-estimated here; only the alpha-power time courses
+and their 0.3-0.8 and 0.1-0.7 s window means are baseline corrected.
+No stimulation ON data or across-sensor ROI averaging is used.
+
 Outputs: derivatives/reports/group/EEG_all_channels_OFF_peak_alpha/
-==================================================================
 """
 from __future__ import annotations
 
@@ -39,6 +36,7 @@ FREQS = np.arange(2.0, 32.0, 0.5)
 TIME_RANGE = (0.0, 1.2)
 WINDOWS = {"alpha_0p3_0p8": (0.3, 0.8), "alpha_0p1_0p7": (0.1, 0.7)}
 PEAK_HALF_WIDTH = 2.0
+BASELINE = (-0.3, -0.1)
 
 
 def parse_args():
@@ -75,7 +73,7 @@ def load_peaks(path, subjects):
 
 
 def participant_curves(epochs, peak, n_jobs):
-    """Return good-channel absolute alpha curves, averaging trials first."""
+    """Return good-channel percent-baseline alpha curves, averaging trials first."""
     eeg = epochs.copy().pick("eeg")
     good = [ch for ch in eeg.ch_names if ch not in eeg.info["bads"]]
     if not good:
@@ -92,10 +90,13 @@ def participant_curves(epochs, peak, n_jobs):
                  & (tfr.times <= TIME_RANGE[1]))
     if not freq_mask.any() or not time_mask.any():
         raise ValueError("Requested alpha frequencies or times absent")
+    # Baseline each participant/sensor/frequency BEFORE frequency averaging.
+    # MNE percent mode returns fractions, so multiply by 100 for % units.
+    tfr.apply_baseline(BASELINE, mode="percent")
     # Shape: sensors x frequency x time -> sensors x time.
-    alpha = tfr.data[:, freq_mask, :][:, :, time_mask].mean(axis=1)
+    alpha = 100.0 * tfr.data[:, freq_mask, :][:, :, time_mask].mean(axis=1)
     if not np.isfinite(alpha).all():
-        raise ValueError("Nonfinite absolute alpha power")
+        raise ValueError("Nonfinite baseline-corrected alpha power")
     return dict(zip(tfr.ch_names, alpha)), tfr.times[time_mask]
 
 
@@ -115,13 +116,13 @@ def add_curve_pages(pdf, curves, times, title):
             ax.axvspan(0.3, 0.8, color="tab:orange", alpha=0.12)
             ax.axvspan(0.1, 0.7, color="tab:green", alpha=0.08)
             ax.set_title(f"{ch} (n={len(data)})", fontsize=10)
-            ax.set_ylabel("Power (V²/Hz)")
+            ax.set_ylabel("Power change from baseline (%)")
             ax.set_xlim(TIME_RANGE)
         for ax in axes.flat[len(subset):]:
             ax.axis("off")
         for ax in axes[-1]:
             ax.set_xlabel("Time from cue (s)")
-        fig.suptitle(title + " | DBS OFF | individual peak ±2 Hz | unbaselined")
+        fig.suptitle(title + " | DBS OFF | individual peak ±2 Hz | percent baseline -0.3 to -0.1 s")
         fig.tight_layout(rect=[0, 0, 1, 0.97])
         pdf.savefig(fig)
         plt.close(fig)
@@ -191,8 +192,8 @@ def main():
     ax.bar(positions + width / 2, table["alpha_0p1_0p7"], width,
            label="0.1–0.7 s")
     ax.set_xticks(positions, table.sensor, rotation=75)
-    ax.set_ylabel("Mean unbaselined alpha power (V²/Hz)")
-    ax.set_title("DBS OFF | participant peak ±2 Hz | sensor ranking")
+    ax.set_ylabel("Mean alpha power change from baseline (%)")
+    ax.set_title("DBS OFF | peak ±2 Hz | percent-baseline alpha ranking")
     ax.legend()
     fig.tight_layout()
     fig.savefig(output / "sensor_alpha_power_ranking.png", dpi=200)
@@ -200,7 +201,7 @@ def main():
         pdf.savefig(fig)
         add_curve_pages(pdf, curves, times, "Group mean ± SEM across participants")
     plt.close(fig)
-    print("\nTop sensors by 0.3–0.8 s alpha power:")
+    print("\nTop sensors by 0.3–0.8 s percent-baseline alpha change:")
     print(table[["sensor", "n_subjects", "alpha_0p3_0p8",
                  "alpha_0p1_0p7"]].head(15).to_string(index=False))
     print(f"Saved report and CSV to {output}")
