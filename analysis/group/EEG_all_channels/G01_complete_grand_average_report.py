@@ -469,8 +469,10 @@ def peak_aligned_roi_figure(data, times, title, vlim):
     return fig
 
 
-def peak_aligned_alpha_topomap(group_maps, members, times, montage_info, target_time):
-    """Plot peak-aligned alpha power at a requested time for all contrasts.
+def peak_aligned_alpha_topomap(
+    group_maps, members, times, montage_info, target_time=None, time_window=None
+):
+    """Plot peak-aligned alpha power at one time or averaged over a window.
 
     The alpha sample is relative frequency 0 Hz (each subject's CSV peak).
     Each channel's value is the mean of its eligible participant maps.
@@ -478,7 +480,23 @@ def peak_aligned_alpha_topomap(group_maps, members, times, montage_info, target_
     the normalized ratio is computed from unbaselined power.
     """
     frequency_index = int(np.argmin(np.abs(RELATIVE_FREQS)))
-    time_index = int(np.argmin(np.abs(times - target_time)))
+    if (target_time is None) == (time_window is None):
+        raise ValueError("Specify exactly one of target_time or time_window.")
+    if time_window is not None:
+        time_mask = (times >= time_window[0]) & (times <= time_window[1])
+        if not time_mask.any():
+            raise ValueError(f"No TFR samples within {time_window}.")
+        selected_times = np.asarray(times)[time_mask]
+        time_label = (
+            f"{time_window[0]:.1f}-{time_window[1]:.1f} s "
+            f"(mean of {len(selected_times)} samples)"
+        )
+    else:
+        time_index = int(np.argmin(np.abs(times - target_time)))
+        time_mask = np.zeros(len(times), dtype=bool)
+        time_mask[time_index] = True
+        selected_times = np.asarray(times)[time_mask]
+        time_label = f"{times[time_index]:.3f} s"
     if not np.isclose(RELATIVE_FREQS[frequency_index], 0.0):
         raise RuntimeError("The relative-frequency grid does not include 0 Hz.")
 
@@ -496,7 +514,7 @@ def peak_aligned_alpha_topomap(group_maps, members, times, montage_info, target_
     values_by_condition = {}
     for key, _, _ in panels:
         values_by_condition[key] = {
-            channel: float(values[frequency_index, time_index])
+            channel: float(values[frequency_index, time_mask].mean())
             for channel, values in group_maps[key].items()
         }
 
@@ -547,10 +565,10 @@ def peak_aligned_alpha_topomap(group_maps, members, times, montage_info, target_
 
     fig.suptitle(
         "Grand-average alpha-peak-aligned scalp distribution at "
-        f"{times[time_index]:.3f} s (relative frequency 0 Hz)",
+        f"{time_label} (relative frequency 0 Hz)",
         fontsize=13,
     )
-    return fig, values_by_condition, float(times[time_index])
+    return fig, values_by_condition, selected_times.tolist()
 
 
 def build_peak_aligned_report(
@@ -866,7 +884,7 @@ def build_peak_aligned_report(
     topomap_results = {}
     for tenth in range(1, 8):
         target_time = tenth / 10.0
-        topo_figure, topo_values, actual_time = peak_aligned_alpha_topomap(
+        topo_figure, topo_values, selected_times = peak_aligned_alpha_topomap(
             group_data,
             membership,
             times,
@@ -885,7 +903,7 @@ def build_peak_aligned_report(
             "Relative frequency = 0 Hz (each participant's own alpha "
             "peak from CSV). Requested time = "
             f"{target_time:.1f} s; nearest available TFR sample = "
-            f"{actual_time:.3f} s. Stim ON and OFF are separately "
+            f"{selected_times[0]:.3f} s. Stim ON and OFF are separately "
             "percent-baseline corrected (-0.3 to -0.1 s). "
             "Difference = baseline-corrected ON minus OFF "
             "(percentage points); normalized ratio uses unbaselined "
@@ -909,9 +927,46 @@ def build_peak_aligned_report(
         )
         plt.close(topo_figure)
         topomap_results[f"{target_time:.1f}"] = {
-            "actual_time_seconds": actual_time,
+            "actual_time_seconds": selected_times[0],
             "channel_values": topo_values,
         }
+
+    # Additional window-averaged topomap: mean every TFR sample in
+    # [0.1, 0.7] seconds, not merely the seven snapshot topomaps.
+    mean_figure, mean_values, mean_times = peak_aligned_alpha_topomap(
+        group_data,
+        membership,
+        times,
+        montage_info,
+        time_window=(0.1, 0.7),
+    )
+    mean_path = str(
+        peak_figure_dir / "peak_aligned_alpha_topomap_mean_0p1_to_0p7s.png"
+    )
+    mean_title = "Peak-aligned alpha scalp topography: mean 0.1-0.7 s"
+    mean_caption = (
+        "At 0 Hz relative to each participant's alpha peak, each sensor's "
+        "grand-average TFR is averaged across ALL available time samples "
+        "from 0.1 through 0.7 s inclusive ("
+        f"{len(mean_times)} samples; first={mean_times[0]:.3f} s, "
+        f"last={mean_times[-1]:.3f} s). Stim ON/OFF and their "
+        "difference are separately percent-baseline corrected before "
+        "participant averaging; the normalized ratio is unbaselined. "
+        "Each channel uses its eligible participants with equal weight."
+    )
+    for destination_report in (peak_report, grand_report):
+        destination_report.add_figure(
+            mean_figure,
+            mean_path,
+            mean_title,
+            mean_caption,
+            "Peak-aligned alpha topography",
+        )
+    plt.close(mean_figure)
+    topomap_results["mean_0.1_to_0.7"] = {
+        "time_samples_seconds": mean_times,
+        "channel_values": mean_values,
+    }
 
     peak_report.add_text(
         "Topomap time points and channel sample sizes",
