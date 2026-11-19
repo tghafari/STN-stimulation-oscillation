@@ -8,7 +8,7 @@ For each participant, this script reads final cleaned cue epochs for DBS ON
 and OFF and selects posterior EEG sensors retained in both conditions.
 
 The individual alpha peak is estimated from DBS OFF **unbaselined** multitaper
-power: average over retained posterior sensors and 0.3-0.8 seconds after cue,
+power: average over retained posterior sensors and 0.1-0.7 seconds after cue,
 restrict to 8-12 Hz, and select the frequency bin with maximum power
 (0.5-Hz resolution). 
 The same participant-specific peak +/- --alpha-peak-half-width Hz is used
@@ -24,7 +24,9 @@ No across-participant averaging or statistical inference is performed.
 Prerequisite: final cleaned stim/no-stim cue epochs from the subject EEG
 pipelines. Run from the repository root, for example:
 
-    python analysis/group/EEG_posterior_channels/G02_peak_of_alpha_calculations_with_TFRs.py --subjects 115 116 118 --platform mac
+    python analysis/group/EEG_posterior_channels/G02_peak_of_alpha_calculations_with_TFRs.py \
+        --subjects 101 102 103 105 106 107 108 112 113 114 115 116 118 120 121 123 \
+        --platform mac
 
 Outputs:
     <PROJECT_ROOT>/derivatives/reports/QC/posterior_TFR_all_subjects/
@@ -36,11 +38,6 @@ Outputs:
 The CSV supplies participant alpha peaks for the stimulation-laterality
 runner. Run the full intended participant set before that analysis because
 each run replaces the CSV with the participants selected for that run.
-
-run:
-    G03_off_peak_aligned_alpha_sensor_curves.py \
-    --subjects 101 102 103 105 106 107 108 112 113 114 115 116 118 120 121 123 \    
-    --platform mac
 =====================================================================
 """
 
@@ -80,7 +77,7 @@ ALPHA_WINDOW = (-0.3, 1.3)
 ROBUST = 98.0
 SUBJECTS_PER_FIGURE = 8
 PEAK_SEARCH = (8.0, 12.0)
-PEAK_TIME = (0.3, 0.8)
+PEAK_TIME = (0.1, 0.7)
 PLOT_WINDOW = (-0.5, 1.5)
 
 
@@ -394,7 +391,7 @@ def alpha_peak(off_tfr):
 
     Steps
     -----
-    1. Select the time interval 0.3-0.8 seconds after cue onset.
+    1. Select the time interval 0.1-0.7 seconds after cue onset.
 
     2. Average absolute power across the selected time points
        and all retained posterior channels, independently for
@@ -509,7 +506,7 @@ def plot_participant(subject, raw, channels, counts, half_width):
         0.5, 0.012,
         "Power averaged across trials, then percent baseline corrected "
         "(-0.3 to -0.1 s); ROI averaged last. "
-        "Alpha peak selected from unbaselined DBS OFF (0.3-0.8 s).",
+        "Alpha peak selected from unbaselined DBS OFF (0.1-0.7 s).",
         ha="center", fontsize=9, color="dimgray",
     )
     return fig, peak
@@ -572,7 +569,7 @@ def main():
     report.add_text(
         "OFF-derived individual alpha peaks",
         "Select the 8-12 Hz peak from unbaselined DBS OFF power "
-        "averaged across available posterior sensors and 0.3-0.8 s. "
+        "averaged across available posterior sensors and 0.1-0.7 s. "
         "Peak-centred ON/OFF curves use condition-wise percent baseline "
         "-0.3 to -0.1 s. CSV is also used by stimulation-laterality analysis.",
         "Individual alpha peaks",
