@@ -36,6 +36,11 @@ Outputs:
 The CSV supplies participant alpha peaks for the stimulation-laterality
 runner. Run the full intended participant set before that analysis because
 each run replaces the CSV with the participants selected for that run.
+
+run:
+    G03_off_peak_aligned_alpha_sensor_curves.py \
+    --subjects 101 102 103 105 106 107 108 112 113 114 115 116 118 120 121 123 \    
+    --platform mac
 =====================================================================
 """
 

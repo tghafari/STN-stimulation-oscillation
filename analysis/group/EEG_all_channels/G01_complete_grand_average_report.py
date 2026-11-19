@@ -1,5 +1,7 @@
 #!/usr/bin/env python
-"""G01_complete_grand_average_report.py: group analysis overview
+"""
+====================================================================
+G01_complete_grand_average_report.py: group analysis overview
 
 Read final cleaned all-channel cue epochs for every selected subject. In
 addition, create a separate peak-aligned TFR report using participant-specific
@@ -19,6 +21,7 @@ channels, and save PDF figures, channel counts and analysis JSON.
 Prepare subject inputs by running the posterior-channel subject pipeline first,
 then the all-channel pipeline when analysing the full montage.
 See this group's README for prerequisites, commands and output locations.
+====================================================================
 """
 
 import argparse

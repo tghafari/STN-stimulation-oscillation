@@ -46,7 +46,7 @@ from S02_absolute_alpha_block_permutation import (
 )
 from pipeline_config import resolve_project_root, stage_path
 import mne
-from S04_fixed_frequency_tfr import FREQS, WINDOW, ROI8, power_epochs, normalise, plot_map
+from analysis.old.S04_fixed_frequency_tfr import FREQS, WINDOW, ROI8, power_epochs, normalise, plot_map
 
 
 def arguments():

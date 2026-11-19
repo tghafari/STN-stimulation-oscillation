@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Unbaselined DBS OFF individual-peak alpha curves for each EEG sensor.
+"""
+==================================================================
+Unbaselined DBS OFF individual-peak alpha curves for each EEG sensor.
 
 For each participant, load final cleaned no-stim cue epochs and the
 OFF-derived individual alpha peak from individual_alpha_peaks.csv.
@@ -12,6 +14,7 @@ NO baseline correction or stimulation ON data are used.
 Plot 0-1.2 s alpha curves, group mean +/- SEM, and report absolute
 mean alpha power separately for 0.3-0.8 and 0.1-0.7 s.
 Outputs: derivatives/reports/group/EEG_all_channels_OFF_peak_alpha/
+==================================================================
 """
 from __future__ import annotations
 
