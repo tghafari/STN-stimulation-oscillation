@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Percent-baseline-corrected DBS OFF peak-aligned alpha curves by sensor.
+"""
+===================================================================
+Percent-baseline-corrected DBS OFF peak-aligned alpha curves by sensor.
 
 Load final cleaned OFF cue epochs and individual OFF-derived alpha peak
 frequencies from individual_alpha_peaks.csv. For each participant, compute
@@ -12,6 +14,7 @@ and their 0.3-0.8 and 0.1-0.7 s window means are baseline corrected.
 No stimulation ON data or across-sensor ROI averaging is used.
 
 Outputs: derivatives/reports/group/EEG_all_channels_OFF_peak_alpha/
+====================================================================
 """
 from __future__ import annotations
 
