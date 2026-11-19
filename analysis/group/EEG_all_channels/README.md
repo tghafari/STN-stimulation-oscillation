@@ -104,3 +104,7 @@ Outputs: `derivatives/reports/group/EEG_all_channels_OFF_peak_alpha/` containing
 ## Peak-aligned alpha topographies from 0.1 to 0.7 s
 
 The separate peak-aligned G01 PDF also contains seven four-panel scalp topographies at **0 Hz relative to each participant's individual alpha peak**, for **0.1, 0.2, 0.3, 0.4, 0.5, 0.6 and 0.7 s after cue onset** (nearest TFR samples). Panels show no-stimulation, stimulation, their difference, and normalized ratio. ON/OFF and difference are percent-baseline corrected; only the ratio is unbaselined. Each channel uses its own eligible participant set. The figures are saved as `figures/peak_aligned/peak_aligned_alpha_topomap_0p1s.png` through `peak_aligned_alpha_topomap_0p7s.png`; the analysis JSON includes each actual sampled time and its channel values.
+
+## Peak-aligned alpha topoplots at 0.1-0.7 s
+
+G01 produces seven separate four-panel scalp topographies in the peak-aligned PDF, for requested times **0.1, 0.2, 0.3, 0.4, 0.5, 0.6 and 0.7 seconds** after cue onset. The frequency is **0 Hz relative to each participant's CSV alpha peak**. Each figure shows stim OFF, stim ON, their separately baseline-corrected difference, and the unbaselined normalized ratio. The nearest available TFR time sample is recorded in the caption and analysis JSON. PNGs are saved as `figures/peak_aligned/peak_aligned_alpha_topomap_0p1s.png` through `peak_aligned_alpha_topomap_0p7s.png`.
