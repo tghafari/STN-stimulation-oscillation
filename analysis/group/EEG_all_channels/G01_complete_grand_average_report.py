@@ -21,6 +21,11 @@ channels, and save PDF figures, channel counts and analysis JSON.
 Prepare subject inputs by running the posterior-channel subject pipeline first,
 then the all-channel pipeline when analysing the full montage.
 See this group's README for prerequisites, commands and output locations.
+
+run:
+    python analysis/group/EEG_all_channels/G01_complete_grand_average_report.py \
+        --subjects 101 102 103 105 106 107 108 112 113 114 115 116 118 120 121 123 \
+        --platform mac
 ====================================================================
 """
 
@@ -464,8 +469,8 @@ def peak_aligned_roi_figure(data, times, title, vlim):
     return fig
 
 
-def peak_aligned_alpha_topomap(group_maps, members, times, montage_info, target_time):
-    """Plot peak-aligned alpha power at a requested time for all contrasts.
+def peak_aligned_alpha_topomap(group_maps, members, times, montage_info):
+    """Plot peak-aligned alpha power at 0.3 s for all four contrasts.
 
     The alpha sample is relative frequency 0 Hz (each subject's CSV peak).
     Each channel's value is the mean of its eligible participant maps.
@@ -473,7 +478,7 @@ def peak_aligned_alpha_topomap(group_maps, members, times, montage_info, target_
     the normalized ratio is computed from unbaselined power.
     """
     frequency_index = int(np.argmin(np.abs(RELATIVE_FREQS)))
-    time_index = int(np.argmin(np.abs(times - target_time)))
+    time_index = int(np.argmin(np.abs(times - 0.3)))
     if not np.isclose(RELATIVE_FREQS[frequency_index], 0.0):
         raise RuntimeError("The relative-frequency grid does not include 0 Hz.")
 
@@ -793,7 +798,7 @@ def build_peak_aligned_report(
         )
         plt.close(figure)
 
-        # Posterior ROI3 and ROI8: average available sensors per participant,
+        # Posterior ROI3, and ROI8: average available sensors per participant,
         # then average participant maps equally.
         for roi_channels, roi_name in (
             (ROI3, "ROI3"),
@@ -855,58 +860,39 @@ def build_peak_aligned_report(
             )
             plt.close(figure)
 
-    # Seven alpha-peak-aligned scalp maps, at 0.1-s increments.
-    # Relative frequency 0 Hz corresponds to each participant's CSV peak.
-    topo_times = np.arange(0.1, 0.7 + 0.001, 0.1)
-    topo_results = {}
-    for target_time in topo_times:
-        topo_figure, topo_values, actual_time = peak_aligned_alpha_topomap(
-            group_data,
-            membership,
-            times,
-            montage_info,
-            target_time=float(target_time),
-        )
-        time_label = f"{target_time:.1f}".replace(".", "p")
-        peak_report.add_figure(
-            topo_figure,
-            str(
-                peak_figure_dir
-                / f"peak_aligned_alpha_topomap_{time_label}s.png"
-            ),
-            f"Peak-aligned alpha scalp topography at {target_time:.1f} s",
-            (
-                "Grand-average scalp topography at 0 Hz relative to "
-                "each participant's alpha peak (loaded from CSV). "
-                f"Requested time: {target_time:.1f} s after cue; "
-                f"actual nearest TFR sample: {actual_time:.3f} s. "
-                "Stim ON and OFF are percent-baseline corrected "
-                "(-0.3 to -0.1 s); difference = corrected ON minus "
-                "corrected OFF (percentage points); normalized ratio "
-                "uses unbaselined power. Each sensor averages its "
-                "eligible participants equally. Symmetric colorbars "
-                "are centered at zero; blue is negative and red positive."
-            ),
-            "Peak-aligned alpha topography",
-        )
-        plt.close(topo_figure)
-        topo_results[f"{target_time:.1f}"] = {
-            "actual_time_seconds": actual_time,
-            "channel_values": topo_values,
-        }
-
-    peak_report.add_text(
-        "Peak-aligned alpha topomap timing and channel counts",
+    # Scalp topographies at the individual-alpha-peak row (0 relative Hz)
+    # and the nearest available time sample to 0.3 s after cue onset.
+    topo_figure, topo_values, topo_time = peak_aligned_alpha_topomap(
+        group_data,
+        membership,
+        times,
+        montage_info,
+    )
+    peak_report.add_figure(
+        topo_figure,
+        str(peak_figure_dir / "peak_aligned_alpha_topomap_0p3s.png"),
+        "Peak-aligned alpha scalp topography at 0.3 s",
         (
-            "Topoplots are generated at requested times 0.1, 0.2, "
-            "0.3, 0.4, 0.5, 0.6 and 0.7 s, using the nearest available "
-            "TFR sample at each time. The frequency is 0 Hz relative "
-            "to each participant's individual alpha peak.\\n\\n"
-            + "\\n".join(
-                f"{channel}: n={len(subjects_for_channel)}"
-                for channel, subjects_for_channel
-                in membership["difference"].items()
-            )
+            "Grand-average topographic distribution at relative frequency "
+            "0 Hz (each participant's own alpha peak) and the nearest "
+            f"TFR time sample to 0.3 s ({topo_time:.3f} s). "
+            "Stimulation ON and OFF are separately percent-baseline "
+            "corrected (-0.3 to -0.1 s). Difference = ON minus OFF "
+            "in percentage points after separate baseline correction. "
+            "Only the normalized ratio uses unbaselined power. "
+            "Each sensor averages its own eligible participants with "
+            "equal weight; no bad or missing channels are interpolated. "
+            "Blue indicates negative and red positive values, with "
+            "symmetric zero-centered color scales."
+        ),
+        "Peak-aligned alpha topography",
+    )
+    plt.close(topo_figure)
+    peak_report.add_text(
+        "Topomap channel sample sizes",
+        "\\n".join(
+            f"{channel}: n={len(subjects_for_channel)}"
+            for channel, subjects_for_channel in membership["difference"].items()
         ),
         "Peak-aligned alpha topography",
     )
@@ -917,8 +903,9 @@ def build_peak_aligned_report(
         "alpha_peak_source": str(peak_csv_path),
         "alpha_peak_method": "Read exact peak_hz values from Q01 CSV; no G01 re-estimation.",
         "relative_frequency_hz": RELATIVE_FREQS.tolist(),
+        "alpha_topomap_time_seconds": topo_time,
         "alpha_topomap_relative_frequency_hz": 0.0,
-        "alpha_topomaps_by_requested_time_seconds": topo_results,
+        "alpha_topomap_channel_values": topo_values,
         "condition_baseline": {
             "window_seconds": BASELINE,
             "mode": "percent",
