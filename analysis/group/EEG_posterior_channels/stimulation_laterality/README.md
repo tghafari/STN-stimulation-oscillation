@@ -100,3 +100,15 @@ participants included in the grand average. Participants lacking
 sufficient frequency/time support are not included in this page and
 are reported in the terminal; their individual pages remain.
 No inferential statistics or baseline correction of TFRs are applied.
+
+## Paired homologous sensor asymmetry (PDF only)
+
+To run only the new paired right-minus-left stimulation-effect analysis, from the repository root:
+
+```bash
+python analysis/group/EEG_posterior_channels/stimulation_laterality/run_stim_laterality_tfr.py --subjects 101 102 103 --platform mac --paired-asymmetry-only
+```
+
+Replace the subject IDs with the participants you wish to include. This mode **does not generate the three original laterality PDFs**. It uses the existing B03-validated `trial_alpha.csv` and final cleaned ON/OFF epochs, pooling both verified unilateral ON periods and both OFF periods. Each homologous pair (PO7/PO8, PO3/PO4, O1/O2) includes only subjects with both good sensors. Each condition is percent-baseline corrected over -0.3 to -0.1 s before computing the within-participant contrast `(ON-OFF)_right - (ON-OFF)_left`. Negative values mean stronger ON-related suppression on the right. The PDF contains the pairwise grand-average TFRs, alpha time courses, sample sizes, two-sided cluster-permutation tests in 8-12 Hz and 0.1-0.7 s, and scalar paired alpha tests with Holm adjustment across the three pairs. Cluster p-values are exploratory and not adjusted across pairs.
+
+Output: `derivatives/reports/group/EEG_posterior_channels_stim_laterality/paired_right_minus_left_sensor_stimulation_effect.pdf` and `paired_sensor_asymmetry_stats.json`. This mode computes new subject TFRs from cleaned epochs; it skips the original reports but does not reuse their cached power arrays.

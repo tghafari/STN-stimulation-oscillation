@@ -92,6 +92,11 @@ def parse_args():
     parser.add_argument("--trial-csv", type=Path)
     parser.add_argument("--peaks-csv", type=Path)
     parser.add_argument("--output-dir", type=Path)
+    parser.add_argument(
+        "--paired-asymmetry-only", action="store_true",
+        help="Generate only the paired homologous-sensor asymmetry PDF.",
+    )
+    parser.add_argument("--n-permutations", type=int, default=2048)
     args = parser.parse_args()
     args.subjects = [
         str(subject).removeprefix("sub-") for subject in args.subjects
@@ -677,6 +682,10 @@ def methods_page(report_key):
 def main():
     """Create three PDF reports from verified participant-specific epochs."""
     args = parse_args()
+    if args.paired_asymmetry_only:
+        from paired_sensor_asymmetry import run_paired_asymmetry
+        run_paired_asymmetry(args)
+        return
     root = resolve_project_root(args.platform, args.project_root)
     group = root / "derivatives" / "reports" / "group"
     trial_path = args.trial_csv or (
