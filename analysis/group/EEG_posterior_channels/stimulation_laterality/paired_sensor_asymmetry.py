@@ -21,7 +21,8 @@ from mne.stats import permutation_cluster_1samp_test
 PAIRS = (("PO7", "PO8"), ("PO3", "PO4"), ("O1", "O2"))
 BASELINE = (-0.3, -0.1)
 ALPHA_WINDOW = (0.1, 0.7)
-ALPHA_BAND = (8.0, 12.0)
+ALPHA_HALF_WIDTH_HZ = 2.0
+RELATIVE_ALPHA_FREQS = np.arange(-2.0, 2.01, 0.5)
 
 
 def baseline_percent(power, times):
@@ -85,7 +86,7 @@ def load_paired_subject(subject, args, root, trials, parent):
     return times, contrasts, {"on": len(on), "off": len(off)}
 
 
-def summary_page(pdf, counts, skipped, n_permutations):
+def summary_page(pdf, counts, skipped, n_permutations, peaks):
     """Write methodological details and inclusion counts."""
     lines = [
         "PAIRED HEMISPHERIC STIMULATION-EFFECT ASYMMETRY",
@@ -108,7 +109,9 @@ def summary_page(pdf, counts, skipped, n_permutations):
         f"pair ({n_permutations} permutations, cluster-forming p<0.05).",
         "Clusters are connected in frequency/time; p-values are",
         "uncorrected across the three pairs (exploratory).",
-        "A prespecified mean 8-12 Hz, 0.1-0.7 s paired contrast is",
+        "Alpha tests use each participant's OFF-derived peak +/-2 Hz.",
+        "Maps are peak-aligned before frequency-wise cluster testing.",
+        "The mean 0.1-0.7 s paired contrast is",
         "also tested against zero using a two-sided one-sample t-test.",
         "Holm correction is applied across the three scalar tests.",
         "",
@@ -118,6 +121,8 @@ def summary_page(pdf, counts, skipped, n_permutations):
             f"{pair[1]}-{pair[0]}: n={len(subjects)}; "
             f"sub-{', sub-'.join(subjects) if subjects else 'none'}"
         )
+    lines.extend(["", "Individual alpha peaks (Hz):"])
+    lines.extend(f"sub-{key}: {value:g}" for key, value in peaks.items())
     if skipped:
         lines.extend(["", "Skipped subjects:"])
         lines.extend(f"sub-{k}: {v}" for k, v in skipped.items())
@@ -132,7 +137,7 @@ def summary_page(pdf, counts, skipped, n_permutations):
     plt.close(fig)
 
 
-def plot_pair(pdf, pair, subjects, maps, times, freqs, stats):
+def plot_pair(pdf, pair, subjects, maps, times, freqs, stats, aligned_alpha):
     """Add a grand-average TFR and time course for a sensor pair."""
     mean_map = maps.mean(axis=0)
     limit = max(np.nanpercentile(np.abs(mean_map), 99), 1e-6)
@@ -147,8 +152,7 @@ def plot_pair(pdf, pair, subjects, maps, times, freqs, stats):
         xlabel="Time after cue (s)", ylabel="Frequency (Hz)",
     )
     fig.colorbar(image, ax=axes[0], label="Percentage-point difference")
-    fm = (freqs >= ALPHA_BAND[0]) & (freqs <= ALPHA_BAND[1])
-    alpha = maps[:, fm, :].mean(axis=1)
+    alpha = aligned_alpha.mean(axis=1)
     mean = alpha.mean(axis=0)
     sem = alpha.std(axis=0, ddof=1) / np.sqrt(len(subjects))
     axes[1].plot(times, mean, color="black")
@@ -156,7 +160,7 @@ def plot_pair(pdf, pair, subjects, maps, times, freqs, stats):
     axes[1].axhline(0, color="gray", lw=0.8)
     axes[1].axvspan(*ALPHA_WINDOW, color="gray", alpha=0.1)
     axes[1].set(
-        title="8-12 Hz mean +/- SEM",
+        title="Individual alpha peak +/-2 Hz mean +/- SEM",
         xlabel="Time after cue (s)", ylabel="Right minus left (pp)",
     )
     fig.suptitle(
@@ -191,12 +195,18 @@ def run_paired_asymmetry(args):
     )
     out.mkdir(parents=True, exist_ok=True)
 
+    peak_path = parent.locate_peaks_csv(root, args.peaks_csv)
+    peaks = parent.load_alpha_peaks(peak_path)
     samples = {pair: [] for pair in PAIRS}
+    alpha_aligned = {pair: [] for pair in PAIRS}
     membership = {pair: [] for pair in PAIRS}
     skipped = {}
     times = None
     for subject in args.subjects:
         try:
+            peak = peaks.get(subject)
+            if peak is None or not np.isfinite(peak):
+                raise ValueError("Missing/invalid individual alpha peak in CSV.")
             current_times, contrasts, counts = load_paired_subject(
                 subject, args, root, trials, parent
             )
@@ -205,7 +215,18 @@ def run_paired_asymmetry(args):
             elif not np.allclose(times, current_times):
                 raise ValueError("TFR time axis differs across participants.")
             for pair, values in contrasts.items():
+                absolute_frequencies = peak + RELATIVE_ALPHA_FREQS
+                if (absolute_frequencies.min() < parent.FREQUENCIES.min()
+                        or absolute_frequencies.max() > parent.FREQUENCIES.max()):
+                    raise ValueError("Peak +/-2 Hz exceeds TFR frequency range.")
+                aligned_values = np.stack(
+                    [np.interp(absolute_frequencies, parent.FREQUENCIES,
+                               values[:, index])
+                     for index in range(values.shape[1])],
+                    axis=1,
+                )
                 samples[pair].append(values)
+                alpha_aligned[pair].append(aligned_values)
                 membership[pair].append(subject)
             print(f"sub-{subject}: ON={counts['on']}, OFF={counts['off']}; "
                   f"eligible pairs={len(contrasts)}")
@@ -223,14 +244,14 @@ def run_paired_asymmetry(args):
             results[str(pair)] = {"n": len(samples[pair]), "status": "n<3"}
             continue
         data = np.stack(samples[pair])
-        fm = (freqs >= ALPHA_BAND[0]) & (freqs <= ALPHA_BAND[1])
         tm = (times >= ALPHA_WINDOW[0]) & (times <= ALPHA_WINDOW[1])
-        scalars = data[:, fm, :][:, :, tm].mean(axis=(1, 2))
+        aligned = np.stack(alpha_aligned[pair])
+        scalars = aligned[:, :, tm].mean(axis=(1, 2))
         test = ttest_1samp(scalars, 0, alternative="two-sided")
         from scipy.stats import t as student_t
         threshold = float(student_t.ppf(0.975, len(data)-1))
         # Restrict cluster testing to the attention window and alpha band.
-        cluster_data = data[:, fm, :][:, :, tm]
+        cluster_data = aligned[:, :, tm]
         t_obs, clusters, cluster_p, _ = permutation_cluster_1samp_test(
             cluster_data, threshold=threshold, tail=0,
             n_permutations=args.n_permutations, seed=42,
@@ -245,7 +266,11 @@ def run_paired_asymmetry(args):
             "p_scalar": float(test.pvalue),
             "min_cluster_p": float(np.min(cluster_p)) if len(cluster_p) else 1.0,
             "cluster_p_values": [float(p) for p in cluster_p],
-            "cluster_window_hz": list(ALPHA_BAND),
+            "cluster_relative_frequency_hz": [-2.0, 2.0],
+            "individual_peaks_hz": {
+                subject: float(peaks[subject])
+                for subject in membership[pair]
+            },
             "cluster_window_s": list(ALPHA_WINDOW),
         }
 
@@ -260,11 +285,17 @@ def run_paired_asymmetry(args):
         results[str(pair)]["p_holm"] = float(adjusted)
 
     with PdfPages(path) as pdf:
-        summary_page(pdf, membership, skipped, args.n_permutations)
+        summary_page(
+            pdf, membership, skipped, args.n_permutations,
+            {subject: float(peaks[subject])
+             for pair in PAIRS for subject in membership[pair]},
+        )
         for pair in tested:
             data = np.stack(samples[pair])
-            plot_pair(pdf, pair, membership[pair], data, times, freqs,
-                      results[str(pair)])
+            plot_pair(
+                pdf, pair, membership[pair], data, times, freqs,
+                results[str(pair)], np.stack(alpha_aligned[pair]),
+            )
         fig, ax = plt.subplots(figsize=(11.7, 8.3))
         ax.axis("off")
         lines = ["PAIRED SENSOR ASYMMETRY - STATISTICAL RESULTS", ""]
@@ -283,7 +314,8 @@ def run_paired_asymmetry(args):
             )
         lines += [
             "",
-            "Scalar tests: mean 8-12 Hz, 0.1-0.7 s per participant.",
+            "Scalar tests: individual alpha peak +/-2 Hz, 0.1-0.7 s.",
+            "Cluster tests: peak-aligned -2 to +2 Hz, 0.1-0.7 s.",
             "Holm correction across three pair tests.",
             "Cluster p-values are exploratory and uncorrected across pairs.",
             "Negative: stronger stimulation-related suppression on RIGHT.",
