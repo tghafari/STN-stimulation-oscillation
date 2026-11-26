@@ -689,7 +689,7 @@ def main():
     root = resolve_project_root(args.platform, args.project_root)
     group = root / "derivatives" / "reports" / "group"
     trial_path = args.trial_csv or (
-        group / "EEG_posterior_channels_block_mapping" / "trial_alpha.csv"
+        group / "trials_assigning_to_blocks_report" / "trial_alpha.csv"
     )
     peak_path = locate_peaks_csv(root, args.peaks_csv)
     output = args.output_dir or (

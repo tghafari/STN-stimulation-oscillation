@@ -175,7 +175,7 @@ def run_paired_asymmetry(args):
     root = parent.resolve_project_root(args.platform, args.project_root)
     group = root / "derivatives" / "reports" / "group"
     trial_path = args.trial_csv or (
-        group / "EEG_posterior_channels_block_mapping" / "trial_alpha.csv"
+        group / "trials_assigning_to_blocks_report" / "trial_alpha.csv"
     )
     trials = pd.read_csv(trial_path, dtype={"subject": str})
     required = {
